@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<problemBlock>
+  <problemId>{{problem_id}}</problemId>
+  <title>{{problem_title}}</title>
+  <ocrText><![CDATA[{{ocr_text}}]]></ocrText>
+  <diagram>
+    <svgPath>{{svg_path}}</svgPath>
+    <cropImagePath>{{crop_image_path}}</cropImagePath>
+  </diagram>
+  <meta>
+    <sourceJob>{{job_id}}</sourceJob>
+    <regionType>{{region_type}}</regionType>
+  </meta>
+</problemBlock>
