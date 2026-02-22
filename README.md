@@ -25,4 +25,5 @@ Docker 실행:
 
 - `docker compose up --build`
 - API 문서: `http://localhost:8000/docs`
+- 전체 기능/작동 방법 상세 가이드: `docs/full_system_guide_ko.md`
 
