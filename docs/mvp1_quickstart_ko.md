@@ -22,6 +22,19 @@ pytest -q tests/test_mvp1_core.py
 - API 테스트(FastAPI 설치 필요):
 ```bash
 pytest -q tests/test_mvp1_api.py
+## 설치
+```bash
+pip install -r requirements.txt
+```
+
+## 서버 실행
+```bash
+uvicorn app.main:app --reload
+```
+
+## 테스트
+```bash
+pytest -q
 ```
 
 ## 처리 흐름
