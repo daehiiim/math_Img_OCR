@@ -1,0 +1,12 @@
+version: '3.9'
+services:
+  mvp1-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: math-img-ocr-mvp1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./runtime:/app/runtime
+    restart: unless-stopped

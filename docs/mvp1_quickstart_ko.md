@@ -7,12 +7,22 @@
 python -m app.demo_flow
 ```
 
+## 1) Docker로 API 서버 실행 (권장)
+```bash
+docker compose up --build
+```
+
+- 접속: `http://localhost:8000/docs`
+- 중지: `docker compose down`
+
+## 2) 로컬 Python으로 API 서버 실행
 ## 1) API 서버 실행(의존성 필요)
 ```bash
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+## 3) 테스트
 ## 2) 테스트
 - 코어 테스트(의존성 최소):
 ```bash
