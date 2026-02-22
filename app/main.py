@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Literal
 import json
 import uuid
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from zipfile import ZipFile
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
+from app import core
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_DIR = ROOT / "runtime" / "jobs"
 TEMPLATE_PATH = ROOT / "templates" / "hwpx" / "problem_block_template.xml"
@@ -26,6 +28,7 @@ class Region(BaseModel):
     @field_validator("polygon")
     @classmethod
     def validate_polygon(cls, value: list[list[float]]) -> list[list[float]]:
+        core.validate_polygon(value)
         if len(value) < 4:
             raise ValueError("polygon must contain at least 4 points")
         for pt in value:
@@ -53,6 +56,10 @@ class JobResponse(BaseModel):
     regions: list[RegionResult] = Field(default_factory=list)
 
 
+@app.post("/jobs", response_model=JobResponse, status_code=201)
+async def create_job(image: UploadFile = File(...)) -> JobResponse:
+    content = await image.read()
+    job = core.create_job_from_bytes(image.filename or "uploaded_image", content)
 def _job_dir(job_id: str) -> Path:
     return RUNTIME_DIR / job_id
 
@@ -114,6 +121,10 @@ async def create_job(image: UploadFile = File(...)) -> JobResponse:
 
 @app.put("/jobs/{job_id}/regions")
 def save_regions(job_id: str, payload: RegionSetRequest) -> dict:
+    try:
+        return core.save_regions(job_id, [r.model_dump() for r in payload.regions])
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="job not found")
     job = _read_job(job_id)
     regions = [
         {
@@ -133,6 +144,12 @@ def save_regions(job_id: str, payload: RegionSetRequest) -> dict:
 
 @app.post("/jobs/{job_id}/run")
 def run_pipeline(job_id: str) -> dict:
+    try:
+        return core.run_pipeline(job_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="job not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     job = _read_job(job_id)
     if not job.get("regions"):
         raise HTTPException(status_code=400, detail="regions not set")
@@ -174,12 +191,22 @@ def run_pipeline(job_id: str) -> dict:
 
 @app.get("/jobs/{job_id}", response_model=JobResponse)
 def get_job(job_id: str) -> JobResponse:
+    try:
+        job = core.read_job(job_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="job not found")
     job = _read_job(job_id)
     return JobResponse(**job)
 
 
 @app.post("/jobs/{job_id}/export/hwpx")
 def export_hwpx(job_id: str) -> dict:
+    try:
+        return core.export_hwpx(job_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="job not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     job = _read_job(job_id)
     if job.get("status") != "completed":
         raise HTTPException(status_code=400, detail="job is not completed")

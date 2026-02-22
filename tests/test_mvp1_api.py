@@ -1,3 +1,10 @@
+import pytest
+
+fastapi = pytest.importorskip("fastapi")
+
+from fastapi.testclient import TestClient
+
+from app.main import app, core
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -8,6 +15,7 @@ from app.main import app, ROOT
 client = TestClient(app)
 
 
+def test_mvp1_flow():
 def test_mvp1_flow(tmp_path):
     response = client.post(
         "/jobs",
@@ -45,6 +53,7 @@ def test_mvp1_flow(tmp_path):
     assert response.status_code == 200
     rel_path = response.json()["download_url"]
     assert rel_path.endswith(".hwpx")
+    assert (core.ROOT / rel_path).exists()
     assert (ROOT / rel_path).exists()
 
 
