@@ -1,0 +1,15 @@
+version: '3.9'
+services:
+  mvp1-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: math-img-ocr-mvp1
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./apiKey.env
+    volumes:
+      - ./runtime:/app/runtime
+      - ../hwpx_generator:/app/hwpx_generator:ro
+    restart: unless-stopped

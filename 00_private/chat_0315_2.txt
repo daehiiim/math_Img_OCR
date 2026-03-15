@@ -1,0 +1,108 @@
+TODO
+1. svg 파일을 png 파일로 변환할때 한글이 깨짐. 
+2. 선 굵기 수정
+3. 점선이 png로 변환 시 실선으로 바뀜.
+4. 한글 파일의 초기 형식을 설정해서 그 형식에 맞게 각 문단이 들어갈 수 있도록 수정
+---
+vercel을 이용해서 무료로 우리 웹사이트를 등록할 수 있는 방법이 있을까?
+---
+그러면 github에 코드를 올리고, render이용해서 바로 웹사이트 올려도 되는건가?
+---
+일단 우리 개발을 이어나가자. 
+1. svg 파일을 png 파일로 변환해서 hwpx로 저장할때 한글이 깨지는 문제가 발생. 한글이 깨지지 않도록 하는것이 중요.
+2. svg 수식 편집기에서 svg 선을 그릴때 굵기를 수정할 수 있도록 굵기 조정이 필요.
+3.  svg 파일을 png 파일로 변환해서 hwpx로 저장할때 점선이 실선으로 바뀌지 않도록 수정이 필요. 
+---
+1. 새 작업 생성에서 파일 선택을 눌러도 파일 탐색기가 팝업되지 않음.
+---
+1. 여전이 새 작업 생성에서 파일 선택을 눌러도 파일을 넣을 수 있는 기능이 구현되어 있지 않음. 단, 파일을 드래그해서 업로드하는 것은 가능함.
+2. svg 파일 편집을 누르면 웹사이트가 강제로 종료됨. 
+---
+1.  svg 파일을 png 파일로 변환해서 hwpx로 저장할때 점선이 실선으로 바뀌지 않도록 수정이 필요. 여전히 고쳐지지 않음.
+2. hwpx 파일 내보내기 선택시 {"detail":"Not Found"}가 출력됨. 다시 수정이 필요함. 예시 hwpx 형식은 "D:\project\mathOCR\DAE_sampleData\imgExample.hwpx"에 존재하니 무엇이 잘못되었는지 직접 확인하고 작동되도록 할 것.
+3. 영역 그리기에서 텍스트/도형/혼합이 있는데, "혼합"을 "선택"으로 바꾸고 나머지 기능은 삭제시킬 것. 
+4. "SVG 코드 편집"을 "SVG 도형 편집"으로 바꿀 것.
+5. 새 작업 생성에서 파일 선택을 눌러도 아무런 반응이 없음. 드래그 앤 드롭만 작동하는 중.
+6. "SVG 도형 편집"에서 영역 선택을 구현해 영역에 포함된 모든 대상을 동시에 편집할 수 있는 기능 구현이 필요. (전체 삭제, 전체 회전, 전체 이동 등등)
+ ---
+"D:\project\mathOCR\DAE_chating_with_LLM\claude.md"를 읽고
+ 1.  'svg 도형 편집'에서 '수정 svg 저장' 후 점선이 실선으로 바뀜. 
+ 2. 'hwpx'로 내보내기 실행시 [404] Not Found 출력됨.
+ 문제를 해결하시오.
+---
+요약본
+Handoff Summary — mathOCR Project
+Project Overview
+A math OCR web application with:
+- Backend: FastAPI (Python) at D:/project/mathOCR/math_Img_OCR-main/app/ — port 8000
+- Frontend: React + Vite + TypeScript at D:/project/mathOCR/mathOCR_design/ — port 5173
+- HWPX Generator: D:/project/mathOCR/hwpx_generator/ — converts OCR results to Korean word processor format
+- Sample Data: D:/project/mathOCR/DAE_sampleData/imgExample.hwpx
+Pipeline Flow
+1. User uploads math problem image → backend creates job
+2. User draws regions on image (RegionEditor) → saves to backend
+3. Backend runs OCR pipeline per region → produces OCR text, SVG, MathML, explanation
+4. User can edit SVG shapes (SvgCanvasEditor) → saves edited SVG
+5. User exports to HWPX → backend renders SVG→PNG, generates HWPX document
+---
+Key Files Modified
+D:/project/mathOCR/
+├── math_Img_OCR-main/app/
+│   ├── core.py                    
+│   └── main.py                   
+├── mathOCR_design/src/app/
+│   ├── api/
+│   │   └── jobApi.ts              
+│   ├── components/
+│   │   ├── NewJobPage.tsx         
+│   │   ├── RegionEditor.tsx       
+│   │   ├── ResultsViewer.tsx     
+│   │   └── SvgCanvasEditor.tsx    
+│   ├── store/jobStore.ts         
+│   └── context/JobContext.tsx    
+├── hwpx_generator/                
+└── DAE_sampleData/imgExample.hwpx  
+Key Types / Structures
+- RegionType = "text" | "diagram" | "mixed" — defined in jobStore.ts:16
+- ToolMode = "select" | "line" | "line-dashed" | "curve" | "curve-dashed" | "text" — in SvgCanvasEditor.tsx
+- Backend routes: POST /jobs, PUT /jobs/{id}/regions, POST /jobs/{id}/run, POST /jobs/{id}/export/hwpx, GET /jobs/{id}/export/hwpx/download
+Build State
+- Frontend: npm run build passes cleanly (Vite, 2.2s)
+- Backend: core.py verified via python -c "import ast; ast.parse(open('core.py').read())" — syntax OK
+- Both servers may need restart to pick up changes
+AGENTS.md Constraint
+The project has C:\Users\user\AGENTS.md requiring explicit user consent before reading any file. Always ask permission before reading files, stating path and purpose.
+---
+1. 수식을 mathML로 작성하지 말고, 문제 내용 추출한 것 처럼 글과 수식을 작성하도록 수정하시오.
+2. svg 파일을 png로 변경하지 말고 바로 svg파일을 hwpx 파일에 삽입하시오.
+---
+1. 'svg 도형 편집' 기능을 사용한 이후 '수정 svg 저장'을 눌러도 상단 svg 벡터 이미지가 수정이 되지 않아 보임. 이를 수정이 된 svg 파일이 보이도록 수정 요청. hwpx 파일 상으로는 수정이 된 것을 확인함. 
+2. svg파일을 png로 바꾸는 기능을 다시 복구해야될 것 같은데, 문제는 png로 바꿀때 이미지 품질이 너무 떨어져. 화면에서 출력된 미리보기 수준으로 이미지가 png로 변환되었으면 좋겠음.
+---
+1. 'svg 도형 편집'에서 '선택'을 이용해서 영역을 선택했으면, 선이 아니라 사각형으로 감싸진 영역 안 어느 곳을 클릭해도 대상이 이동 할 수 있게 하시오.
+2.  'svg 도형 편집'에서 회전이나 '선택'을 통한 크기 변경 이후에도 대상을 선택시 영역이 새로고침 되지 않음. 이에 회전을 한 대상은 선택 후 드래그로 이동시 상하좌우반전이 일어나는 것 처럼 보이므로 회전과 크기 변경 이후 대상의 영역 새로고침이 필요함. 
+3. 'svg 도형 편집'의 윗 부분과 아랫부분이 잘려서 svg가 저장되는 문제가 발생. 보이는 영역을 일치시킬 것. 
+---
+1. 파란색 경계 박스는 나타났다가 바로 사라짐. 계속 유지해야지 박스 안 공간을 눌러서 이동이 가능하므로 계속 유지시키되, 박스 외부 공간을 누르거나, 도구 선택이(다시 '선택'을 누를 경우에도) 일어날 경우 경계 박스를 없앨 것. 
+2. 선택을 통해 영역을 생성하거나, 선을 그릴때 "D:\project\mathOCR\DAE_sampleData\errorImg.png"같이 파란색 박스가 svg 그림위에 생김. 문제를 해결할 것. 
+3. 여전히 회전/크기 조절 후 경계 박스가 새로고침 되지 않고 있음. 
+4. 여전히 위/아래 영역이 잘리고 있음. 'svg 도형 편집'의 편집 공간과 svg 벡터 탭의 svg를 보여주는 공간의 크기가 다름. hwpx는  svg 벡터 탭의 svg를 보여주는 것을 바탕으로 이미지를 저장하고 있음.
+---
+1. 여전히 위/아래 영역이 잘리고 있음. 'svg 도형 편집'의 편집 공간과 svg 벡터 탭의 svg를 보여주는 공간의 크기가 다름. hwpx는 svg 벡터 탭의 svg를 보여주는 것을 바탕으로 이미지를 저장하고 있음. 
+2. 파란색 경계 박스는 나타났다가 바로 사라짐. 계속 유지해야지 박스 안 공간을 눌러서 이동이 가능하므로 계속 유지시키되, 박스 외부 공간을 누르거나, 도구 선택이(다시 '선택'을 누를 경우에도) 일어날 경우 경계 박스를 없앨 것. https://oliveyoung.tech/2023-10-20/mouse/ 참고. 
+---
+'선택' 후 클릭 후 드래그 하면 바로 영역이 해제됨. 영역 안에 포함된 모든 대상을 편집하고 이동할 수 있게 하기 위해서 파란색 영역 박스를 계속 유지해야됨.
+---
+"D:\project\mathOCR\DAE_chating_with_LLM\claude.md"를 읽고 작업하시오. 
+ todo: Even after clicking “선택” when I drag, the selection is cleared immediately. To be able to edit and move all objects included inside the area, the blue selection box needs to stay visible.
+---
+드래그하여 영역을 지정하면 영역 밖을 클릭하지 이전까지는 영역 상자 생성이 유지되어야하는데, 영역을 지정하자마자 해제가 되고 있음. 
+영역을 계속 유지하도록 하시오. 
+"D:\project\mathOCR\DAE_chating_with_LLM\claude.md"를 읽고 작업하시오. 
+---
+
+---
+왜 드래그하여 영역을 지정하는게 여전히 안되는지, 그리고 영역을 지정하면 계속 텍스트가 선택이 되는 문제가 발생하고 있음. 
+이 부분에 대해서 전체적으로 코드를 검토하고 수정할 것. 브라우저에서 svg editor를 구현해야되서 이런 문제가 지속적으로 발생하는 것인지? 그렇다면 svg 편집이 일어나는 영역을 다른 브라우저 영역과 완전히 배제시켜 새로운 영역으로 만들 것.
+---
+1. 수식을 "$\angle G=88^\circ$" 이런 형식이 아니라 일반 텍스트(유니코드 등) 수식으로 변경할 것. 현재는 수식이 제대로 출력되고 있지 않음.

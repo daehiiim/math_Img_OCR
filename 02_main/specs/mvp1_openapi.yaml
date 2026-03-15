@@ -1,0 +1,179 @@
+openapi: 3.0.3
+info:
+  title: Math Region OCR MVP API
+  version: 0.1.0
+  description: |
+    API for uploading a worksheet image, defining problem regions,
+    running OCR per region, and exporting HWPX.
+servers:
+  - url: https://api.example.com
+paths:
+  /jobs:
+    post:
+      summary: Create a new processing job
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobCreated'
+  /jobs/{jobId}/regions:
+    put:
+      summary: Save user-marked problem regions
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegionSetRequest'
+      responses:
+        '200':
+          description: Regions saved
+  /jobs/{jobId}/run:
+    post:
+      summary: Run OCR pipeline for all regions
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Processing started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunAccepted'
+  /jobs/{jobId}:
+    get:
+      summary: Get job status and outputs
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+  /jobs/{jobId}/export/hwpx:
+    post:
+      summary: Export current result to HWPX
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Export completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [download_url]
+                properties:
+                  download_url:
+                    type: string
+components:
+  schemas:
+    JobCreated:
+      type: object
+      required: [job_id, image_url, status]
+      properties:
+        job_id:
+          type: string
+        image_url:
+          type: string
+        status:
+          type: string
+          enum: [created, regions_pending, queued, running, completed, failed]
+    RegionSetRequest:
+      type: object
+      required: [regions]
+      properties:
+        regions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Region'
+    Region:
+      type: object
+      required: [id, polygon, type]
+      properties:
+        id:
+          type: string
+          example: q1
+        polygon:
+          type: array
+          minItems: 4
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: number
+        type:
+          type: string
+          enum: [text, diagram, mixed]
+        order:
+          type: integer
+          minimum: 1
+    RunAccepted:
+      type: object
+      required: [job_id, status]
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [queued]
+    JobStatusResponse:
+      type: object
+      required: [job_id, status, regions]
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [created, regions_pending, queued, running, completed, failed]
+        regions:
+          type: array
+          items:
+            type: object
+            required: [id, status]
+            properties:
+              id:
+                type: string
+              status:
+                type: string
+                enum: [pending, running, completed, failed]
+              ocr_text:
+                type: string
+              svg_url:
+                type: string
+              crop_url:
+                type: string

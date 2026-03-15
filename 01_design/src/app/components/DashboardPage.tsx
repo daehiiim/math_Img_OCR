@@ -1,0 +1,269 @@
+import { useNavigate } from "react-router";
+import { useJobs } from "../context/JobContext";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "./ui/card";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import {
+  Upload,
+  FileImage,
+  Trash2,
+  Eye,
+  ArrowRight,
+  Layers,
+  Clock,
+  CheckCircle2,
+  Loader2,
+  FileDown,
+  Cpu,
+  Box,
+  Workflow,
+} from "lucide-react";
+import type { JobStatus } from "../store/jobStore";
+
+const statusConfig: Record<
+  JobStatus,
+  { label: string; variant: "default" | "secondary" | "outline" | "destructive"; icon: React.ComponentType<{ className?: string }> }
+> = {
+  regions_pending: { label: "영역 대기", variant: "outline", icon: Clock },
+  queued: { label: "영역 저장됨", variant: "secondary", icon: Layers },
+  running: { label: "처리 중", variant: "default", icon: Loader2 },
+  completed: { label: "완료", variant: "secondary", icon: CheckCircle2 },
+  failed: { label: "실패", variant: "destructive", icon: Clock },
+  exported: { label: "내보내기 완료", variant: "default", icon: FileDown },
+};
+
+export function DashboardPage() {
+  const { jobs, deleteJob } = useJobs();
+  const navigate = useNavigate();
+
+  return (
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1>작업 대시보드</h1>
+          
+        </div>
+        <Button onClick={() => navigate("/new")} className="gap-2">
+          <Upload className="w-4 h-4" />
+          새 작업
+        </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[12px] text-muted-foreground">전체 작업</p>
+                <p className="text-[28px] mt-1">{jobs.length}</p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Box className="w-5 h-5 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[12px] text-muted-foreground">처리 중</p>
+                <p className="text-[28px] mt-1">
+                  {jobs.filter((j) => j.status === "running").length}
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <Cpu className="w-5 h-5 text-amber-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[12px] text-muted-foreground">완료</p>
+                <p className="text-[28px] mt-1">
+                  {
+                    jobs.filter(
+                      (j) => j.status === "completed" || j.status === "exported"
+                    ).length
+                  }
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[12px] text-muted-foreground">총 영역</p>
+                <p className="text-[28px] mt-1">
+                  {jobs.reduce((acc, j) => acc + j.regions.length, 0)}
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <Layers className="w-5 h-5 text-blue-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Pipeline Overview */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Workflow className="w-4 h-4" />
+            파이프라인 흐름
+          </CardTitle>
+          
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-0 overflow-x-auto pb-2">
+            {[
+              { step: "1", label: "이미지 업로드", desc: "POST /jobs", color: "bg-blue-500" },
+              { step: "2", label: "영역 지정", desc: "PUT /jobs/{id}/regions", color: "bg-violet-500" },
+              { step: "3", label: "파이프라인 실행", desc: "POST /jobs/{id}/run", color: "bg-amber-500" },
+              { step: "4", label: "결과 조회", desc: "GET /jobs/{id}", color: "bg-emerald-500" },
+              { step: "5", label: "HWPX 내보내기", desc: "POST /.../export/hwpx", color: "bg-rose-500" },
+            ].map((item, i) => (
+              <div key={item.step} className="flex items-center shrink-0">
+                <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-accent/50 min-w-[160px]">
+                  <div
+                    className={`w-7 h-7 rounded-full ${item.color} text-white flex items-center justify-center text-[12px] shrink-0`}
+                  >
+                    {item.step}
+                  </div>
+                  <div>
+                    <p className="text-[13px]">{item.label}</p>
+                    
+                  </div>
+                </div>
+                {i < 4 && (
+                  <ArrowRight className="w-4 h-4 text-muted-foreground mx-1 shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Job List */}
+      <div className="mb-4 flex items-center justify-between">
+        <h2>작업 목록</h2>
+        <p className="text-[13px] text-muted-foreground">
+          {jobs.length}개 작업
+        </p>
+      </div>
+
+      {jobs.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+              <FileImage className="w-7 h-7 text-muted-foreground" />
+            </div>
+            <h3 className="text-[15px] mb-1">작업이 없습니다</h3>
+            <p className="text-[13px] text-muted-foreground mb-4">
+              수학 문제 이미지를 업로드하여 첫 번째 작업을 시작하세요.
+            </p>
+            <Button onClick={() => navigate("/new")} variant="outline" className="gap-2">
+              <Upload className="w-4 h-4" />
+              이미지 업로드
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {jobs.map((job) => {
+            const cfg = statusConfig[job.status];
+            const StatusIcon = cfg.icon;
+            return (
+              <Card
+                key={job.id}
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => navigate(`/job/${job.id}`)}
+              >
+                <CardContent className="py-4">
+                  <div className="flex items-center gap-4">
+                    {/* Thumbnail */}
+                    <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden shrink-0">
+                      <img
+                        src={job.imageUrl}
+                        alt={job.fileName}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[14px] truncate">{job.fileName}</p>
+                        <Badge variant={cfg.variant} className="shrink-0">
+                          <StatusIcon
+                            className={`w-3 h-3 ${
+                              job.status === "running" ? "animate-spin" : ""
+                            }`}
+                          />
+                          {cfg.label}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-4 text-[12px] text-muted-foreground">
+                        <span className="font-mono">{job.id.slice(0, 16)}...</span>
+                        <span>{job.regions.length}개 영역</span>
+                        <span>
+                          {new Date(job.createdAt).toLocaleString("ko-KR", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/job/${job.id}`);
+                        }}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteJob(job.id);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

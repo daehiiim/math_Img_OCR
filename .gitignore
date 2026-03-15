@@ -1,3 +1,10 @@
 __pycache__/
 *.pyc
 runtime/
+node_modules/
+.env
+dist/
+build/
+*.env
+apiKey.env
+02_main/apiKey.env
