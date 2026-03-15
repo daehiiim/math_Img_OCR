@@ -1,20 +1,48 @@
-import { useNavigate, Navigate } from "react-router";
+import { useEffect } from "react";
+import { useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { motion } from "motion/react";
+import { resolvePostLoginPath } from "../lib/authFlow";
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, loginWithGoogle } = useAuth();
+  const {
+    clearPostLoginPath,
+    isAuthenticated,
+    isLoading,
+    loginWithGoogle,
+    readPostLoginPath,
+    user,
+  } = useAuth();
 
-  // Already logged in → go to workspace (or pricing if no credits)
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      return;
+    }
+
+    const nextPath = readPostLoginPath();
+    const destination = resolvePostLoginPath(
+      {
+        openAiConnected: user.openAiConnected,
+        credits: user.credits,
+      },
+      nextPath
+    );
+
+    clearPostLoginPath();
+    navigate(destination, { replace: true });
+  }, [clearPostLoginPath, isAuthenticated, navigate, readPostLoginPath, user]);
+
+  if (isLoading) {
+    return null;
   }
 
-  const handleLogin = () => {
-    loginWithGoogle();
-    // After login, Layout will handle redirect to pricing if no credits
-    navigate("/");
+  if (isAuthenticated) {
+    return null;
+  }
+
+  const handleLogin = async () => {
+    await loginWithGoogle();
   };
 
   return (
@@ -60,7 +88,7 @@ export function LoginPage() {
         </button>
 
         <p className="text-[12px] text-[#a1a1aa] mt-5">
-          계속하려면 Google 계정 로그인이 필요합니다.
+          이미지를 올리는 순간에만 로그인하도록 동작합니다.
         </p>
       </div>
     </motion.div>

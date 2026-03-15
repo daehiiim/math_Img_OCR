@@ -13,6 +13,7 @@ import {
   X,
   Info,
 } from "lucide-react";
+import { resolveUploadGate } from "../lib/authFlow";
 
 // Sample demo images for quick testing
 const DEMO_IMAGES = [
@@ -68,7 +69,7 @@ const DEMO_IMAGES = [
 
 export function NewJobPage() {
   const { createJob } = useJobs();
-  const { consumeCredit } = useAuth();
+  const { isAuthenticated, prepareLogin, user } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -79,7 +80,44 @@ export function NewJobPage() {
     height: number;
   } | null>(null);
 
+  const ensureUploadAccess = useCallback(() => {
+    const decision = resolveUploadGate({
+      isAuthenticated,
+      openAiConnected: user?.openAiConnected ?? false,
+      credits: user?.credits ?? 0,
+    });
+
+    if (decision === "login") {
+      prepareLogin("/new");
+      toast("로그인이 필요합니다", {
+        description: "이미지를 올리려면 먼저 Google 로그인을 진행해주세요.",
+      });
+      navigate("/login");
+      return false;
+    }
+
+    if (decision === "connect-openai") {
+      toast("먼저 OpenAI 연결 또는 크레딧이 필요합니다", {
+        description: "로그인 후에는 OpenAI API key 연결을 먼저 안내합니다.",
+      });
+      navigate("/connect-openai");
+      return false;
+    }
+
+    return true;
+  }, [isAuthenticated, navigate, prepareLogin, user?.credits, user?.openAiConnected]);
+
   const handleFile = useCallback((file: File) => {
+    if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      toast.error("지원되지 않는 파일 형식입니다.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("파일 크기 제한을 초과했습니다.");
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       const url = e.target?.result as string;
@@ -96,22 +134,29 @@ export function NewJobPage() {
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragActive(false);
+      if (!ensureUploadAccess()) {
+        return;
+      }
       const file = e.dataTransfer.files[0];
       if (file && file.type.startsWith("image/")) {
         handleFile(file);
       }
     },
-    [handleFile]
+    [ensureUploadAccess, handleFile]
   );
 
   const handleDemoSelect = (demo: (typeof DEMO_IMAGES)[0]) => {
+    if (!ensureUploadAccess()) {
+      return;
+    }
+
     setPreview({ url: demo.url, name: demo.name, width: demo.width, height: demo.height });
   };
 
   const handleCreateJob = () => {
     if (!preview) return;
     const jobId = createJob(preview.name, preview.url, preview.width, preview.height);
-    navigate(`/job/${jobId}`);
+    navigate(`/workspace/job/${jobId}`);
   };
 
   return (
@@ -119,7 +164,7 @@ export function NewJobPage() {
       <div className="mb-8">
         <h1>새 작업 생성</h1>
         <p className="text-muted-foreground text-[14px] mt-1">
-          수학 문제 이미지를 업로드하여 자동 인식을 시작합니다.
+          공개 페이지에서 이미지를 검토하고, 실제 업로드 시점에만 로그인/연결을 요구합니다.
         </p>
       </div>
 
@@ -146,11 +191,17 @@ export function NewJobPage() {
                 </div>
                 <h3 className="text-[15px] mb-1">이미지를 드래그하거나 클릭하여 업로드</h3>
                 <p className="text-[13px] text-muted-foreground mb-4">
-                  PNG, JPG, BMP 형식 지원 — 수학 시험지/문제 이미지 권장
+                  PNG, JPG, JPEG 형식 지원 · 10MB 이하
                 </p>
                 <Button
                   variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => {
+                    if (!ensureUploadAccess()) {
+                      return;
+                    }
+
+                    fileInputRef.current?.click();
+                  }}
                   className="gap-2"
                 >
                   <ImageIcon className="w-4 h-4" />
@@ -159,7 +210,7 @@ export function NewJobPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];

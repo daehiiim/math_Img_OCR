@@ -10,7 +10,7 @@ import {
 import { cn } from "./ui/utils";
 
 const navItems = [
-  { path: "/", label: "대시보드", icon: LayoutDashboard },
+  { path: "/workspace", label: "대시보드", icon: LayoutDashboard },
   { path: "/new", label: "새 작업", icon: Upload },
 ];
 
@@ -46,8 +46,8 @@ export function AppSidebar() {
         <ul className="space-y-0.5">
           {navItems.map((item) => {
             const isActive =
-              item.path === "/"
-                ? location.pathname === "/"
+              item.path === "/workspace"
+                ? location.pathname === "/workspace"
                 : location.pathname.startsWith(item.path);
             return (
               <li key={item.path}>

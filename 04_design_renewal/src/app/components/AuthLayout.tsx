@@ -1,7 +1,6 @@
-import { Outlet, Link, useLocation } from "react-router";
-import { LogOut, ImageIcon, Settings, Bot } from "lucide-react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router";
+import { ImageIcon, KeyRound, LogOut, Settings } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +10,7 @@ import {
 } from "./ui/dropdown-menu";
 
 export function AuthLayout() {
+  const navigate = useNavigate();
   const auth = useAuth();
   const { user, isAuthenticated, logout } = auth;
   const location = useLocation();
@@ -20,7 +20,7 @@ export function AuthLayout() {
     <div className="min-h-screen bg-[#fafafa] flex flex-col">
       {/* Header */}
       <header className="h-14 border-b border-black/[0.06] bg-white flex items-center justify-between px-5 shrink-0">
-        <Link to={isAuthenticated ? "/" : "/login"} className="flex items-center gap-2">
+        <Link to={isAuthenticated ? "/workspace" : "/"} className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-[#111] flex items-center justify-center">
             <span className="text-[11px] text-white tracking-tight">M</span>
           </div>
@@ -32,10 +32,10 @@ export function AuthLayout() {
             {/* Credits indicator */}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#f4f4f5] text-[12px] text-[#71717a]">
               <ImageIcon className="w-3 h-3" />
-              {user.chatGptConnected ? (
+              {user.openAiConnected ? (
                 <span className="flex items-center gap-1">
-                  <Bot className="w-3 h-3 text-emerald-600" />
-                  ChatGPT 연결됨
+                  <KeyRound className="w-3 h-3 text-emerald-600" />
+                  OpenAI 연결됨
                 </span>
               ) : (
                 <span>
@@ -58,7 +58,7 @@ export function AuthLayout() {
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to="/connect-chatgpt" className="flex items-center gap-2 cursor-pointer">
+                  <Link to="/connect-openai" className="flex items-center gap-2 cursor-pointer">
                     <Settings className="w-3.5 h-3.5" />
                     <span className="text-[13px]">설정</span>
                   </Link>
@@ -71,7 +71,10 @@ export function AuthLayout() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={logout}
+                  onClick={() => {
+                    void logout();
+                    navigate("/");
+                  }}
                   className="flex items-center gap-2 text-red-600 cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />

@@ -1,87 +1,249 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-export interface User {
-  name: string;
-  email: string;
-  avatarInitials: string;
-  credits: number;
-  chatGptConnected: boolean;
-  usedCredits: number; // Track total credits used
-}
+import type { User as SupabaseUser } from "@supabase/supabase-js";
+
+import {
+  clearPendingPath,
+  createDefaultProfile,
+  readPendingPath,
+  readStoredProfile,
+  savePendingPath,
+  saveStoredProfile,
+  type StoredProfile,
+} from "../lib/authStorage";
+import { browserSupabase, hasSupabaseAuth } from "../lib/supabase";
+
+export type User = StoredProfile;
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  loginWithGoogle: () => void;
-  connectChatGpt: () => void;
-  disconnectChatGpt: () => void;
+  isLoading: boolean;
+  isSupabaseEnabled: boolean;
+  prepareLogin: (nextPath?: string) => void;
+  loginWithGoogle: () => Promise<User | null>;
+  connectOpenAi: (apiKey: string) => void;
+  disconnectOpenAi: () => void;
   purchaseCredits: (amount: number) => void;
-  consumeCredit: () => boolean;
-  logout: () => void;
+  consumeCredit: (jobId?: string) => boolean;
+  readPostLoginPath: () => string;
+  clearPostLoginPath: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function mapSupabaseUser(user: SupabaseUser) {
+  const email = user.email ?? "unknown@example.com";
+  const displayName =
+    user.user_metadata.full_name ??
+    user.user_metadata.name ??
+    email.split("@")[0] ??
+    "Math OCR 사용자";
+
+  return readStoredProfile(email) ?? createDefaultProfile(displayName, email);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const loginWithGoogle = useCallback(() => {
-    setUser({
-      name: "김수학",
-      email: "mathkim@example.com",
-      avatarInitials: "김",
-      credits: 0, // Start with 0 credits
-      chatGptConnected: false,
-      usedCredits: 0, // Initialize used credits
+  useEffect(() => {
+    if (!browserSupabase) {
+      setIsLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    // 현재 브라우저 세션이 있으면 로컬 프로필과 합쳐 복원한다.
+    void browserSupabase.auth.getUser().then(({ data }) => {
+      if (!active) {
+        return;
+      }
+
+      setUser(data.user ? mapSupabaseUser(data.user) : null);
+      setIsLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = browserSupabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) {
+        return;
+      }
+
+      if (!session?.user) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      const profile = mapSupabaseUser(session.user);
+      saveStoredProfile(profile);
+      setUser(profile);
+      setIsLoading(false);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const updateUser = useCallback((updater: (prev: User) => User) => {
+    setUser((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const next = updater(prev);
+      saveStoredProfile(next);
+      return next;
     });
   }, []);
 
-  const connectChatGpt = useCallback(() => {
-    setUser((prev) => (prev ? { ...prev, chatGptConnected: true } : prev));
+  const prepareLogin = useCallback((nextPath = "/workspace") => {
+    savePendingPath(nextPath);
   }, []);
 
-  const disconnectChatGpt = useCallback(() => {
-    setUser((prev) => (prev ? { ...prev, chatGptConnected: false } : prev));
+  const loginWithGoogle = useCallback(async () => {
+    if (browserSupabase) {
+      await browserSupabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/login`,
+        },
+      });
+      return null;
+    }
+
+    const profile = createDefaultProfile("김수학", "mathkim@example.com");
+    saveStoredProfile(profile);
+    setUser(profile);
+    return profile;
   }, []);
 
-  const purchaseCredits = useCallback((amount: number) => {
-    setUser((prev) => (prev ? { ...prev, credits: prev.credits + amount } : prev));
+  const connectOpenAi = useCallback(
+    (apiKey: string) => {
+      const maskedKey = apiKey.length > 8 ? `${apiKey.slice(0, 5)}••••${apiKey.slice(-4)}` : "연결됨";
+      updateUser((prev) => ({
+        ...prev,
+        openAiConnected: true,
+        openAiMaskedKey: maskedKey,
+      }));
+    },
+    [updateUser]
+  );
+
+  const disconnectOpenAi = useCallback(() => {
+    updateUser((prev) => ({
+      ...prev,
+      openAiConnected: false,
+      openAiMaskedKey: null,
+    }));
   }, []);
 
-  const consumeCredit = useCallback((): boolean => {
+  const purchaseCredits = useCallback(
+    (amount: number) => {
+      updateUser((prev) => ({
+        ...prev,
+        credits: prev.credits + amount,
+      }));
+    },
+    [updateUser]
+  );
+
+  const consumeCredit = useCallback((jobId?: string): boolean => {
     let consumed = false;
+
+    updateUser((prev) => {
+      if (jobId && prev.chargedJobIds.includes(jobId)) {
+        consumed = true;
+        return prev;
+      }
+
+      const chargedJobIds = jobId ? [...prev.chargedJobIds, jobId] : prev.chargedJobIds;
+
+      if (prev.openAiConnected) {
+        consumed = true;
+        return {
+          ...prev,
+          chargedJobIds,
+        };
+      }
+
+      if (prev.credits <= 0) {
+        return prev;
+      }
+
+      consumed = true;
+      return {
+        ...prev,
+        credits: prev.credits - 1,
+        usedCredits: prev.usedCredits + 1,
+        chargedJobIds,
+      };
+    });
+
+    return consumed;
+  }, [updateUser]);
+
+  const logout = useCallback(async () => {
+    if (browserSupabase) {
+      await browserSupabase.auth.signOut();
+    }
+
     setUser((prev) => {
       if (!prev) return prev;
-      if (prev.chatGptConnected || prev.credits > 0) {
-        consumed = true;
-        if (!prev.chatGptConnected) {
-          return { ...prev, credits: prev.credits - 1, usedCredits: prev.usedCredits + 1 };
-        } else {
-          // ChatGPT connected - no credit deduction, but still track usage
-          return { ...prev, usedCredits: prev.usedCredits + 1 };
-        }
-      }
-      return prev;
+      saveStoredProfile({
+        ...prev,
+        openAiConnected: false,
+        openAiMaskedKey: null,
+      });
+      return null;
     });
-    return consumed;
   }, []);
 
-  const logout = useCallback(() => {
-    setUser(null);
-  }, []);
+  const readPostLoginPath = useCallback(() => readPendingPath(), []);
+  const clearPostLoginPath = useCallback(() => clearPendingPath(), []);
 
-  const value = React.useMemo(
+  const value = useMemo(
     () => ({
       user,
       isAuthenticated: !!user,
+      isLoading,
+      isSupabaseEnabled: hasSupabaseAuth,
+      prepareLogin,
       loginWithGoogle,
-      connectChatGpt,
-      disconnectChatGpt,
+      connectOpenAi,
+      disconnectOpenAi,
       purchaseCredits,
       consumeCredit,
+      readPostLoginPath,
+      clearPostLoginPath,
       logout,
     }),
-    [user, loginWithGoogle, connectChatGpt, disconnectChatGpt, purchaseCredits, consumeCredit, logout]
+    [
+      user,
+      isLoading,
+      prepareLogin,
+      loginWithGoogle,
+      connectOpenAi,
+      disconnectOpenAi,
+      purchaseCredits,
+      consumeCredit,
+      readPostLoginPath,
+      clearPostLoginPath,
+      logout,
+    ]
   );
 
   return (

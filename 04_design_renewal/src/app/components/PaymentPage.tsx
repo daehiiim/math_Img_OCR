@@ -2,15 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  CreditCard,
-  Smartphone,
-  CheckCircle2,
-  Loader2,
-  ShieldCheck,
-  ArrowLeft,
-  Lock,
-} from "lucide-react";
+import { ArrowLeft, CheckCircle2, CreditCard, Loader2, Lock, ShieldCheck } from "lucide-react";
 
 const paymentMethods = [
   {
@@ -48,7 +40,7 @@ export function PaymentPage() {
       setPaid(true);
       purchaseCredits(credits);
       setTimeout(() => {
-        navigate("/");
+        navigate("/workspace");
       }, 2000);
     }, 2200);
   };

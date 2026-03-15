@@ -69,8 +69,8 @@ export function DashboardPage() {
               남은 이미지
             </CardTitle>
             <CardDescription>
-              {user.chatGptConnected 
-                ? "ChatGPT 연결로 무제한 변환을 사용하고 있습니다" 
+              {user.openAiConnected
+                ? "OpenAI API key 연결로 사용자 소유 키를 사용하고 있습니다"
                 : "이미지를 사용하여 OCR 작업을 실행하세요"}
             </CardDescription>
           </CardHeader>
@@ -84,7 +84,7 @@ export function DashboardPage() {
                 <div>
                   <p className="text-[12px] text-muted-foreground mb-1">남은 이미지</p>
                   <p className="text-[24px]">
-                    {user.chatGptConnected ? "∞" : user.credits.toLocaleString()}
+                    {user.openAiConnected ? "∞" : user.credits.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -102,7 +102,7 @@ export function DashboardPage() {
 
               {/* Action Button */}
               <div className="flex items-center justify-end">
-                {!user.chatGptConnected && user.credits <= 10 && (
+                {!user.openAiConnected && user.credits <= 10 && (
                   <Button 
                     onClick={() => navigate("/pricing")} 
                     variant="default"
@@ -112,7 +112,7 @@ export function DashboardPage() {
                     이미지 충전
                   </Button>
                 )}
-                {!user.chatGptConnected && user.credits > 10 && (
+                {!user.openAiConnected && user.credits > 10 && (
                   <Button 
                     onClick={() => navigate("/pricing")} 
                     variant="outline"
@@ -122,10 +122,10 @@ export function DashboardPage() {
                     이미지 추가
                   </Button>
                 )}
-                {user.chatGptConnected && (
+                {user.openAiConnected && (
                   <div className="flex items-center gap-2 text-emerald-500">
                     <CheckCircle2 className="w-5 h-5" />
-                    <span className="text-[14px]">ChatGPT 연결됨</span>
+                    <span className="text-[14px]">OpenAI 연결됨</span>
                   </div>
                 )}
               </div>
@@ -272,7 +272,7 @@ export function DashboardPage() {
               <Card
                 key={job.id}
                 className="hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/job/${job.id}`)}
+                onClick={() => navigate(`/workspace/job/${job.id}`)}
               >
                 <CardContent className="py-4">
                   <div className="flex items-center gap-4">
@@ -319,7 +319,7 @@ export function DashboardPage() {
                         size="icon"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/job/${job.id}`);
+                          navigate(`/workspace/job/${job.id}`);
                         }}
                       >
                         <Eye className="w-4 h-4" />

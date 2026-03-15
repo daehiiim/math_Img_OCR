@@ -42,7 +42,7 @@ function getStepIndex(status: JobStatus) {
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const { getJob, saveRegions, runPipeline, exportHwpx } = useJobs();
-  const { consumeCredit } = useAuth();
+  const { consumeCredit, user } = useAuth();
   const navigate = useNavigate();
   const [isRunning, setIsRunning] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -74,25 +74,26 @@ export function JobDetailPage() {
 
   const handleRun = useCallback(async () => {
     if (!jobId) return;
-    
-    // Check if user has credits or ChatGPT connected
-    const hasCredits = consumeCredit();
-    if (!hasCredits) {
-      toast.error("이미지가 부족합니다", {
-        description: "이미지를 구매하거나 ChatGPT 계정을 연결해주세요.",
+
+    const canProcess = Boolean(user?.openAiConnected || (user?.credits ?? 0) > 0);
+    if (!canProcess) {
+      toast.error("OpenAI 연결 또는 이미지 구매가 필요합니다", {
+        description: "먼저 OpenAI API key를 연결하거나 이미지를 충전해주세요.",
       });
+      navigate("/connect-openai");
       return;
     }
-    
-    // Show success toast for credit consumption
-    toast.success("이미지 1개가 소모되었습니다", {
-      description: "파이프라인이 실행됩니다.",
-    });
-    
+
     setIsRunning(true);
     await runPipeline(jobId);
+    consumeCredit(jobId);
+    toast.success("OCR이 완료되었습니다", {
+      description: user?.openAiConnected
+        ? "사용자 OpenAI API key로 처리되었습니다."
+        : "성공한 작업 1건에 대해 이미지 1개가 차감되었습니다.",
+    });
     setIsRunning(false);
-  }, [jobId, runPipeline, consumeCredit]);
+  }, [consumeCredit, jobId, navigate, runPipeline, user?.credits, user?.openAiConnected]);
 
   const handleExport = useCallback(() => {
     if (jobId) exportHwpx(jobId);
@@ -117,7 +118,7 @@ export function JobDetailPage() {
           </p>
           <Button
             variant="outline"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/workspace")}
             className="mt-4 gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -137,7 +138,7 @@ export function JobDetailPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/workspace")}
         >
           <ArrowLeft className="w-4 h-4" />
         </Button>

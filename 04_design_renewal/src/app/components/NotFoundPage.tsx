@@ -14,7 +14,7 @@ export function NotFoundPage() {
         </p>
         <Button onClick={() => navigate("/")} variant="outline" className="gap-2">
           <ArrowLeft className="w-4 h-4" />
-          대시보드로 돌아가기
+          홈으로 돌아가기
         </Button>
       </div>
     </div>

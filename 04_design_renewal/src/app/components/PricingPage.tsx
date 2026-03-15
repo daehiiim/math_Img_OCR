@@ -68,7 +68,7 @@ export function PricingPage() {
         className="flex items-center gap-1.5 text-[13px] text-[#71717a] hover:text-[#111] transition-colors mb-8 cursor-pointer"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
-        워크스페이스로 돌아가기
+        홈으로 돌아가기
       </button>
 
       {/* Header */}
