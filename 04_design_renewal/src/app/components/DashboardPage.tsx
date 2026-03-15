@@ -28,18 +28,7 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import type { JobStatus } from "../store/jobStore";
-
-const statusConfig: Record<
-  JobStatus,
-  { label: string; variant: "default" | "secondary" | "outline" | "destructive"; icon: React.ComponentType<{ className?: string }> }
-> = {
-  regions_pending: { label: "영역 대기", variant: "outline", icon: Clock },
-  regions_saved: { label: "영역 저장됨", variant: "secondary", icon: Layers },
-  running: { label: "처리 중", variant: "default", icon: Loader2 },
-  completed: { label: "완료", variant: "secondary", icon: CheckCircle2 },
-  exported: { label: "내보내기 완료", variant: "default", icon: FileDown },
-};
+import { getStatusConfig } from "../lib/jobPresentation";
 
 export function DashboardPage() {
   const { jobs, deleteJob } = useJobs();
@@ -266,7 +255,7 @@ export function DashboardPage() {
       ) : (
         <div className="space-y-3">
           {jobs.map((job) => {
-            const cfg = statusConfig[job.status];
+            const cfg = getStatusConfig(job.status);
             const StatusIcon = cfg.icon;
             return (
               <Card

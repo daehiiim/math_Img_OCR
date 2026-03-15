@@ -1,8 +1,11 @@
 import time
 import uuid
+from io import BytesIO
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any
+
+from PIL import Image
 
 from app.pipeline.schema import (
     JobPipelineContext,
@@ -13,7 +16,6 @@ from app.pipeline.schema import (
 )
 from app.pipeline.extractor import analyze_region_with_gpt, generate_explanation_with_gpt
 from app.pipeline.figure import crop_region_image, render_svg_to_png, build_mock_svg, sanitize_svg, normalize_svg_xml
-from app.pipeline.exporter import export_hwpx
 
 # It expects ROOT to be 2 levels up from app
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +29,14 @@ def _job_dir(job_id: str) -> Path:
 
 def _job_json(job_id: str) -> Path:
     return _job_dir(job_id) / "job.json"
+
+
+def _read_image_size(content: bytes) -> tuple[int, int]:
+    try:
+        with Image.open(BytesIO(content)) as image:
+            return image.width, image.height
+    except Exception:
+        return 0, 0
 
 def read_job(job_id: str) -> JobPipelineContext:
     path = _job_json(job_id)
@@ -59,10 +69,14 @@ def create_job_from_bytes(filename: str, content: bytes) -> JobPipelineContext:
     safe_name = filename or "uploaded_image"
     image_path = input_dir / safe_name
     image_path.write_bytes(content)
+    image_width, image_height = _read_image_size(content)
 
     job = JobPipelineContext(
         job_id=job_id,
+        file_name=safe_name,
         image_url=str(image_path.relative_to(ROOT)).replace("\\", "/"),
+        image_width=image_width,
+        image_height=image_height,
         status="regions_pending",
         created_at=_utc_now(),
         updated_at=_utc_now()
@@ -247,6 +261,8 @@ def execute_hwpx_export(job_id: str) -> dict:
     export_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        from app.pipeline.exporter import export_hwpx
+
         hwpx_path = export_hwpx(ROOT, job, export_dir)
     except Exception as error:
         raise ValueError(f"HWPX export failed: {error}") from error

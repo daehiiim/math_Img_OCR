@@ -18,7 +18,7 @@ interface RegionEditorProps {
   imageWidth: number;
   imageHeight: number;
   regions: Region[];
-  onSaveRegions: (regions: Region[]) => void;
+  onSaveRegions: (regions: Region[]) => Promise<void> | void;
   disabled?: boolean;
 }
 
@@ -45,6 +45,8 @@ export function RegionEditor({
   const [currentPoint, setCurrentPoint] = useState<{ x: number; y: number } | null>(null);
   const [selectedType, setSelectedType] = useState<RegionType>("mixed");
   const [tool, setTool] = useState<"select" | "draw">("draw");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -126,8 +128,18 @@ export function RegionEditor({
     );
   };
 
-  const handleSave = () => {
-    onSaveRegions(regions);
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      await onSaveRegions(regions);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "영역 저장 중 오류가 발생했습니다.";
+      setSaveError(message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const toPercent = (val: number, total: number) => `${(val / total) * 100}%`;
@@ -316,10 +328,15 @@ export function RegionEditor({
 
       {/* Save button */}
       {!disabled && (
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={regions.length === 0} className="gap-2">
+        <div className="flex flex-col items-end gap-2">
+          {saveError && <p className="text-[12px] text-destructive">{saveError}</p>}
+          <Button
+            onClick={() => void handleSave()}
+            disabled={regions.length === 0 || isSaving}
+            className="gap-2"
+          >
             <Plus className="w-4 h-4" />
-            영역 저장 ({regions.length}개)
+            {isSaving ? "영역 저장 중..." : `영역 저장 (${regions.length}개)`}
           </Button>
         </div>
       )}

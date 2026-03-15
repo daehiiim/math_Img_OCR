@@ -63,6 +63,9 @@ class RegionSetRequest(BaseModel):
 class RegionResult(BaseModel):
     id: str
     status: Literal["pending", "running", "completed", "failed"]
+    polygon: list[list[float]] = Field(default_factory=list)
+    type: Literal["text", "diagram", "mixed"] | None = None
+    order: int = 1
     ocr_text: str | None = None
     explanation: str | None = None
     mathml: str | None = None
@@ -80,7 +83,10 @@ class RegionResult(BaseModel):
 class JobResponse(BaseModel):
     job_id: str
     status: Literal["created", "regions_pending", "queued", "running", "completed", "failed"]
+    file_name: str | None = None
     image_url: str | None = None
+    image_width: int | None = None
+    image_height: int | None = None
     regions: list[RegionResult] = Field(default_factory=list)
 
 
@@ -93,7 +99,10 @@ async def create_job(image: UploadFile = File(...)) -> JobResponse:
     return JobResponse(
          job_id=job.job_id,
          status=job.status,
+         file_name=job.file_name,
          image_url=job.image_url,
+         image_width=job.image_width,
+         image_height=job.image_height,
          regions=[]
     )
 
@@ -130,6 +139,9 @@ def get_job(job_id: str) -> JobResponse:
          regions.append(RegionResult(
              id=r.context.id,
              status=r.status,
+             polygon=r.context.polygon,
+             type=r.context.type,
+             order=r.context.order,
              ocr_text=r.extractor.ocr_text,
              explanation=r.extractor.explanation,
              mathml=r.extractor.mathml,
@@ -145,7 +157,10 @@ def get_job(job_id: str) -> JobResponse:
     return JobResponse(
         job_id=job.job_id,
         status=job.status,
+        file_name=job.file_name,
         image_url=job.image_url,
+        image_width=job.image_width,
+        image_height=job.image_height,
         regions=regions
     )
 

@@ -1,23 +1,47 @@
-// Mock store for Math OCR MVP-1 Job management
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
+
+import {
+  createJobApi,
+  downloadHwpxApi,
+  exportHwpxApi,
+  getJobApi,
+  getRegionSvgApi,
+  saveEditedSvgApi,
+  saveRegionsApi,
+  runPipelineApi,
+  resolveRuntimePath,
+} from "../api/jobApi";
+import { mapBackendJob } from "./jobMappers";
 
 export type RegionType = "text" | "diagram" | "mixed";
+export type RegionStatus = "pending" | "running" | "completed" | "failed";
 
 export interface Region {
   id: string;
   polygon: number[][];
   type: RegionType;
   order: number;
-  status?: "pending" | "running" | "completed";
+  status?: RegionStatus;
   ocrText?: string;
+  explanation?: string;
+  mathml?: string;
+  svgUrl?: string;
+  cropUrl?: string;
+  processingMs?: number;
+  success?: boolean;
+  errorReason?: string;
+  editedSvgUrl?: string;
+  editedSvgVersion?: number;
   svgData?: string;
 }
 
 export type JobStatus =
+  | "created"
   | "regions_pending"
-  | "regions_saved"
+  | "queued"
   | "running"
   | "completed"
+  | "failed"
   | "exported";
 
 export interface Job {
@@ -30,35 +54,36 @@ export interface Job {
   regions: Region[];
   createdAt: string;
   hwpxPath?: string;
+  lastError?: string;
 }
 
-// Mock OCR results
-const MOCK_OCR_TEXTS: Record<string, string> = {
-  text: "다음 이차방정식의 근을 구하시오.\n\nx² - 5x + 6 = 0\n\n풀이:\n(x-2)(x-3) = 0\nx = 2 또는 x = 3",
-  diagram:
-    "[도형 인식]\n삼각형 ABC\nAB = 5cm, BC = 4cm, AC = 3cm\n∠C = 90°\n넓이 = 6cm²",
-  mixed:
-    "다음 그림에서 삼각형 ABC의 넓이를 구하시오.\n[도형: 직각삼각형]\nAB = 5, BC = 4, CA = 3\n넓이 = (1/2) × 3 × 4 = 6",
-};
+const POLL_INTERVAL_MS = 1200;
+const POLL_MAX_ATTEMPTS = 45;
 
-function generateMockSvg(polygon: number[][], regionId: string): string {
-  const points = polygon.map((p) => `${p[0]},${p[1]}`).join(" ");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700">
-  <polygon points="${points}" fill="none" stroke="#3b82f6" stroke-width="2"/>
-  <text x="${polygon[0][0] + 10}" y="${polygon[0][1] + 20}" fill="#3b82f6" font-size="14">${regionId}</text>
-</svg>`;
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-let jobCounter = 0;
+function triggerDownloadBlob(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+}
 
 export function useJobStore() {
   const [jobs, setJobs] = useState<Job[]>([]);
 
   const createJob = useCallback(
-    (fileName: string, imageUrl: string, width: number, height: number) => {
-      jobCounter += 1;
-      const job: Job = {
-        id: `job_${Date.now()}_${jobCounter}`,
+    async (fileName: string, imageUrl: string, width: number, height: number, imageFile: File) => {
+      const backend = await createJobApi(imageFile);
+      const job = mapBackendJob(backend, {
+        id: backend.job_id,
         fileName,
         imageUrl,
         imageWidth: width,
@@ -66,123 +91,214 @@ export function useJobStore() {
         status: "regions_pending",
         regions: [],
         createdAt: new Date().toISOString(),
-      };
-      setJobs((prev) => [job, ...prev]);
+      });
+
+      setJobs((prev) => [job, ...prev.filter((candidate) => candidate.id !== job.id)]);
       return job.id;
     },
     []
   );
 
-  const saveRegions = useCallback((jobId: string, regions: Region[]) => {
+  const saveRegions = useCallback(async (jobId: string, regions: Region[]) => {
     setJobs((prev) =>
-      prev.map((j) =>
-        j.id === jobId
+      prev.map((job) =>
+        job.id === jobId
           ? {
-              ...j,
-              regions: regions.map((r) => ({ ...r, status: "pending" })),
-              status: "regions_saved",
+              ...job,
+              status: "regions_pending",
+              lastError: undefined,
+              regions: regions.map((region) => ({
+                ...region,
+                status: "pending",
+                ocrText: undefined,
+                explanation: undefined,
+                mathml: undefined,
+                svgUrl: undefined,
+                cropUrl: undefined,
+                processingMs: undefined,
+                success: undefined,
+                errorReason: undefined,
+                editedSvgUrl: undefined,
+                editedSvgVersion: undefined,
+                svgData: undefined,
+              })),
             }
-          : j
+          : job
       )
     );
+
+    try {
+      await saveRegionsApi(
+        jobId,
+        regions.map((region) => ({
+          id: region.id,
+          polygon: region.polygon,
+          type: region.type,
+          order: region.order,
+        }))
+      );
+
+      setJobs((prev) =>
+        prev.map((job) =>
+          job.id === jobId
+            ? {
+                ...job,
+                status: "queued",
+                lastError: undefined,
+              }
+            : job
+        )
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "영역 저장에 실패했습니다.";
+      setJobs((prev) =>
+        prev.map((job) =>
+          job.id === jobId
+            ? {
+                ...job,
+                status: "regions_pending",
+                lastError: message,
+              }
+            : job
+        )
+      );
+      throw error;
+    }
   }, []);
 
-  const runPipeline = useCallback(
-    (jobId: string): Promise<void> => {
-      return new Promise((resolve) => {
-        let regionCount = 0;
-
-        setJobs((prev) => {
-          const updated = prev.map((j) => {
-            if (j.id !== jobId) return j;
-            regionCount = j.regions.length;
-            return {
-              ...j,
-              status: "running" as const,
-              regions: j.regions.map((r) => ({
-                ...r,
-                status: "running" as const,
-              })),
-            };
-          });
-          return updated;
-        });
-
-        // Use setTimeout to let state settle, then get regionCount
-        setTimeout(() => {
-          if (regionCount === 0) {
-            resolve();
-            return;
-          }
-
-          let processed = 0;
-
-          const processNext = () => {
-            if (processed >= regionCount) {
-              setJobs((prev) =>
-                prev.map((j) =>
-                  j.id === jobId ? { ...j, status: "completed" } : j
-                )
-              );
-              resolve();
-              return;
-            }
-
-            const regionIndex = processed;
-            setTimeout(() => {
-              setJobs((prev) =>
-                prev.map((j) => {
-                  if (j.id !== jobId) return j;
-                  const newRegions = [...j.regions];
-                  const region = newRegions[regionIndex];
-                  if (region) {
-                    newRegions[regionIndex] = {
-                      ...region,
-                      status: "completed",
-                      ocrText:
-                        MOCK_OCR_TEXTS[region.type] || MOCK_OCR_TEXTS.mixed,
-                      svgData: generateMockSvg(region.polygon, region.id),
-                    };
-                  }
-                  return { ...j, regions: newRegions };
-                })
-              );
-              processed += 1;
-              processNext();
-            }, 800 + Math.random() * 400);
-          };
-
-          processNext();
-        }, 50);
-      });
-    },
-    []
-  );
-
-  const exportHwpx = useCallback((jobId: string) => {
+  const runPipeline = useCallback(async (jobId: string): Promise<void> => {
     setJobs((prev) =>
-      prev.map((j) =>
-        j.id === jobId
+      prev.map((job) =>
+        job.id === jobId
           ? {
-              ...j,
-              status: "exported",
-              hwpxPath: `runtime/jobs/${jobId}/exports/${jobId}.hwpx`,
+              ...job,
+              status: "running",
+              lastError: undefined,
+              regions: job.regions.map((region) => ({ ...region, status: "running" })),
             }
-          : j
+          : job
       )
     );
+
+    try {
+      await runPipelineApi(jobId);
+
+      for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt += 1) {
+        const backend = await getJobApi(jobId);
+        let hydrated: Job | null = null;
+
+        setJobs((prev) =>
+          prev.map((job) => {
+            if (job.id !== jobId) {
+              return job;
+            }
+
+            hydrated = mapBackendJob(backend, job);
+            return hydrated;
+          })
+        );
+
+        if (backend.status === "completed") {
+          return;
+        }
+
+        if (backend.status === "failed") {
+          throw new Error("파이프라인 처리에 실패했습니다.");
+        }
+
+        await sleep(POLL_INTERVAL_MS);
+      }
+
+      throw new Error("처리 상태 조회 시간이 초과되었습니다.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "파이프라인 실행 중 오류가 발생했습니다.";
+      setJobs((prev) =>
+        prev.map((job) =>
+          job.id === jobId
+            ? {
+                ...job,
+                status: "failed",
+                lastError: message,
+              }
+            : job
+        )
+      );
+      throw error;
+    }
+  }, []);
+
+  const saveEditedSvg = useCallback(async (jobId: string, regionId: string, svg: string) => {
+    await saveEditedSvgApi(jobId, regionId, svg);
+    const backend = await getJobApi(jobId);
+    setJobs((prev) => prev.map((job) => (job.id === jobId ? mapBackendJob(backend, job) : job)));
+  }, []);
+
+  const loadRegionSvg = useCallback(async (jobId: string, regionId: string): Promise<string> => {
+    const data = await getRegionSvgApi(jobId, regionId);
+    return data.svg;
+  }, []);
+
+  const hydrateJob = useCallback(async (jobId: string): Promise<Job> => {
+    const backend = await getJobApi(jobId);
+    let hydrated: Job | null = null;
+
+    setJobs((prev) => {
+      const existing = prev.find((job) => job.id === jobId) ?? null;
+      hydrated = mapBackendJob(backend, existing);
+
+      if (existing) {
+        return prev.map((job) => (job.id === jobId ? hydrated! : job));
+      }
+
+      return [hydrated!, ...prev];
+    });
+
+    return hydrated!;
+  }, []);
+
+  const exportHwpx = useCallback(async (jobId: string) => {
+    const result = await exportHwpxApi(jobId);
+    const hwpxPath = resolveRuntimePath(result.download_url) ?? result.download_url;
+
+    setJobs((prev) =>
+      prev.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              status: "exported",
+              hwpxPath,
+              lastError: undefined,
+            }
+          : job
+      )
+    );
+
+    const downloaded = await downloadHwpxApi(jobId);
+    const filename = downloaded.filename.toLowerCase().endsWith(".hwpx")
+      ? downloaded.filename
+      : `${jobId}.hwpx`;
+    triggerDownloadBlob(downloaded.blob, filename);
   }, []);
 
   const deleteJob = useCallback((jobId: string) => {
-    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    setJobs((prev) => prev.filter((job) => job.id !== jobId));
   }, []);
 
   const getJob = useCallback(
-    (jobId: string) => {
-      return jobs.find((j) => j.id === jobId) || null;
-    },
+    (jobId: string) => jobs.find((job) => job.id === jobId) || null,
     [jobs]
   );
 
-  return { jobs, createJob, saveRegions, runPipeline, exportHwpx, deleteJob, getJob };
+  return {
+    jobs,
+    createJob,
+    saveRegions,
+    runPipeline,
+    saveEditedSvg,
+    loadRegionSvg,
+    hydrateJob,
+    exportHwpx,
+    deleteJob,
+    getJob,
+  };
 }

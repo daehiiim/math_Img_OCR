@@ -32,7 +32,10 @@ class RegionPipelineContext(BaseModel):
     
 class JobPipelineContext(BaseModel):
     job_id: str
+    file_name: str = "uploaded_image"
     image_url: str
+    image_width: int = 0
+    image_height: int = 0
     status: Literal["created", "regions_pending", "queued", "running", "completed", "failed"]
     regions: List[RegionPipelineContext] = Field(default_factory=list)
     created_at: str

@@ -14,6 +14,7 @@ import {
   Info,
 } from "lucide-react";
 import { resolveUploadGate } from "../lib/authFlow";
+import { dataUrlToFile, validateImageFile } from "../lib/uploadPreview";
 
 // Sample demo images for quick testing
 const DEMO_IMAGES = [
@@ -78,7 +79,10 @@ export function NewJobPage() {
     name: string;
     width: number;
     height: number;
+    file: File;
   } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const ensureUploadAccess = useCallback(() => {
     const decision = resolveUploadGate({
@@ -108,13 +112,9 @@ export function NewJobPage() {
   }, [isAuthenticated, navigate, prepareLogin, user?.credits, user?.openAiConnected]);
 
   const handleFile = useCallback((file: File) => {
-    if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
-      toast.error("지원되지 않는 파일 형식입니다.");
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("파일 크기 제한을 초과했습니다.");
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -123,7 +123,8 @@ export function NewJobPage() {
       const url = e.target?.result as string;
       const img = new Image();
       img.onload = () => {
-        setPreview({ url, name: file.name, width: img.width, height: img.height });
+        setPreview({ url, name: file.name, width: img.width, height: img.height, file });
+        setErrorMessage(null);
       };
       img.src = url;
     };
@@ -150,13 +151,38 @@ export function NewJobPage() {
       return;
     }
 
-    setPreview({ url: demo.url, name: demo.name, width: demo.width, height: demo.height });
+    setPreview({
+      url: demo.url,
+      name: demo.name,
+      width: demo.width,
+      height: demo.height,
+      file: dataUrlToFile(demo.url, demo.name),
+    });
+    setErrorMessage(null);
   };
 
-  const handleCreateJob = () => {
-    if (!preview) return;
-    const jobId = createJob(preview.name, preview.url, preview.width, preview.height);
-    navigate(`/workspace/job/${jobId}`);
+  const handleCreateJob = async () => {
+    if (!preview || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const jobId = await createJob(
+        preview.name,
+        preview.url,
+        preview.width,
+        preview.height,
+        preview.file
+      );
+      navigate(`/workspace/job/${jobId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "작업 생성 중 오류가 발생했습니다.";
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -269,7 +295,10 @@ export function NewJobPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setPreview(null)}
+                onClick={() => {
+                  setPreview(null);
+                  setErrorMessage(null);
+                }}
               >
                 <X className="w-4 h-4" />
               </Button>
@@ -290,11 +319,14 @@ export function NewJobPage() {
                   {preview.width} × {preview.height}px
                 </p>
               </div>
-              <Button onClick={handleCreateJob} className="gap-2">
-                작업 생성 및 영역 지정
+              <Button onClick={() => void handleCreateJob()} className="gap-2" disabled={isSubmitting}>
+                {isSubmitting ? "작업 생성 중..." : "작업 생성 및 영역 지정"}
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
+            {errorMessage && (
+              <p className="text-[12px] text-destructive mt-3">{errorMessage}</p>
+            )}
           </CardContent>
         </Card>
       )}

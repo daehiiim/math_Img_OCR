@@ -3,10 +3,13 @@ import { useJobStore, type Job, type Region } from "../store/jobStore";
 
 interface JobContextType {
   jobs: Job[];
-  createJob: (fileName: string, imageUrl: string, width: number, height: number) => string;
-  saveRegions: (jobId: string, regions: Region[]) => void;
+  createJob: (fileName: string, imageUrl: string, width: number, height: number, imageFile: File) => Promise<string>;
+  saveRegions: (jobId: string, regions: Region[]) => Promise<void>;
   runPipeline: (jobId: string) => Promise<void>;
-  exportHwpx: (jobId: string) => void;
+  saveEditedSvg: (jobId: string, regionId: string, svg: string) => Promise<void>;
+  loadRegionSvg: (jobId: string, regionId: string) => Promise<string>;
+  hydrateJob: (jobId: string) => Promise<Job>;
+  exportHwpx: (jobId: string) => Promise<void>;
   deleteJob: (jobId: string) => void;
   getJob: (jobId: string) => Job | null;
 }
