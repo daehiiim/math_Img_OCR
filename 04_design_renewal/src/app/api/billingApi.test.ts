@@ -72,6 +72,22 @@ describe("billingApi", () => {
     ).rejects.toThrow("API 연결 실패 (http://localhost:8000/billing/checkout): Failed to fetch");
   });
 
+  it("blocks non-local deployments when the API base URL is missing", async () => {
+    (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__ = "";
+    (globalThis as { __MATH_OCR_ALLOW_LOCAL_API_FALLBACK__?: boolean }).__MATH_OCR_ALLOW_LOCAL_API_FALLBACK__ = false;
+
+    await expect(
+      createCheckoutSessionApi({
+        planId: "starter",
+        successUrl: "https://example.com/success",
+        cancelUrl: "https://example.com/cancel",
+      })
+    ).rejects.toThrow("API base URL is not configured. Set VITE_API_BASE_URL for deployed environments.");
+
+    delete (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__;
+    delete (globalThis as { __MATH_OCR_ALLOW_LOCAL_API_FALLBACK__?: boolean }).__MATH_OCR_ALLOW_LOCAL_API_FALLBACK__;
+  });
+
   it("surfaces backend detail messages for failed checkout requests", async () => {
     vi.stubGlobal(
       "fetch",

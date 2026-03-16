@@ -4,6 +4,11 @@ import { motion } from "motion/react";
 import { Check, ArrowLeft, Sparkles } from "lucide-react";
 
 import { getBillingCatalogApi, type BillingPlanResponse } from "../api/billingApi";
+import {
+  formatBillingAmount,
+  formatBillingUnitPrice,
+  normalizeBillingCurrency,
+} from "../lib/billingCurrency";
 
 type PlanId = "single" | "starter" | "pro";
 
@@ -48,26 +53,14 @@ const planDecorations: Record<PlanId, PlanDecoration> = {
 
 const planOrder: PlanId[] = ["single", "starter", "pro"];
 
-function formatUsdAmount(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(amount / 100);
-}
-
-function formatUnitPrice(amount: number, credits: number) {
-  return `이미지당 ${formatUsdAmount(Math.round(amount / Math.max(credits, 1)))}`;
-}
-
 function buildPlanCards(catalog: BillingPlanResponse[]): PlanCard[] {
   return [...catalog]
     .sort((left, right) => planOrder.indexOf(left.plan_id) - planOrder.indexOf(right.plan_id))
     .map((plan) => ({
       ...plan,
       ...planDecorations[plan.plan_id],
-      priceLabel: formatUsdAmount(plan.amount),
-      perImageLabel: formatUnitPrice(plan.amount, plan.credits),
+      priceLabel: formatBillingAmount(plan.amount, plan.currency),
+      perImageLabel: formatBillingUnitPrice(plan.amount, plan.credits, plan.currency),
     }));
 }
 
@@ -123,8 +116,7 @@ export function PricingPage() {
           수학 이미지를 HWPX 문서로 즉시 변환하세요.
         </p>
         <div className="mt-4 inline-flex flex-col gap-1 rounded-2xl border border-[#ece7dd] bg-[#fbf7f1] px-5 py-3 text-[13px] text-[#6b6258]">
-          <p>모든 가격은 USD 기준입니다.</p>
-          <p>세금은 checkout에서 국가별로 계산될 수 있습니다.</p>
+          <p>실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.</p>
         </div>
       </div>
 
@@ -163,7 +155,7 @@ export function PricingPage() {
                   {plan.priceLabel}
                 </span>
                 <span className="text-[12px] uppercase tracking-[0.2em] text-[#a1a1aa]">
-                  USD
+                  {normalizeBillingCurrency(plan.currency)}
                 </span>
               </div>
               <p className="mb-2 text-[14px] text-[#52525b]">{plan.description}</p>

@@ -2,6 +2,26 @@ import { browserSupabase } from "../lib/supabase";
 
 const DEFAULT_API_BASE = "http://localhost:8000";
 
+// 로컬 개발 호스트인지 판별해 localhost fallback 허용 여부를 정한다.
+function canUseLocalApiFallback(hostname: string | undefined): boolean {
+  if (!shouldAllowLocalApiFallback()) {
+    return false;
+  }
+
+  return !hostname || ["localhost", "127.0.0.1", "0.0.0.0"].includes(hostname.toLowerCase());
+}
+
+// 개발/테스트 환경에서만 localhost 기본 API를 허용한다.
+function shouldAllowLocalApiFallback(): boolean {
+  const runtimeOverride = (globalThis as { __MATH_OCR_ALLOW_LOCAL_API_FALLBACK__?: boolean })
+    .__MATH_OCR_ALLOW_LOCAL_API_FALLBACK__;
+  if (typeof runtimeOverride === "boolean") {
+    return runtimeOverride;
+  }
+
+  return Boolean(import.meta.env.DEV || import.meta.env.MODE === "test");
+}
+
 export interface BillingProfileResponse {
   credits_balance: number;
   used_credits: number;
@@ -35,7 +55,16 @@ export interface BillingCheckoutStatusResponse {
 function getApiBaseUrl(): string {
   const viteEnvBase = (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL;
   const runtimeBase = (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__;
-  return (viteEnvBase || runtimeBase || DEFAULT_API_BASE).replace(/\/$/, "");
+  const configuredBase = runtimeBase ?? viteEnvBase;
+  if (configuredBase?.trim()) {
+    return configuredBase.replace(/\/$/, "");
+  }
+
+  if (canUseLocalApiFallback(globalThis.location?.hostname)) {
+    return DEFAULT_API_BASE;
+  }
+
+  throw new Error("API base URL is not configured. Set VITE_API_BASE_URL for deployed environments.");
 }
 
 async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> {

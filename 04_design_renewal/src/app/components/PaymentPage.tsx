@@ -19,6 +19,7 @@ import {
   type BillingPlanResponse,
 } from "../api/billingApi";
 import { useAuth } from "../context/AuthContext";
+import { formatBillingAmount, normalizeBillingCurrency } from "../lib/billingCurrency";
 
 type PlanId = "single" | "starter" | "pro";
 
@@ -56,14 +57,6 @@ const fallbackCatalog: BillingPlanResponse[] = [
 
 const terminalFailureStatuses = new Set(["canceled", "cancelled", "expired", "failed"]);
 
-function formatUsdAmount(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(amount / 100);
-}
-
 function resolvePlan(
   planIdParam: string | undefined,
   state: PaymentLocationState,
@@ -80,7 +73,7 @@ function resolvePlan(
     credits: state.credits ?? fallbackPlan.credits,
     amount,
     currency,
-    priceLabel: state.price ?? formatUsdAmount(amount),
+    priceLabel: state.price ?? formatBillingAmount(amount, currency),
   };
 }
 
@@ -353,7 +346,7 @@ export function PaymentPage() {
                       {resolvedPlan.priceLabel}
                     </span>
                     <p className="text-[11px] uppercase tracking-[0.2em] text-[#a1a1aa]">
-                      {resolvedPlan.currency}
+                      {normalizeBillingCurrency(resolvedPlan.currency)}
                     </p>
                   </div>
                 </div>
@@ -429,7 +422,7 @@ export function PaymentPage() {
 
                 <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-[#a1a1aa]">
                   <ShieldCheck className="h-3 w-3" />
-                  USD 결제 · 세금은 checkout에서 국가별로 계산될 수 있습니다.
+                  실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.
                 </div>
                 <p className="mt-2 text-center text-[11px] text-[#a1a1aa]">
                   결제가 실패하면 잔액 변경 없이 다시 시도만 요청됩니다.

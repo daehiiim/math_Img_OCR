@@ -1,22 +1,35 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { getBillingCatalogApiMock } = vi.hoisted(() => ({
+  getBillingCatalogApiMock: vi.fn(),
+}));
 
 vi.mock("../api/billingApi", () => ({
-  getBillingCatalogApi: vi.fn(async () => []),
+  getBillingCatalogApi: getBillingCatalogApiMock,
 }));
 
 import { PricingPage } from "./PricingPage";
 
 describe("PricingPage", () => {
-  it("USD 기준과 세금 안내를 노출한다", () => {
+  beforeEach(() => {
+    getBillingCatalogApiMock.mockResolvedValue([
+      { plan_id: "single", title: "Single", amount: 1000, currency: "krw", credits: 1 },
+      { plan_id: "starter", title: "Starter", amount: 19000, currency: "krw", credits: 100 },
+      { plan_id: "pro", title: "Pro", amount: 29000, currency: "krw", credits: 200 },
+    ]);
+  });
+
+  it("catalog 기준 통화와 checkout 안내를 노출한다", async () => {
     render(
       <MemoryRouter>
         <PricingPage />
       </MemoryRouter>
     );
 
-    expect(screen.getByText("모든 가격은 USD 기준입니다.")).toBeInTheDocument();
-    expect(screen.getByText("세금은 checkout에서 국가별로 계산될 수 있습니다.")).toBeInTheDocument();
+    expect(await screen.findByText("₩19,000")).toBeInTheDocument();
+    expect(screen.getAllByText("KRW").length).toBeGreaterThan(0);
+    expect(screen.getByText("실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.")).toBeInTheDocument();
   });
 });
