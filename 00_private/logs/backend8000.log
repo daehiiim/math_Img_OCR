@@ -1,0 +1,127 @@
+INFO:     Started server process [482716]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [451728]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:64231 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64237 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58054 - "GET /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58057 - "POST /billing/checkout HTTP/1.1" 200 OK
+INFO:     20.106.57.122:50310 - "GET / HTTP/1.1" 404 Not Found
+WARNING:  Invalid HTTP request received.
+INFO:     127.0.0.1:60445 - "OPTIONS /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59503 - "OPTIONS /billing/checkout/7b559c7b-54e1-4778-a6d6-ab538dfb8c01 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60445 - "OPTIONS /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59503 - "OPTIONS /billing/checkout/7b559c7b-54e1-4778-a6d6-ab538dfb8c01 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60445 - "OPTIONS /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59503 - "OPTIONS /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60445 - "OPTIONS /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59503 - "OPTIONS /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59503 - "GET /billing/checkout/7b559c7b-54e1-4778-a6d6-ab538dfb8c01 HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59503 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59503 - "GET /billing/checkout/7b559c7b-54e1-4778-a6d6-ab538dfb8c01 HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59503 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59503 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59503 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60445 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59503 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59503 - "OPTIONS /billing/checkout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59503 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:57076 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:57076 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:57076 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:57076 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:57076 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:53544 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53544 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:65351 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53544 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65351 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58954 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62997 - "OPTIONS /billing/checkout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62997 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62997 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62568 - "OPTIONS /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62568 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62568 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62568 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:50129 - "OPTIONS /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50129 - "OPTIONS /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50129 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60318 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60318 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60318 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60318 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60318 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:58976 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60318 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60318 - "OPTIONS /jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60318 - "POST /jobs HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60318 - "POST /jobs HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60318 - "POST /jobs HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60318 - "POST /jobs HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60318 - "POST /jobs HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60318 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56593 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56593 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64111 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64111 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64111 - "POST /billing/checkout HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56593 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64111 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52848 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:52848 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:61831 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:61831 - "GET /billing/profile HTTP/1.1" 401 Unauthorized
+INFO:     Started server process [542384]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:49162 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61840 - "GET /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61840 - "GET /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61954 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61840 - "GET /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57913 - "POST /billing/checkout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61954 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "OPTIONS /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52812 - "GET /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59050 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61593 - "GET /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59050 - "GET /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52812 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /billing/checkout/d084021a-4a4a-4d44-aed7-ff4e1f0ced6c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51815 - "OPTIONS /billing/checkout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51815 - "POST /billing/checkout HTTP/1.1" 200 OK
+INFO:     Started server process [549832]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [575204]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+WARNING:  Invalid HTTP request received.
+WARNING:  Invalid HTTP request received.

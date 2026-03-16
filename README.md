@@ -1,29 +1,45 @@
-# math_Img_OCR
+# mathOCR
 
-저장된 결과물:
+현재 운영 기준 디렉터리는 아래 두 곳입니다.
 
-- OCR + 풀이 문서: `docs/geometry_problem_solution_ko.md`
-- 다시 그린 도형(SVG): `assets/triangle_redraw.svg`
+- 백엔드 API: `02_main`
+- 프런트엔드: `04_design_renewal`
 
-바로 확인:
+## 빠른 시작
 
+### 1) 백엔드 실행
 ```bash
-cat docs/geometry_problem_solution_ko.md
+cd 02_main
+copy .env.example .env
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-SVG는 브라우저에서 열어 확인할 수 있습니다.
+- Swagger: `http://localhost:8000/docs`
+- Polar webhook 엔드포인트: `POST /billing/webhooks/polar`
+- Polar 사전 점검: `py scripts/polar_sandbox_preflight.py`
 
-추가 기획 문서:
+### 2) 프런트 실행
+```bash
+cd 04_design_renewal
+copy .env.example .env.local
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
 
-- 다중 영역 OCR/벡터화/HWP 설계안: `docs/multi_problem_ocr_vector_hwp_plan_ko.md`
+- 프런트 URL: `http://localhost:5173`
+- 기본 API base: `VITE_API_BASE_URL=http://localhost:8000`
 
-- MVP-1 실행 패키지: `docs/mvp1_execution_pack_ko.md`
-- MVP-1 빠른 시작: `docs/mvp1_quickstart_ko.md`
-- 코어 데모 실행: `python -m app.demo_flow`
+### 3) 루트 Docker 실행
+```bash
+docker compose up --build
+```
 
-Docker 실행:
+루트 Docker는 내부적으로 `02_main` 백엔드를 실행합니다.
 
-- `docker compose up --build`
-- API 문서: `http://localhost:8000/docs`
-- 전체 기능/작동 방법 상세 가이드: `docs/full_system_guide_ko.md`
+## 주요 문서
 
+- 백엔드 가이드: `02_main/README.md`
+- 백엔드 빠른 시작: `02_main/docs/mvp1_quickstart_ko.md`
+- Polar sandbox 런북: `02_main/docs/polar_sandbox_runbook_ko.md`
+- 구현 계획 문서: `docs/plans/*`

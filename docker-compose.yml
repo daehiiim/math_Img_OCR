@@ -1,12 +1,12 @@
 version: '3.9'
 services:
-  mvp1-api:
+  mathocr-api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: math-img-ocr-mvp1
+    container_name: mathocr-api
     ports:
       - "8000:8000"
     volumes:
-      - ./runtime:/app/runtime
+      - ./02_main/runtime:/app/runtime
     restart: unless-stopped

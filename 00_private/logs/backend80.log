@@ -1,0 +1,23 @@
+INFO:     Started server process [448072]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:80 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55667 - "HEAD /docs HTTP/1.1" 200 OK
+INFO:     14.50.225.3:0 - "HEAD /docs HTTP/1.1" 200 OK
+INFO:     14.50.225.3:0 - "GET /billing/catalog HTTP/1.1" 500 Internal Server Error
+INFO:     Started server process [451908]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:80 (Press CTRL+C to quit)
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     74.220.50.2:0 - "POST /billing/webhooks/polar HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:56241 - "OPTIONS /C%24/Users/user/Downloads HTTP/1.1" 404 Not Found
+INFO:     13.89.125.227:56428 - "GET / HTTP/1.1" 404 Not Found

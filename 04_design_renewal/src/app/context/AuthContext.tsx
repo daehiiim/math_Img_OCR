@@ -18,6 +18,7 @@ import {
   saveStoredProfile,
   type StoredProfile,
 } from "../lib/authStorage";
+import { getBillingProfileApi } from "../api/billingApi";
 import { browserSupabase, hasSupabaseAuth } from "../lib/supabase";
 
 export type User = StoredProfile;
@@ -33,6 +34,7 @@ interface AuthContextType {
   disconnectOpenAi: () => void;
   purchaseCredits: (amount: number) => void;
   consumeCredit: (jobId?: string) => boolean;
+  refreshProfile: () => Promise<void>;
   readPostLoginPath: () => string;
   clearPostLoginPath: () => void;
   logout: () => Promise<void>;
@@ -51,9 +53,41 @@ function mapSupabaseUser(user: SupabaseUser) {
   return readStoredProfile(email) ?? createDefaultProfile(displayName, email);
 }
 
+function mergeRemoteProfile(localProfile: User, remoteProfile: Awaited<ReturnType<typeof getBillingProfileApi>>): User {
+  return {
+    ...localProfile,
+    credits: remoteProfile.credits_balance,
+    usedCredits: remoteProfile.used_credits,
+    openAiConnected: localProfile.openAiConnected || remoteProfile.openai_connected,
+    openAiMaskedKey: localProfile.openAiMaskedKey ?? remoteProfile.openai_key_masked ?? null,
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const syncRemoteProfile = useCallback(async (fallbackProfile?: User | null) => {
+    if (!browserSupabase) {
+      return;
+    }
+
+    try {
+      const remoteProfile = await getBillingProfileApi();
+      setUser((prev) => {
+        const baseProfile = prev ?? fallbackProfile ?? null;
+        if (!baseProfile) {
+          return baseProfile;
+        }
+
+        const nextProfile = mergeRemoteProfile(baseProfile, remoteProfile);
+        saveStoredProfile(nextProfile);
+        return nextProfile;
+      });
+    } catch {
+      // 프로필 동기화 실패 시 기존 로컬 상태를 유지한다.
+    }
+  }, []);
 
   useEffect(() => {
     if (!browserSupabase) {
@@ -71,6 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(data.user ? mapSupabaseUser(data.user) : null);
       setIsLoading(false);
+
+      if (data.user) {
+        const profile = mapSupabaseUser(data.user);
+        void syncRemoteProfile(profile);
+      }
     });
 
     const {
@@ -90,13 +129,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       saveStoredProfile(profile);
       setUser(profile);
       setIsLoading(false);
+      void syncRemoteProfile(profile);
     });
 
     return () => {
       active = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [syncRemoteProfile]);
 
   const updateUser = useCallback((updater: (prev: User) => User) => {
     setUser((prev) => {
@@ -196,6 +236,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return consumed;
   }, [updateUser]);
 
+  const refreshProfile = useCallback(async () => {
+    await syncRemoteProfile();
+  }, [syncRemoteProfile]);
+
   const logout = useCallback(async () => {
     if (browserSupabase) {
       await browserSupabase.auth.signOut();
@@ -227,6 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       disconnectOpenAi,
       purchaseCredits,
       consumeCredit,
+      refreshProfile,
       readPostLoginPath,
       clearPostLoginPath,
       logout,
@@ -240,6 +285,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       disconnectOpenAi,
       purchaseCredits,
       consumeCredit,
+      refreshProfile,
       readPostLoginPath,
       clearPostLoginPath,
       logout,

@@ -13,6 +13,8 @@ class ExtractorContext(BaseModel):
     ocr_text: Optional[str] = None
     explanation: Optional[str] = None
     mathml: Optional[str] = None
+    model_used: Optional[str] = None
+    openai_request_id: Optional[str] = None
 
 class FigureContext(BaseModel):
     svg_url: Optional[str] = None
@@ -36,7 +38,9 @@ class JobPipelineContext(BaseModel):
     image_url: str
     image_width: int = 0
     image_height: int = 0
-    status: Literal["created", "regions_pending", "queued", "running", "completed", "failed"]
+    status: Literal["created", "regions_pending", "queued", "running", "completed", "failed", "exported"]
     regions: List[RegionPipelineContext] = Field(default_factory=list)
     created_at: str
     updated_at: str
+    last_error: Optional[str] = None
+    hwpx_export_path: Optional[str] = None

@@ -1,0 +1,290 @@
+from __future__ import annotations
+
+import mimetypes
+from pathlib import Path
+from typing import Protocol
+
+from app.auth import AuthenticatedUser
+from app.config import get_settings
+from app.pipeline.schema import (
+    ExtractorContext,
+    FigureContext,
+    JobPipelineContext,
+    RegionContext,
+    RegionPipelineContext,
+)
+from app.supabase import SupabaseClient, SupabaseConfig
+
+PipelineUserContext = AuthenticatedUser
+
+
+class PipelineRepository(Protocol):
+    """파이프라인이 기대하는 영구 저장 계약이다."""
+
+    def create_job(
+        self,
+        user: PipelineUserContext,
+        filename: str,
+        content: bytes,
+        image_width: int,
+        image_height: int,
+    ) -> JobPipelineContext: ...
+
+    def read_job(self, user: PipelineUserContext, job_id: str) -> JobPipelineContext: ...
+
+    def save_job(self, user: PipelineUserContext, job: JobPipelineContext) -> None: ...
+
+    def upload_bytes(
+        self,
+        user: PipelineUserContext,
+        storage_path: str,
+        content: bytes,
+        content_type: str,
+    ) -> None: ...
+
+    def download_bytes(self, user: PipelineUserContext, storage_path: str) -> bytes: ...
+
+    def download_text(self, user: PipelineUserContext, storage_path: str) -> str: ...
+
+    def create_signed_url(
+        self,
+        user: PipelineUserContext,
+        storage_path: str,
+        expires_in: int = 3600,
+    ) -> str: ...
+
+
+def _sanitize_filename(filename: str) -> str:
+    """업로드 파일명을 안전한 basename으로 정리한다."""
+    candidate = Path(filename or "uploaded_image").name.strip()
+    return candidate or "uploaded_image"
+
+
+def _guess_content_type(path_value: str, fallback: str) -> str:
+    """파일명 확장자로 MIME 타입을 추정한다."""
+    guessed, _ = mimetypes.guess_type(path_value)
+    return guessed or fallback
+
+
+class SupabasePipelineRepository:
+    """OCR 파이프라인 데이터를 Supabase DB와 Storage에 저장한다."""
+
+    def __init__(self, root_path: Path) -> None:
+        settings = get_settings(root_path)
+        if not settings.auth.supabase_url or not settings.auth.supabase_anon_key:
+            raise ValueError("Supabase REST settings are not configured")
+
+        self._config = SupabaseConfig(
+            url=settings.auth.supabase_url,
+            anon_key=settings.auth.supabase_anon_key,
+            storage_bucket=settings.auth.supabase_storage_bucket or "ocr-assets",
+        )
+
+    def _client(self, user: PipelineUserContext) -> SupabaseClient:
+        """사용자 JWT가 포함된 Supabase 클라이언트를 만든다."""
+        return SupabaseClient(self._config, user.access_token)
+
+    def create_job(
+        self,
+        user: PipelineUserContext,
+        filename: str,
+        content: bytes,
+        image_width: int,
+        image_height: int,
+    ) -> JobPipelineContext:
+        """원본 이미지를 업로드하고 ocr_jobs row를 만든다."""
+        from app.pipeline.orchestrator import _utc_now
+        import uuid
+
+        safe_name = _sanitize_filename(filename)
+        job_id = str(uuid.uuid4())
+        image_path = f"{user.user_id}/{job_id}/input/{safe_name}"
+        now = _utc_now()
+
+        self.upload_bytes(user, image_path, content, _guess_content_type(safe_name, "application/octet-stream"))
+        self._client(user).insert(
+            "ocr_jobs",
+            {
+                "id": job_id,
+                "user_id": user.user_id,
+                "file_name": safe_name,
+                "source_image_path": image_path,
+                "image_width": image_width,
+                "image_height": image_height,
+                "processing_type": "service_api",
+                "status": "regions_pending",
+                "was_charged": False,
+                "last_error": None,
+                "hwpx_export_path": None,
+            },
+        )
+
+        return JobPipelineContext(
+            job_id=job_id,
+            file_name=safe_name,
+            image_url=image_path,
+            image_width=image_width,
+            image_height=image_height,
+            status="regions_pending",
+            created_at=now,
+            updated_at=now,
+        )
+
+    def read_job(self, user: PipelineUserContext, job_id: str) -> JobPipelineContext:
+        """DB row와 region row를 읽어 파이프라인 컨텍스트로 조립한다."""
+        client = self._client(user)
+        job_rows = client.select(
+            "ocr_jobs",
+            params={
+                "select": "id,file_name,source_image_path,image_width,image_height,status,last_error,hwpx_export_path,created_at,updated_at",
+                "id": f"eq.{job_id}",
+            },
+        )
+        if not job_rows:
+            raise FileNotFoundError(f"job not found: {job_id}")
+
+        region_rows = client.select(
+            "ocr_job_regions",
+            params={
+                "select": "region_key,polygon,region_type,region_order,status,ocr_text,explanation,mathml,model_used,openai_request_id,svg_path,edited_svg_path,edited_svg_version,crop_path,png_rendered_path,processing_ms,error_reason",
+                "job_id": f"eq.{job_id}",
+                "order": "region_order.asc",
+            },
+        )
+
+        job_row = job_rows[0]
+        regions = [
+            RegionPipelineContext(
+                context=RegionContext(
+                    id=str(row["region_key"]),
+                    polygon=row.get("polygon") or [],
+                    type=row.get("region_type") or "mixed",
+                    order=int(row.get("region_order") or 1),
+                ),
+                extractor=ExtractorContext(
+                    ocr_text=row.get("ocr_text"),
+                    explanation=row.get("explanation"),
+                    mathml=row.get("mathml"),
+                    model_used=row.get("model_used"),
+                    openai_request_id=row.get("openai_request_id"),
+                ),
+                figure=FigureContext(
+                    svg_url=row.get("svg_path"),
+                    crop_url=row.get("crop_path"),
+                    edited_svg_url=row.get("edited_svg_path"),
+                    edited_svg_version=int(row.get("edited_svg_version") or 0),
+                    png_rendered_url=row.get("png_rendered_path"),
+                ),
+                status=row.get("status") or "pending",
+                success=(row.get("status") == "completed") if row.get("status") is not None else None,
+                error_reason=row.get("error_reason"),
+                processing_ms=row.get("processing_ms"),
+            )
+            for row in region_rows
+        ]
+
+        return JobPipelineContext(
+            job_id=str(job_row["id"]),
+            file_name=str(job_row.get("file_name") or "uploaded_image"),
+            image_url=str(job_row.get("source_image_path") or ""),
+            image_width=int(job_row.get("image_width") or 0),
+            image_height=int(job_row.get("image_height") or 0),
+            status=job_row.get("status") or "created",
+            regions=regions,
+            created_at=str(job_row.get("created_at")),
+            updated_at=str(job_row.get("updated_at")),
+            last_error=job_row.get("last_error"),
+            hwpx_export_path=job_row.get("hwpx_export_path"),
+        )
+
+    def save_job(self, user: PipelineUserContext, job: JobPipelineContext) -> None:
+        """Job 전체 상태와 region 목록을 DB에 동기화한다."""
+        client = self._client(user)
+        client.update(
+            "ocr_jobs",
+            filters={"id": f"eq.{job.job_id}"},
+            payload={
+                "file_name": job.file_name,
+                "source_image_path": job.image_url,
+                "image_width": job.image_width,
+                "image_height": job.image_height,
+                "status": job.status,
+                "last_error": job.last_error,
+                "hwpx_export_path": job.hwpx_export_path,
+            },
+        )
+
+        existing_rows = client.select(
+            "ocr_job_regions",
+            params={"select": "region_key", "job_id": f"eq.{job.job_id}"},
+        )
+        existing_keys = {str(row["region_key"]) for row in existing_rows}
+        current_keys = {region.context.id for region in job.regions}
+        for stale_key in sorted(existing_keys - current_keys):
+            client.delete(
+                "ocr_job_regions",
+                filters={
+                    "job_id": f"eq.{job.job_id}",
+                    "region_key": f"eq.{stale_key}",
+                },
+            )
+
+        if not job.regions:
+            return
+
+        payload = [
+            {
+                "job_id": job.job_id,
+                "region_key": region.context.id,
+                "polygon": region.context.polygon,
+                "region_type": region.context.type,
+                "region_order": region.context.order,
+                "status": region.status,
+                "ocr_text": region.extractor.ocr_text,
+                "explanation": region.extractor.explanation,
+                "mathml": region.extractor.mathml,
+                "model_used": region.extractor.model_used,
+                "openai_request_id": region.extractor.openai_request_id,
+                "svg_path": region.figure.svg_url,
+                "edited_svg_path": region.figure.edited_svg_url,
+                "edited_svg_version": region.figure.edited_svg_version,
+                "crop_path": region.figure.crop_url,
+                "png_rendered_path": region.figure.png_rendered_url,
+                "processing_ms": region.processing_ms,
+                "error_reason": region.error_reason,
+            }
+            for region in job.regions
+        ]
+        client.upsert("ocr_job_regions", payload=payload, on_conflict="job_id,region_key")
+
+    def upload_bytes(
+        self,
+        user: PipelineUserContext,
+        storage_path: str,
+        content: bytes,
+        content_type: str,
+    ) -> None:
+        """Storage에 바이트를 저장한다."""
+        self._client(user).upload_bytes(storage_path, content, content_type)
+
+    def download_bytes(self, user: PipelineUserContext, storage_path: str) -> bytes:
+        """Storage에서 바이트를 읽는다."""
+        return self._client(user).download_bytes(storage_path)
+
+    def download_text(self, user: PipelineUserContext, storage_path: str) -> str:
+        """Storage에서 UTF-8 텍스트를 읽는다."""
+        return self.download_bytes(user, storage_path).decode("utf-8")
+
+    def create_signed_url(
+        self,
+        user: PipelineUserContext,
+        storage_path: str,
+        expires_in: int = 3600,
+    ) -> str:
+        """Storage object의 presigned URL을 생성한다."""
+        return self._client(user).create_signed_url(storage_path, expires_in=expires_in)
+
+
+def build_repository_from_settings(root_path: Path) -> PipelineRepository:
+    """환경설정에 맞는 기본 저장소 구현체를 반환한다."""
+    return SupabasePipelineRepository(root_path)

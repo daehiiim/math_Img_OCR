@@ -36,10 +36,17 @@ create table if not exists public.user_openai_keys (
 create table if not exists public.payment_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  stripe_event_id text not null unique,
+  provider text not null check (provider in ('polar', 'stripe')),
+  provider_event_id text not null,
+  provider_order_id text,
+  provider_checkout_id text,
+  provider_customer_id text,
   plan_id text not null,
   credits_added integer not null check (credits_added > 0),
-  amount_krw integer not null check (amount_krw > 0),
+  amount integer not null check (amount > 0),
+  currency text not null,
+  invoice_number text,
+  invoice_url text,
   status text not null check (status in ('pending', 'completed', 'failed')),
   raw_payload jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
@@ -51,6 +58,8 @@ create table if not exists public.ocr_jobs (
   user_id uuid not null references auth.users(id) on delete cascade,
   file_name text not null,
   source_image_path text not null,
+  image_width integer not null default 0,
+  image_height integer not null default 0,
   processing_type text not null check (processing_type in ('user_api_key', 'service_api')),
   status text not null check (status in ('created', 'regions_pending', 'queued', 'running', 'completed', 'failed', 'exported')),
   was_charged boolean not null default false,
@@ -71,6 +80,9 @@ create table if not exists public.ocr_job_regions (
   status text not null default 'pending' check (status in ('pending', 'running', 'completed', 'failed')),
   ocr_text text,
   explanation text,
+  mathml text,
+  model_used text,
+  openai_request_id text,
   svg_path text,
   edited_svg_path text,
   edited_svg_version integer not null default 0 check (edited_svg_version >= 0),
@@ -90,12 +102,23 @@ create table if not exists public.credit_ledger (
   payment_event_id uuid references public.payment_events(id) on delete set null,
   delta integer not null,
   balance_after integer not null check (balance_after >= 0),
-  reason text not null check (reason in ('ocr_success_charge', 'manual_adjustment', 'stripe_purchase')),
+  reason text not null check (reason in ('ocr_success_charge', 'manual_adjustment', 'purchase', 'stripe_purchase')),
   created_at timestamptz not null default now()
 );
 
 create index if not exists idx_payment_events_user_status
   on public.payment_events (user_id, status, created_at desc);
+
+create unique index if not exists idx_payment_events_provider_event
+  on public.payment_events (provider, provider_event_id);
+
+create unique index if not exists idx_payment_events_provider_order
+  on public.payment_events (provider, provider_order_id)
+  where provider_order_id is not null;
+
+create index if not exists idx_payment_events_provider_checkout
+  on public.payment_events (provider, provider_checkout_id)
+  where provider_checkout_id is not null;
 
 create index if not exists idx_ocr_jobs_user_status
   on public.ocr_jobs (user_id, status, created_at desc);
@@ -144,6 +167,12 @@ on public.profiles
 for update
 to authenticated
 using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy "profiles_insert_own"
+on public.profiles
+for insert
+to authenticated
 with check (auth.uid() = user_id);
 
 create policy "user_openai_keys_select_own"
@@ -223,3 +252,47 @@ on public.credit_ledger
 for select
 to authenticated
 using (auth.uid() = user_id);
+
+insert into storage.buckets (id, name, public)
+values ('ocr-assets', 'ocr-assets', false)
+on conflict (id) do nothing;
+
+create policy "ocr_assets_select_own"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'ocr-assets'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "ocr_assets_insert_own"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'ocr-assets'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "ocr_assets_update_own"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'ocr-assets'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'ocr-assets'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "ocr_assets_delete_own"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'ocr-assets'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);

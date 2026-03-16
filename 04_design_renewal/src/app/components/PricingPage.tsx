@@ -1,59 +1,104 @@
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { Check, ArrowLeft, Sparkles } from "lucide-react";
 
-const plans = [
-  {
-    id: "single",
-    title: "Single",
-    price: "90",
-    currency: "원",
+import { getBillingCatalogApi, type BillingPlanResponse } from "../api/billingApi";
+
+type PlanId = "single" | "starter" | "pro";
+
+interface PlanDecoration {
+  description: string;
+  badge: string | null;
+  highlight: boolean;
+  features: string[];
+}
+
+interface PlanCard extends BillingPlanResponse, PlanDecoration {
+  priceLabel: string;
+  perImageLabel: string;
+}
+
+const fallbackCatalog: BillingPlanResponse[] = [
+  { plan_id: "single", title: "Single", amount: 100, currency: "usd", credits: 1 },
+  { plan_id: "starter", title: "Starter", amount: 1900, currency: "usd", credits: 100 },
+  { plan_id: "pro", title: "Pro", amount: 2900, currency: "usd", credits: 200 },
+];
+
+const planDecorations: Record<PlanId, PlanDecoration> = {
+  single: {
     description: "1개 이미지 변환",
-    perImage: "90원 / 이미지",
     badge: null,
     highlight: false,
-    credits: 1,
     features: ["1개 이미지 변환", "HWPX 내보내기", "AI OCR 처리"],
   },
-  {
-    id: "starter",
-    title: "Starter",
-    price: "5,900",
-    currency: "원",
+  starter: {
     description: "100개 이미지",
-    perImage: "59원 / 이미지",
     badge: null,
     highlight: false,
-    credits: 100,
-    features: [
-      "100개 이미지 변환",
-      "HWPX 내보내기",
-      "AI OCR 처리",
-      "영역 선택",
-    ],
+    features: ["100개 이미지 변환", "HWPX 내보내기", "AI OCR 처리", "영역 선택"],
   },
-  {
-    id: "pro",
-    title: "Pro",
-    price: "10,900",
-    currency: "원",
+  pro: {
     description: "200개 이미지",
-    perImage: "54.5원 / 이미지",
-    badge: "최고 가치",
+    badge: "가장 효율적",
     highlight: true,
-    credits: 200,
-    features: [
-      "200개 이미지 변환",
-      "HWPX 내보내기",
-      "AI OCR 처리",
-      "영역 선택",
-      "우선 처리",
-    ],
+    features: ["200개 이미지 변환", "HWPX 내보내기", "AI OCR 처리", "영역 선택", "우선 처리"],
   },
-];
+};
+
+const planOrder: PlanId[] = ["single", "starter", "pro"];
+
+function formatUsdAmount(amount: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(amount / 100);
+}
+
+function formatUnitPrice(amount: number, credits: number) {
+  return `이미지당 ${formatUsdAmount(Math.round(amount / Math.max(credits, 1)))}`;
+}
+
+function buildPlanCards(catalog: BillingPlanResponse[]): PlanCard[] {
+  return [...catalog]
+    .sort((left, right) => planOrder.indexOf(left.plan_id) - planOrder.indexOf(right.plan_id))
+    .map((plan) => ({
+      ...plan,
+      ...planDecorations[plan.plan_id],
+      priceLabel: formatUsdAmount(plan.amount),
+      perImageLabel: formatUnitPrice(plan.amount, plan.credits),
+    }));
+}
 
 export function PricingPage() {
   const navigate = useNavigate();
+  const [catalog, setCatalog] = useState<BillingPlanResponse[]>(fallbackCatalog);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCatalog = async () => {
+      try {
+        const plans = await getBillingCatalogApi();
+        if (active && plans.length > 0) {
+          setCatalog(plans);
+        }
+      } catch {
+        if (active) {
+          setCatalog(fallbackCatalog);
+        }
+      }
+    };
+
+    void loadCatalog();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const plans = useMemo(() => buildPlanCards(catalog), [catalog]);
 
   return (
     <motion.div
@@ -62,30 +107,31 @@ export function PricingPage() {
       transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
       className="w-full max-w-[900px]"
     >
-      {/* Back link */}
       <button
         onClick={() => navigate("/")}
-        className="flex items-center gap-1.5 text-[13px] text-[#71717a] hover:text-[#111] transition-colors mb-8 cursor-pointer"
+        className="mb-8 flex cursor-pointer items-center gap-1.5 text-[13px] text-[#71717a] transition-colors hover:text-[#111]"
       >
-        <ArrowLeft className="w-3.5 h-3.5" />
+        <ArrowLeft className="h-3.5 w-3.5" />
         홈으로 돌아가기
       </button>
 
-      {/* Header */}
-      <div className="text-center mb-10">
-        <h1 className="text-[26px] tracking-[-0.02em] text-[#111] mb-2">
+      <div className="mb-10 text-center">
+        <h1 className="mb-2 text-[26px] tracking-[-0.02em] text-[#111]">
           이미지 구매
         </h1>
         <p className="text-[15px] text-[#71717a]">
           수학 이미지를 HWPX 문서로 즉시 변환하세요.
         </p>
+        <div className="mt-4 inline-flex flex-col gap-1 rounded-2xl border border-[#ece7dd] bg-[#fbf7f1] px-5 py-3 text-[13px] text-[#6b6258]">
+          <p>모든 가격은 USD 기준입니다.</p>
+          <p>세금은 checkout에서 국가별로 계산될 수 있습니다.</p>
+        </div>
       </div>
 
-      {/* Pricing Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
         {plans.map((plan, index) => (
           <motion.div
-            key={plan.id}
+            key={plan.plan_id}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{
@@ -95,62 +141,59 @@ export function PricingPage() {
             }}
             className="relative"
           >
-            {/* Badge */}
             {plan.badge && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                <div className="flex items-center gap-1 bg-indigo-600 text-white text-[11px] px-3 py-1 rounded-full">
-                  <Sparkles className="w-3 h-3" />
+              <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2">
+                <div className="flex items-center gap-1 rounded-full bg-[#14532d] px-3 py-1 text-[11px] text-white">
+                  <Sparkles className="h-3 w-3" />
                   {plan.badge}
                 </div>
               </div>
             )}
 
             <div
-              className={`bg-white rounded-xl border p-7 flex flex-col h-full transition-shadow ${
+              className={`flex h-full flex-col rounded-xl border p-7 transition-shadow ${
                 plan.highlight
-                  ? "border-indigo-200 shadow-[0_4px_24px_rgba(79,70,229,0.1)] ring-1 ring-indigo-100"
-                  : "border-[#e4e4e7] shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
+                  ? "border-[#b7d3bf] bg-[#f7fbf8] shadow-[0_10px_30px_rgba(20,83,45,0.08)]"
+                  : "border-[#e4e4e7] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
               }`}
             >
-              {/* Plan name */}
-              <p className="text-[13px] text-[#71717a] mb-4">{plan.title}</p>
-
-              {/* Price */}
-              <div className="flex items-baseline gap-0.5 mb-1">
-                <span className="text-[36px] tracking-[-0.03em] text-[#111] leading-none">
-                  {plan.price}
+              <p className="mb-2 text-[13px] text-[#71717a]">{plan.title}</p>
+              <div className="mb-1 flex items-baseline gap-2">
+                <span className="text-[34px] tracking-[-0.03em] text-[#111]">
+                  {plan.priceLabel}
                 </span>
-                <span className="text-[15px] text-[#71717a]">{plan.currency}</span>
+                <span className="text-[12px] uppercase tracking-[0.2em] text-[#a1a1aa]">
+                  USD
+                </span>
               </div>
+              <p className="mb-2 text-[14px] text-[#52525b]">{plan.description}</p>
+              <p className="mb-6 text-[13px] text-[#a1a1aa]">{plan.perImageLabel}</p>
 
-              {/* Per image */}
-              <p className="text-[13px] text-[#a1a1aa] mb-6">{plan.perImage}</p>
-
-              {/* CTA Button */}
               <button
                 onClick={() =>
-                  navigate(`/payment/${plan.id}`, {
+                  navigate(`/payment/${plan.plan_id}`, {
                     state: {
                       title: plan.title,
-                      price: `${plan.price}${plan.currency}`,
+                      price: plan.priceLabel,
+                      amount: plan.amount,
+                      currency: plan.currency,
                       credits: plan.credits,
                     },
                   })
                 }
-                className={`w-full h-10 rounded-lg text-[14px] cursor-pointer transition-all active:scale-[0.98] mb-7 ${
+                className={`mb-7 h-10 w-full cursor-pointer rounded-lg text-[14px] transition-all active:scale-[0.98] ${
                   plan.highlight
-                    ? "bg-[#111] text-white hover:bg-[#222]"
-                    : "bg-[#fafafa] border border-[#e4e4e7] text-[#111] hover:bg-[#f4f4f5]"
+                    ? "bg-[#14532d] text-white hover:bg-[#0f3f22]"
+                    : "border border-[#e4e4e7] bg-[#fafafa] text-[#111] hover:bg-[#f4f4f5]"
                 }`}
               >
                 구매
               </button>
 
-              {/* Features */}
-              <div className="space-y-2.5 pt-6 border-t border-[#f4f4f5]">
+              <div className="space-y-2.5 border-t border-[#f4f4f5] pt-6">
                 {plan.features.map((feature) => (
                   <div key={feature} className="flex items-start gap-2">
-                    <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
                     <span className="text-[13px] text-[#52525b]">{feature}</span>
                   </div>
                 ))}

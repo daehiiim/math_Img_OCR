@@ -3,17 +3,14 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 
 from app import pipeline
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-RUNTIME_DIR = ROOT / "runtime" / "jobs"
+from app.auth import AuthenticatedUser, require_authenticated_user
+from app.billing import BillingProfile, build_billing_service
 
 app = FastAPI(title="Math Region OCR MVP API", version="0.1.0")
 
@@ -35,9 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-RUNTIME_DIR.parent.mkdir(parents=True, exist_ok=True)
-app.mount("/runtime", StaticFiles(directory=ROOT / "runtime"), name="runtime")
-
 
 class Region(BaseModel):
     id: str
@@ -48,10 +42,11 @@ class Region(BaseModel):
     @field_validator("polygon")
     @classmethod
     def validate_polygon(cls, value: list[list[float]]) -> list[list[float]]:
+        """영역 polygon 포맷을 검증한다."""
         if len(value) < 4:
             raise ValueError("polygon must contain at least 4 points")
-        for pt in value:
-            if len(pt) != 2:
+        for point in value:
+            if len(point) != 2:
                 raise ValueError("each point must have exactly two coordinates")
         return value
 
@@ -82,7 +77,7 @@ class RegionResult(BaseModel):
 
 class JobResponse(BaseModel):
     job_id: str
-    status: Literal["created", "regions_pending", "queued", "running", "completed", "failed"]
+    status: Literal["created", "regions_pending", "queued", "running", "completed", "failed", "exported"]
     file_name: str | None = None
     image_url: str | None = None
     image_width: int | None = None
@@ -90,27 +85,100 @@ class JobResponse(BaseModel):
     regions: list[RegionResult] = Field(default_factory=list)
 
 
-@app.post("/jobs", response_model=JobResponse, status_code=201)
-async def create_job(image: UploadFile = File(...)) -> JobResponse:
-    content = await image.read()
-    job = pipeline.create_job_from_bytes(image.filename or "uploaded_image", content)
-    
-    # Map back to UI schema
+class EditedSvgRequest(BaseModel):
+    svg: str
+
+
+class CheckoutSessionRequest(BaseModel):
+    plan_id: Literal["single", "starter", "pro"]
+    success_url: str
+    cancel_url: str
+
+
+class BillingProfileResponse(BaseModel):
+    credits_balance: int
+    used_credits: int
+    openai_connected: bool
+    openai_key_masked: str | None = None
+
+
+def _signed_asset_url(current_user: AuthenticatedUser, storage_path: str | None) -> str | None:
+    """Storage 내부 경로를 짧은 signed URL로 바꾼다."""
+    return pipeline.create_asset_url(current_user, storage_path)
+
+
+def _get_billing_service(require_polar: bool = False):
+    """현재 환경설정으로 BillingService를 생성한다."""
+    try:
+        return build_billing_service(require_polar=require_polar)
+    except ValueError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
+    """파이프라인 컨텍스트를 프런트 응답 모델로 바꾼다."""
     return JobResponse(
-         job_id=job.job_id,
-         status=job.status,
-         file_name=job.file_name,
-         image_url=job.image_url,
-         image_width=job.image_width,
-         image_height=job.image_height,
-         regions=[]
+        job_id=job.job_id,
+        status=job.status,
+        file_name=job.file_name,
+        image_url=_signed_asset_url(current_user, job.image_url),
+        image_width=job.image_width,
+        image_height=job.image_height,
+        regions=[
+            RegionResult(
+                id=region.context.id,
+                status=region.status,
+                polygon=region.context.polygon,
+                type=region.context.type,
+                order=region.context.order,
+                ocr_text=region.extractor.ocr_text,
+                explanation=region.extractor.explanation,
+                mathml=region.extractor.mathml,
+                svg_url=_signed_asset_url(current_user, region.figure.svg_url),
+                crop_url=_signed_asset_url(current_user, region.figure.crop_url),
+                processing_ms=region.processing_ms,
+                success=region.success,
+                error_reason=region.error_reason,
+                model_used=region.extractor.model_used,
+                openai_request_id=region.extractor.openai_request_id,
+                edited_svg_url=_signed_asset_url(current_user, region.figure.edited_svg_url),
+                edited_svg_version=region.figure.edited_svg_version,
+            )
+            for region in job.regions
+        ],
     )
 
 
+def _map_billing_profile(profile: BillingProfile) -> BillingProfileResponse:
+    """Billing profile을 응답 모델로 변환한다."""
+    return BillingProfileResponse(
+        credits_balance=profile.credits_balance,
+        used_credits=profile.used_credits,
+        openai_connected=profile.openai_connected,
+        openai_key_masked=profile.openai_key_masked,
+    )
+
+
+@app.post("/jobs", response_model=JobResponse, status_code=201)
+async def create_job(
+    image: UploadFile = File(...),
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JobResponse:
+    """원본 이미지를 업로드하고 초기 job을 생성한다."""
+    content = await image.read()
+    job = pipeline.create_job_from_bytes(current_user, image.filename or "uploaded_image", content)
+    return _map_job_response(current_user, job)
+
+
 @app.put("/jobs/{job_id}/regions")
-def save_regions(job_id: str, payload: RegionSetRequest) -> dict:
+def save_regions(
+    job_id: str,
+    payload: RegionSetRequest,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """사용자 지정 영역 목록을 저장한다."""
     try:
-        return pipeline.save_regions(job_id, [r.model_dump() for r in payload.regions])
+        return pipeline.save_regions(current_user, job_id, [region.model_dump() for region in payload.regions])
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
     except ValueError as error:
@@ -118,9 +186,16 @@ def save_regions(job_id: str, payload: RegionSetRequest) -> dict:
 
 
 @app.post("/jobs/{job_id}/run")
-def run_pipeline(job_id: str) -> dict:
+def run_pipeline(
+    job_id: str,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """OCR 파이프라인을 실행한다."""
     try:
-        return pipeline.run_pipeline(job_id)
+        result = pipeline.run_pipeline(current_user, job_id)
+        if result.get("status") == "completed":
+            _get_billing_service().consume_job_credit(current_user, job_id)
+        return result
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
     except ValueError as error:
@@ -128,91 +203,180 @@ def run_pipeline(job_id: str) -> dict:
 
 
 @app.get("/jobs/{job_id}", response_model=JobResponse)
-def get_job(job_id: str) -> JobResponse:
+def get_job(
+    job_id: str,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JobResponse:
+    """DB와 Storage 상태를 합쳐 job 상세 응답을 반환한다."""
     try:
-        job = pipeline.read_job(job_id)
+        job = pipeline.read_job(current_user, job_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
-        
-    regions = []
-    for r in job.regions:
-         regions.append(RegionResult(
-             id=r.context.id,
-             status=r.status,
-             polygon=r.context.polygon,
-             type=r.context.type,
-             order=r.context.order,
-             ocr_text=r.extractor.ocr_text,
-             explanation=r.extractor.explanation,
-             mathml=r.extractor.mathml,
-             svg_url=r.figure.svg_url,
-             crop_url=r.figure.crop_url,
-             processing_ms=r.processing_ms,
-             success=r.success,
-             error_reason=r.error_reason,
-             edited_svg_url=r.figure.edited_svg_url,
-             edited_svg_version=r.figure.edited_svg_version
-         ))
-         
-    return JobResponse(
-        job_id=job.job_id,
-        status=job.status,
-        file_name=job.file_name,
-        image_url=job.image_url,
-        image_width=job.image_width,
-        image_height=job.image_height,
-        regions=regions
-    )
-
-
-
-class EditedSvgRequest(BaseModel):
-    svg: str
+    return _map_job_response(current_user, job)
 
 
 @app.get("/jobs/{job_id}/regions/{region_id}/svg")
-def get_region_svg(job_id: str, region_id: str) -> dict:
+def get_region_svg(
+    job_id: str,
+    region_id: str,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """편집기용 SVG 원문을 반환한다."""
     try:
-        return pipeline.get_region_svg(job_id, region_id)
+        return pipeline.get_region_svg(current_user, job_id, region_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))
 
+
 @app.put("/jobs/{job_id}/regions/{region_id}/svg/edited")
-def save_edited_svg(job_id: str, region_id: str, payload: EditedSvgRequest) -> dict:
+def save_edited_svg(
+    job_id: str,
+    region_id: str,
+    payload: EditedSvgRequest,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """편집된 SVG를 저장하고 최신 signed URL을 반환한다."""
     try:
-        return pipeline.save_edited_svg(job_id, region_id, payload.svg)
+        result = pipeline.save_edited_svg(current_user, job_id, region_id, payload.svg)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
+
+    return {
+        "region_id": result["region_id"],
+        "edited_svg_url": _signed_asset_url(current_user, result["edited_svg_url"]),
+        "edited_svg_version": result["edited_svg_version"],
+    }
 
 
 @app.post("/jobs/{job_id}/export/hwpx")
-def export_hwpx(job_id: str) -> dict:
+def export_hwpx(
+    job_id: str,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """HWPX 내보내기를 실행하고 다운로드 엔드포인트를 반환한다."""
     try:
-        return pipeline.execute_hwpx_export(job_id)
+        pipeline.execute_hwpx_export(current_user, job_id)
+        return {"download_url": f"/jobs/{job_id}/export/hwpx/download"}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.get("/billing/profile", response_model=BillingProfileResponse)
+def get_billing_profile(
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> BillingProfileResponse:
+    """현재 로그인 사용자의 크레딧 상태를 반환한다."""
+    profile = _get_billing_service().get_profile(current_user)
+    return _map_billing_profile(profile)
+
+
+@app.get("/billing/catalog")
+def get_billing_catalog() -> dict:
+    """현재 결제 가능한 고정 플랜 목록을 반환한다."""
+    try:
+        return {"plans": _get_billing_service(require_polar=True).list_plans()}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/billing/checkout")
+@app.post("/billing/checkout-session")
+def create_checkout(
+    payload: CheckoutSessionRequest,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """Polar checkout 세션을 만들고 리다이렉트 URL을 반환한다."""
+    try:
+        return _get_billing_service(require_polar=True).create_checkout(
+            current_user,
+            plan_id=payload.plan_id,
+            success_url=payload.success_url,
+            cancel_url=payload.cancel_url,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.get("/billing/checkout/{checkout_id}")
+@app.get("/billing/checkout-session/{checkout_id}")
+def get_checkout_status(
+    checkout_id: str,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """Polar checkout 상태와 내부 적립 상태를 조회한다."""
+    try:
+        return _get_billing_service(require_polar=True).get_checkout(checkout_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.get("/billing/portal")
+def get_customer_portal(
+    return_url: str | None = None,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """Polar customer portal URL을 생성한다."""
+    try:
+        return _get_billing_service(require_polar=True).create_customer_portal(
+            current_user,
+            return_url=return_url,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/billing/webhooks/polar")
+@app.post("/billing/webhook")
+async def polar_webhook(
+    request: Request,
+    webhook_id: str | None = Header(default=None, alias="webhook-id"),
+    webhook_signature: str | None = Header(default=None, alias="webhook-signature"),
+    webhook_timestamp: str | None = Header(default=None, alias="webhook-timestamp"),
+) -> dict:
+    """Polar webhook을 검증하고 크레딧 적립을 반영한다."""
+    payload = await request.body()
+    try:
+        service = _get_billing_service(require_polar=True)
+        event = service.verify_webhook(
+            payload,
+            {
+                "webhook-id": webhook_id or "",
+                "webhook-signature": webhook_signature or "",
+                "webhook-timestamp": webhook_timestamp or "",
+            },
+        )
+        return service.apply_webhook_event(event)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
     except Exception as error:
-        raise HTTPException(status_code=500, detail=f"unexpected export error: {error}")
+        raise HTTPException(status_code=500, detail=f"unexpected webhook error: {error}")
 
 
 @app.get("/jobs/{job_id}/export/hwpx/download")
-def download_hwpx(job_id: str) -> FileResponse:
-    print("HIT download_hwpx", job_id)
+def download_hwpx(
+    job_id: str,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> Response:
+    """저장된 HWPX를 내려준다."""
     try:
-        result = pipeline.execute_hwpx_export(job_id)
-        path = ROOT / result["download_url"]
-        if not path.exists():
+        job = pipeline.read_job(current_user, job_id)
+        if not job.hwpx_export_path:
+            pipeline.execute_hwpx_export(current_user, job_id)
+            job = pipeline.read_job(current_user, job_id)
+        if not job.hwpx_export_path:
             raise HTTPException(status_code=404, detail="exported hwpx not found")
-        return FileResponse(
-            path=path,
+
+        content = pipeline.download_asset_bytes(current_user, job.hwpx_export_path)
+        return Response(
+            content=content,
             media_type="application/hwp+zip",
-            filename=f"{job_id}.hwpx",
+            headers={"Content-Disposition": f'attachment; filename="{job_id}.hwpx"'},
         )
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")

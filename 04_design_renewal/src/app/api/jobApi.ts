@@ -1,3 +1,5 @@
+import { browserSupabase } from "../lib/supabase";
+
 const DEFAULT_API_BASE = "http://localhost:8000";
 
 export type BackendRegionStatus = "pending" | "running" | "completed" | "failed";
@@ -7,7 +9,8 @@ export type BackendJobStatus =
   | "queued"
   | "running"
   | "completed"
-  | "failed";
+  | "failed"
+  | "exported";
 
 export interface BackendRegion {
   id: string;
@@ -50,12 +53,28 @@ function getApiBaseUrl(): string {
   return (viteEnvBase || runtimeBase || DEFAULT_API_BASE).replace(/\/$/, "");
 }
 
+async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> {
+  const headers = new Headers(initHeaders);
+  const session = browserSupabase ? await browserSupabase.auth.getSession() : null;
+  const accessToken = session?.data.session?.access_token;
+
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  return headers;
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getApiBaseUrl();
   let response: Response;
+  const headers = await buildRequestHeaders(init?.headers);
 
   try {
-    response = await fetch(`${base}${path}`, init);
+    response = await fetch(`${base}${path}`, {
+      ...init,
+      headers,
+    });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(`API 연결 실패 (${base}${path}): ${reason}`);
@@ -144,7 +163,11 @@ export async function getRegionSvgApi(jobId: string, regionId: string) {
 
 export async function downloadHwpxApi(jobId: string): Promise<{ blob: Blob; filename: string }> {
   const base = getApiBaseUrl();
-  const response = await fetch(`${base}/jobs/${jobId}/export/hwpx/download`, { method: "GET" });
+  const headers = await buildRequestHeaders();
+  const response = await fetch(`${base}/jobs/${jobId}/export/hwpx/download`, {
+    method: "GET",
+    headers,
+  });
 
   if (!response.ok) {
     const text = await response.text();

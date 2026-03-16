@@ -1,0 +1,16 @@
+INFO:     Started server process [609956]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55951 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60483 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60482 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61097 - "OPTIONS /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61097 - "GET /billing/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61097 - "OPTIONS /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64707 - "OPTIONS /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64707 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61097 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49459 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60880 - "GET /billing/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60880 - "GET /billing/profile HTTP/1.1" 200 OK

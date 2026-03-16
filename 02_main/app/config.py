@@ -10,17 +10,24 @@ class AuthSettings:
     supabase_url: str | None
     supabase_anon_key: str | None
     supabase_jwt_secret: str | None
+    supabase_storage_bucket: str | None
+    supabase_service_role_key: str | None
 
 
 @dataclass(frozen=True)
 class BillingSettings:
-    stripe_secret_key: str | None
-    stripe_webhook_secret: str | None
+    polar_access_token: str | None
+    polar_webhook_secret: str | None
+    polar_server: str | None
+    polar_product_single_id: str | None
+    polar_product_starter_id: str | None
+    polar_product_pro_id: str | None
 
 
 @dataclass(frozen=True)
 class AppSettings:
     openai_api_key: str | None
+    database_url: str | None
     auth: AuthSettings
     billing: BillingSettings
 
@@ -58,13 +65,20 @@ def get_settings(root_path: Path) -> AppSettings:
 
     return AppSettings(
         openai_api_key=_get_setting(env_values, "OPENAI_API_KEY"),
+        database_url=_get_setting(env_values, "DATABASE_URL"),
         auth=AuthSettings(
             supabase_url=_get_setting(env_values, "SUPABASE_URL"),
             supabase_anon_key=_get_setting(env_values, "SUPABASE_ANON_KEY"),
             supabase_jwt_secret=_get_setting(env_values, "SUPABASE_JWT_SECRET"),
+            supabase_storage_bucket=_get_setting(env_values, "SUPABASE_STORAGE_BUCKET"),
+            supabase_service_role_key=_get_setting(env_values, "SUPABASE_SERVICE_ROLE_KEY"),
         ),
         billing=BillingSettings(
-            stripe_secret_key=_get_setting(env_values, "STRIPE_SECRET_KEY"),
-            stripe_webhook_secret=_get_setting(env_values, "STRIPE_WEBHOOK_SECRET"),
+            polar_access_token=_get_setting(env_values, "POLAR_ACCESS_TOKEN"),
+            polar_webhook_secret=_get_setting(env_values, "POLAR_WEBHOOK_SECRET"),
+            polar_server=_get_setting(env_values, "POLAR_SERVER"),
+            polar_product_single_id=_get_setting(env_values, "POLAR_PRODUCT_SINGLE_ID"),
+            polar_product_starter_id=_get_setting(env_values, "POLAR_PRODUCT_STARTER_ID"),
+            polar_product_pro_id=_get_setting(env_values, "POLAR_PRODUCT_PRO_ID"),
         ),
     )

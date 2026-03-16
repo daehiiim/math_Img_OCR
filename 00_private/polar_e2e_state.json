@@ -1,0 +1,18 @@
+{
+  "user_id": "fe4c80ed-9784-436b-aaaf-efb083407b8c",
+  "email": "polar-e2e-829044111a1b@example.com",
+  "profile": {
+    "credits_balance": 0,
+    "used_credits": 0,
+    "openai_connected": false,
+    "openai_key_masked": null
+  },
+  "checkout_id": "d084021a-4a4a-4d44-aed7-ff4e1f0ced6c",
+  "checkout_url": "https://sandbox.polar.sh/checkout/polar_c_unknown_latest",
+  "plan_id": "pro",
+  "last_checkout_requested_at": 1773654839,
+  "api_base_url": "http://127.0.0.1:8000",
+  "provider_event_id": "2b9344ee-fcc0-4b7d-8fd7-faf68289e345",
+  "provider_order_id": "0ed1ea9e-5a80-418e-855d-f202e0cda36a",
+  "provider_customer_id": "a81fa991-e3b5-4cd8-ae24-60bb4a791dcb"
+}
