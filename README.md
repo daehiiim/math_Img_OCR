@@ -37,6 +37,13 @@ docker compose up --build
 
 루트 Docker는 내부적으로 `02_main` 백엔드를 실행합니다.
 
+## 운영 배포 계약
+
+- Vercel 운영 프런트는 `/jobs`, `/billing` same-origin 경로를 호출하고 `04_design_renewal/vercel.json` 이 Cloud Run 으로 프록시합니다.
+- Vercel production 환경에서는 `VITE_API_BASE_URL` 을 기본값으로 두지 않습니다. 로컬 개발에서만 `http://localhost:8000` 를 사용합니다.
+- Cloud Run 배포는 루트 `Dockerfile` 기준으로 수행하고, 컨테이너는 `${PORT:-8000}` 규칙을 따라야 합니다.
+- 비밀값 회전 순서는 `새 비밀값 등록 -> Cloud Run 재배포 -> 운영 검증 -> 구 비밀값 폐기` 순서를 유지합니다.
+
 ## 주요 문서
 
 - 백엔드 가이드: `02_main/README.md`

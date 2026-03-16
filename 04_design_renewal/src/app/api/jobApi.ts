@@ -1,6 +1,5 @@
 import { browserSupabase } from "../lib/supabase";
-
-const DEFAULT_API_BASE = "http://localhost:8000";
+import { buildApiUrl, getApiBaseUrl } from "./apiBase";
 
 export type BackendRegionStatus = "pending" | "running" | "completed" | "failed";
 export type BackendJobStatus =
@@ -47,12 +46,6 @@ export interface RegionPayload {
   order: number;
 }
 
-function getApiBaseUrl(): string {
-  const viteEnvBase = (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL;
-  const runtimeBase = (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__;
-  return (viteEnvBase || runtimeBase || DEFAULT_API_BASE).replace(/\/$/, "");
-}
-
 async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> {
   const headers = new Headers(initHeaders);
   const session = browserSupabase ? await browserSupabase.auth.getSession() : null;
@@ -66,18 +59,18 @@ async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> 
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const base = getApiBaseUrl();
+  const url = buildApiUrl(path);
   let response: Response;
   const headers = await buildRequestHeaders(init?.headers);
 
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await fetch(url, {
       ...init,
       headers,
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`API 연결 실패 (${base}${path}): ${reason}`);
+    throw new Error(`API 연결 실패 (${url}): ${reason}`);
   }
 
   if (!response.ok) {
@@ -162,9 +155,9 @@ export async function getRegionSvgApi(jobId: string, regionId: string) {
 }
 
 export async function downloadHwpxApi(jobId: string): Promise<{ blob: Blob; filename: string }> {
-  const base = getApiBaseUrl();
+  const url = buildApiUrl(`/jobs/${jobId}/export/hwpx/download`);
   const headers = await buildRequestHeaders();
-  const response = await fetch(`${base}/jobs/${jobId}/export/hwpx/download`, {
+  const response = await fetch(url, {
     method: "GET",
     headers,
   });

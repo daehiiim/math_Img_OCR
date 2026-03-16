@@ -1,27 +1,38 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
+// 셸 환경변수가 있으면 .env.local 보다 우선해서 API base 값을 고정한다.
+function getDefinedApiBase(mode: string): string {
+  const env = loadEnv(mode, __dirname, "");
+  if (Object.prototype.hasOwnProperty.call(process.env, "VITE_API_BASE_URL")) {
+    return process.env.VITE_API_BASE_URL ?? "";
+  }
+
+  return env.VITE_API_BASE_URL ?? "";
+}
+
+export default defineConfig(({ mode }) => ({
+  define: {
+    __MATH_OCR_VITE_API_BASE__: JSON.stringify(getDefinedApiBase(mode)),
+  },
   plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
+    // React 와 Tailwind 플러그인은 현재 빌드 계약의 일부다.
     react(),
     tailwindcss(),
   ],
   resolve: {
     alias: {
-      // Alias @ to the src directory
+      // src 루트를 @ 경로로 고정한다.
       '@': path.resolve(__dirname, './src'),
     },
   },
-
-  // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
+  // raw import 를 허용할 파일만 명시한다.
   assetsInclude: ['**/*.svg', '**/*.csv'],
   test: {
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test/setup.ts",
   },
-})
+}))

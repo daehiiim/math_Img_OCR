@@ -1,26 +1,5 @@
 import { browserSupabase } from "../lib/supabase";
-
-const DEFAULT_API_BASE = "http://localhost:8000";
-
-// 로컬 개발 호스트인지 판별해 localhost fallback 허용 여부를 정한다.
-function canUseLocalApiFallback(hostname: string | undefined): boolean {
-  if (!shouldAllowLocalApiFallback()) {
-    return false;
-  }
-
-  return !hostname || ["localhost", "127.0.0.1", "0.0.0.0"].includes(hostname.toLowerCase());
-}
-
-// 개발/테스트 환경에서만 localhost 기본 API를 허용한다.
-function shouldAllowLocalApiFallback(): boolean {
-  const runtimeOverride = (globalThis as { __MATH_OCR_ALLOW_LOCAL_API_FALLBACK__?: boolean })
-    .__MATH_OCR_ALLOW_LOCAL_API_FALLBACK__;
-  if (typeof runtimeOverride === "boolean") {
-    return runtimeOverride;
-  }
-
-  return Boolean(import.meta.env.DEV || import.meta.env.MODE === "test");
-}
+import { buildApiUrl } from "./apiBase";
 
 export interface BillingProfileResponse {
   credits_balance: number;
@@ -52,21 +31,6 @@ export interface BillingCheckoutStatusResponse {
   credits_applied: boolean;
 }
 
-function getApiBaseUrl(): string {
-  const viteEnvBase = (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL;
-  const runtimeBase = (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__;
-  const configuredBase = runtimeBase ?? viteEnvBase;
-  if (configuredBase?.trim()) {
-    return configuredBase.replace(/\/$/, "");
-  }
-
-  if (canUseLocalApiFallback(globalThis.location?.hostname)) {
-    return DEFAULT_API_BASE;
-  }
-
-  throw new Error("API base URL is not configured. Set VITE_API_BASE_URL for deployed environments.");
-}
-
 async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> {
   const headers = new Headers(initHeaders);
   const session = browserSupabase ? await browserSupabase.auth.getSession() : null;
@@ -80,18 +44,18 @@ async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> 
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const base = getApiBaseUrl();
+  const url = buildApiUrl(path);
   const headers = await buildRequestHeaders(init?.headers);
   let response: Response;
 
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await fetch(url, {
       ...init,
       headers,
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`API 연결 실패 (${base}${path}): ${reason}`);
+    throw new Error(`API 연결 실패 (${url}): ${reason}`);
   }
 
   if (!response.ok) {
