@@ -39,6 +39,7 @@ docker compose up --build
 
 ## 운영 배포 계약
 
+- Vercel 프런트 프로젝트의 Root Directory 는 `04_design_renewal` 로 고정합니다.
 - Vercel 운영 프런트는 `/jobs`, `/billing` same-origin 경로를 호출하고 `04_design_renewal/vercel.json` 이 Cloud Run 으로 프록시합니다.
 - Vercel production 환경에서는 `VITE_API_BASE_URL` 을 기본값으로 두지 않습니다. 로컬 개발에서만 `http://localhost:8000` 를 사용합니다.
 - Cloud Run 배포는 루트 `Dockerfile` 기준으로 수행하고, 컨테이너는 `${PORT:-8000}` 규칙을 따라야 합니다.
