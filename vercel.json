@@ -1,0 +1,28 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm --prefix 04_design_renewal ci",
+  "buildCommand": "npm --prefix 04_design_renewal run build",
+  "outputDirectory": "04_design_renewal/dist",
+  "rewrites": [
+    {
+      "source": "/jobs",
+      "destination": "https://mathocr-146126176673.us-central1.run.app/jobs"
+    },
+    {
+      "source": "/jobs/(.*)",
+      "destination": "https://mathocr-146126176673.us-central1.run.app/jobs/$1"
+    },
+    {
+      "source": "/billing",
+      "destination": "https://mathocr-146126176673.us-central1.run.app/billing"
+    },
+    {
+      "source": "/billing/(.*)",
+      "destination": "https://mathocr-146126176673.us-central1.run.app/billing/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
