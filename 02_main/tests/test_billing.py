@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import app.auth as auth_module
 import app.main as main_module
 from app.auth import AuthenticatedUser
-from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway, StoredOpenAiKey
+from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway, StoredOpenAiKey, build_billing_service
 from app.config import AppSettings, AuthSettings, BillingSettings
 from app.main import app
 from tests.auth_test_utils import StubJwksResponse, build_es256_key_pair, build_es256_token
@@ -413,6 +413,29 @@ def test_save_openai_key_overwrites_existing_ciphertext():
     assert profile.openai_key_masked.endswith("7891")
 
 
+def test_save_openai_key_requires_encryption_secret():
+    gateway = FakePolarGateway()
+    store = FakeBillingStore()
+    service = BillingService(
+        store=store,
+        polar_gateway=gateway,
+        plan_product_ids={
+            "single": "prod_single",
+            "starter": "prod_starter",
+            "pro": "prod_pro",
+        },
+        service_openai_api_key="sk-service-1234567890",
+        openai_key_encryption_secret=None,
+    )
+
+    try:
+        service.save_openai_key(make_user(), "sk-user-1234567890")
+    except ValueError as error:
+        assert str(error) == "OPENAI_KEY_ENCRYPTION_SECRET is not configured"
+    else:
+        raise AssertionError("OPENAI key 저장은 암호화 secret 없이는 실패해야 한다.")
+
+
 def test_delete_openai_key_deactivates_profile_and_key():
     service, store, _ = make_service()
     service.save_openai_key(make_user(), "sk-user-1234567890")
@@ -659,3 +682,73 @@ def test_polar_gateway_verify_event_accepts_polar_secret_prefix():
 
     assert event["type"] == "order.paid"
     assert event["_event_id"] == "evt_123"
+
+
+def test_build_billing_service_requires_production_server_for_live_billing(monkeypatch):
+    monkeypatch.setattr(
+        "app.billing.get_settings",
+        lambda root_path: AppSettings(
+            openai_api_key=None,
+            openai_key_encryption_secret="encryption-secret",
+            database_url=None,
+            auth=AuthSettings(
+                supabase_url="https://billing-auth.supabase.co",
+                supabase_anon_key="anon-key",
+                supabase_jwt_secret=None,
+                supabase_storage_bucket="ocr-assets",
+                supabase_service_role_key="service-role-key",
+            ),
+            billing=BillingSettings(
+                polar_access_token="polar-token",
+                polar_webhook_secret="whsec-test",
+                polar_server="sandbox",
+                polar_product_single_id="prod_single",
+                polar_product_starter_id="prod_starter",
+                polar_product_pro_id="prod_pro",
+            ),
+        ),
+    )
+
+    try:
+        build_billing_service(root_path=Path("."), require_polar=True)
+    except ValueError as error:
+        assert str(error) == "POLAR_SERVER must be production for live billing"
+    else:
+        raise AssertionError("운영 결제 경로는 production Polar 서버만 허용해야 한다.")
+
+
+def test_polar_gateway_normalizes_invalid_token_errors(monkeypatch):
+    class FakeSDKError(Exception):
+        """Polar SDK 401을 흉내 내는 테스트 예외다."""
+
+    class FakeProductsClient:
+        """상품 조회 시 invalid_token 에러를 던진다."""
+
+        def get(self, *, id: str):
+            raise FakeSDKError(
+                'API error occurred: Status 401. Body: {"error": "invalid_token", '
+                '"error_description": "The access token provided is expired, revoked, malformed, '
+                'or invalid for other reasons."}'
+            )
+
+    class FakePolarClient:
+        """products client만 노출하는 테스트용 Polar 클라이언트다."""
+
+        def __init__(self) -> None:
+            self.products = FakeProductsClient()
+
+    monkeypatch.setattr("app.billing.polar_models.SDKError", FakeSDKError)
+    monkeypatch.setattr("app.billing.Polar", lambda access_token, server: FakePolarClient())
+
+    gateway = PolarGateway(
+        access_token="polar-token",
+        webhook_secret="whsec-test",
+        server="production",
+    )
+
+    try:
+        gateway.get_product("prod_live")
+    except ValueError as error:
+        assert str(error) == "POLAR_ACCESS_TOKEN does not match POLAR_SERVER"
+    else:
+        raise AssertionError("Polar 401 invalid_token 은 설정 불일치 오류로 정규화돼야 한다.")

@@ -11,6 +11,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+- 백엔드 런타임 설정의 단일 소스는 `02_main/.env` 이다. 저장소 루트 `.env` 는 백엔드 설정 파일로 사용하지 않는다.
 - 브라우저 인증이나 결제 복귀 흐름까지 확인하려면 `.env`에 `APP_URL=https://mathtohwp.vercel.app` 또는 허용할 프런트 도메인을 함께 설정해야 합니다.
 
 ### Docker
@@ -23,13 +24,14 @@ docker compose up --build
 
 ## 필수 환경변수
 
+- `OPENAI_KEY_ENCRYPTION_SECRET`
 - `APP_URL`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `POLAR_ACCESS_TOKEN`
 - `POLAR_WEBHOOK_SECRET`
-- `POLAR_SERVER`
+- `POLAR_SERVER` (`production` 기본, sandbox 테스트는 별도 런북 참고)
 - `POLAR_PRODUCT_SINGLE_ID`
 - `POLAR_PRODUCT_STARTER_ID`
 - `POLAR_PRODUCT_PRO_ID`

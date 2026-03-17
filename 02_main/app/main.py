@@ -118,7 +118,7 @@ def _get_billing_service(require_polar: bool = False):
     try:
         return build_billing_service(require_polar=require_polar)
     except ValueError as error:
-        raise HTTPException(status_code=500, detail=str(error)) from error
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:

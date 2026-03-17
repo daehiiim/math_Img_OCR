@@ -36,8 +36,8 @@ class AppSettings:
 
 
 def _load_env_file(root_path: Path) -> dict[str, str]:
-    """프로젝트 루트의 .env.example 또는 apiKey.env 형식을 읽어 설정 후보를 만든다."""
-    env_candidates = [root_path / ".env", root_path / "apiKey.env"]
+    """백엔드 런타임 기준인 root_path/.env 파일을 읽어 설정 후보를 만든다."""
+    env_candidates = [root_path / ".env"]
     values: dict[str, str] = {}
 
     for path in env_candidates:

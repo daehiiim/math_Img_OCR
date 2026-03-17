@@ -43,6 +43,28 @@ async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> 
   return headers;
 }
 
+function mapBillingDetailToMessage(detail: string): string {
+  if (detail === "OPENAI_KEY_ENCRYPTION_SECRET is not configured") {
+    return "OpenAI 개인 키 저장을 위해 서버의 OPENAI_KEY_ENCRYPTION_SECRET 설정이 필요합니다.";
+  }
+  if (detail === "POLAR_ACCESS_TOKEN is not configured") {
+    return "결제를 위해 서버의 POLAR_ACCESS_TOKEN 설정이 필요합니다.";
+  }
+  if (detail === "POLAR_SERVER must be production for live billing") {
+    return "운영 결제를 사용하려면 서버의 POLAR_SERVER 값을 production으로 설정해야 합니다.";
+  }
+  if (detail === "POLAR_ACCESS_TOKEN does not match POLAR_SERVER") {
+    return "Polar 운영 토큰이 현재 POLAR_SERVER 설정과 맞지 않습니다. 설정 값을 다시 확인해 주세요.";
+  }
+  if (detail.startsWith("missing Polar product ids:")) {
+    return "결제 상품 설정이 누락되었습니다. 서버의 Polar 상품 ID를 확인해 주세요.";
+  }
+  if (detail === "Polar gateway is not configured") {
+    return "결제 서버 설정이 아직 완료되지 않았습니다. 관리자 설정을 확인해 주세요.";
+  }
+  return detail;
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const url = buildApiUrl(path);
   const headers = await buildRequestHeaders(init?.headers);
@@ -65,7 +87,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       const parsed = JSON.parse(text) as { detail?: string };
       if (typeof parsed.detail === "string") {
-        message = `[${response.status}] ${parsed.detail}`;
+        message = mapBillingDetailToMessage(parsed.detail);
       }
     } catch {
       // JSON이 아닌 에러 응답은 그대로 둔다.

@@ -17,6 +17,10 @@ from app.config import get_settings
 from app.supabase import SupabaseApiError, SupabaseClient, SupabaseConfig
 
 ROOT = Path(__file__).resolve().parents[1]
+OPENAI_KEY_ENCRYPTION_SECRET_MISSING = "OPENAI_KEY_ENCRYPTION_SECRET is not configured"
+POLAR_ACCESS_TOKEN_MISSING = "POLAR_ACCESS_TOKEN is not configured"
+POLAR_SERVER_LIVE_BILLING_REQUIRED = "POLAR_SERVER must be production for live billing"
+POLAR_ACCESS_TOKEN_SERVER_MISMATCH = "POLAR_ACCESS_TOKEN does not match POLAR_SERVER"
 
 
 @dataclass(frozen=True)
@@ -167,7 +171,7 @@ def _build_openai_key_cipher(secret: str | None) -> Fernet:
     """환경 비밀값으로 Fernet 암호화기를 만든다."""
     normalized = str(secret or "").strip()
     if not normalized:
-        raise ValueError("OPENAI_KEY_ENCRYPTION_SECRET is not configured")
+        raise ValueError(OPENAI_KEY_ENCRYPTION_SECRET_MISSING)
     digest = hashlib.sha256(normalized.encode("utf-8")).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 
@@ -222,6 +226,30 @@ def _map_product_to_plan(plan_id: str, product_id: str, product: dict) -> Billin
     )
 
 
+def _normalize_polar_sdk_error(action: str, error: Exception) -> ValueError:
+    """Polar SDK 예외를 프런트가 해석할 수 있는 안정적인 문자열로 정규화한다."""
+    message = str(error)
+    normalized = message.lower()
+    if "status 401" in normalized and "invalid_token" in normalized:
+        return ValueError(POLAR_ACCESS_TOKEN_SERVER_MISMATCH)
+    return ValueError(f"{action}: {message}")
+
+
+def _validate_required_polar_settings(
+    access_token: str | None,
+    server: str | None,
+    product_ids: dict[str, str],
+) -> None:
+    """운영 결제 경로에 필요한 Polar 설정을 사전에 검증한다."""
+    if not access_token:
+        raise ValueError(POLAR_ACCESS_TOKEN_MISSING)
+    if (server or "").strip().lower() != "production":
+        raise ValueError(POLAR_SERVER_LIVE_BILLING_REQUIRED)
+    missing = [plan_id for plan_id, product_id in product_ids.items() if not product_id]
+    if missing:
+        raise ValueError(f"missing Polar product ids: {', '.join(missing)}")
+
+
 class PolarGateway:
     """Polar SDK와 표준 webhook 검증기를 감싼다."""
 
@@ -234,7 +262,7 @@ class PolarGateway:
         try:
             product = self._client.products.get(id=product_id)
         except polar_models.SDKError as error:
-            raise ValueError(f"Polar product lookup failed: {error}") from error
+            raise _normalize_polar_sdk_error("Polar product lookup failed", error) from error
 
         amount, currency = _read_price(product)
         return {
@@ -266,7 +294,7 @@ class PolarGateway:
         try:
             checkout = self._client.checkouts.create(request=request)
         except polar_models.SDKError as error:
-            raise ValueError(f"Polar checkout creation failed: {error}") from error
+            raise _normalize_polar_sdk_error("Polar checkout creation failed", error) from error
 
         return {
             "id": checkout.id,
@@ -279,7 +307,7 @@ class PolarGateway:
         try:
             checkout = self._client.checkouts.get(id=checkout_id)
         except polar_models.SDKError as error:
-            raise ValueError(f"Polar checkout lookup failed: {error}") from error
+            raise _normalize_polar_sdk_error("Polar checkout lookup failed", error) from error
 
         return {
             "id": checkout.id,
@@ -295,7 +323,7 @@ class PolarGateway:
         try:
             session = self._client.customer_sessions.create(request=request)
         except polar_models.SDKError as error:
-            raise ValueError(f"Polar customer session creation failed: {error}") from error
+            raise _normalize_polar_sdk_error("Polar customer session creation failed", error) from error
 
         return {"customer_portal_url": session.customer_portal_url}
 
@@ -840,11 +868,11 @@ def build_billing_service(root_path: Path | None = None, require_polar: bool = F
         "pro": _normalize_optional_text(settings.billing.polar_product_pro_id) or "",
     }
     if require_polar:
-        if not settings.billing.polar_access_token:
-            raise ValueError("POLAR_ACCESS_TOKEN is not configured")
-        missing = [plan_id for plan_id, product_id in product_ids.items() if not product_id]
-        if missing:
-            raise ValueError(f"missing Polar product ids: {', '.join(missing)}")
+        _validate_required_polar_settings(
+            settings.billing.polar_access_token,
+            settings.billing.polar_server,
+            product_ids,
+        )
 
     gateway = None
     if settings.billing.polar_access_token:

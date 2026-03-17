@@ -190,7 +190,63 @@ describe("billingApi", () => {
         successUrl: "https://example.com/success",
         cancelUrl: "https://example.com/cancel",
       })
-    ).rejects.toThrow("[400] Polar gateway is not configured");
+    ).rejects.toThrow("결제 서버 설정이 아직 완료되지 않았습니다. 관리자 설정을 확인해 주세요.");
+  });
+
+  it("maps missing OpenAI encryption settings to a friendly Korean message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ detail: "OPENAI_KEY_ENCRYPTION_SECRET is not configured" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+
+    await expect(saveOpenAiKeyApi("sk-user-1234567890")).rejects.toThrow(
+      "OpenAI 개인 키 저장을 위해 서버의 OPENAI_KEY_ENCRYPTION_SECRET 설정이 필요합니다."
+    );
+  });
+
+  it("maps Polar token mismatch errors to a friendly Korean message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ detail: "POLAR_ACCESS_TOKEN does not match POLAR_SERVER" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+
+    await expect(
+      createCheckoutSessionApi({
+        planId: "starter",
+        successUrl: "https://example.com/success",
+        cancelUrl: "https://example.com/cancel",
+      })
+    ).rejects.toThrow("Polar 운영 토큰이 현재 POLAR_SERVER 설정과 맞지 않습니다. 설정 값을 다시 확인해 주세요.");
+  });
+
+  it("maps missing Polar access tokens to a friendly Korean message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ detail: "POLAR_ACCESS_TOKEN is not configured" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+
+    await expect(
+      createCheckoutSessionApi({
+        planId: "starter",
+        successUrl: "https://example.com/success",
+        cancelUrl: "https://example.com/cancel",
+      })
+    ).rejects.toThrow("결제를 위해 서버의 POLAR_ACCESS_TOKEN 설정이 필요합니다.");
   });
 
   it("sends the OpenAI key save request with auth headers and JSON body", async () => {

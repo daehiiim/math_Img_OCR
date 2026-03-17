@@ -15,6 +15,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+- 백엔드 런타임 설정은 `02_main/.env` 만 사용합니다. 저장소 루트 `.env` 는 백엔드 설정 파일이 아닙니다.
 - Swagger: `http://localhost:8000/docs`
 - Polar webhook 엔드포인트: `POST /billing/webhooks/polar`
 - Polar 사전 점검: `py scripts/polar_sandbox_preflight.py`

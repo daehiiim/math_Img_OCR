@@ -90,3 +90,21 @@ def test_get_settings_reads_database_url(tmp_path):
     settings = get_settings(tmp_path)
 
     assert settings.database_url == "postgresql://postgres:secret@db.example.supabase.co:5432/postgres"
+
+
+def test_get_settings_ignores_api_key_env_for_backend_runtime(tmp_path):
+    api_key_env_path = tmp_path / "apiKey.env"
+    api_key_env_path.write_text(
+        "\n".join(
+            [
+                "OPENAI_KEY_ENCRYPTION_SECRET=legacy-secret",
+                "POLAR_ACCESS_TOKEN=legacy-polar-token",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = get_settings(tmp_path)
+
+    assert settings.openai_key_encryption_secret is None
+    assert settings.billing.polar_access_token is None
