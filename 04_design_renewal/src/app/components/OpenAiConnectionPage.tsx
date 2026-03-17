@@ -6,36 +6,29 @@ import {
   ArrowRight,
   CheckCircle2,
   KeyRound,
-  Loader2,
   ShieldCheck,
   Sparkles,
   WalletCards,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { OpenAiKeyForm } from "./OpenAiKeyForm";
 
 export function OpenAiConnectionPage() {
   const navigate = useNavigate();
   const { user, connectOpenAi, disconnectOpenAi } = useAuth();
   const isConnected = user?.openAiConnected ?? false;
-  const [apiKey, setApiKey] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleConnect = async () => {
-    if (!apiKey.startsWith("sk-")) {
-      setError("OpenAI API key 형식이 올바르지 않습니다.");
-      return;
+  const handleConnect = async (apiKey: string) => {
+    try {
+      setError(null);
+      await connectOpenAi(apiKey);
+    } catch (connectError) {
+      const message = connectError instanceof Error ? connectError.message : "OpenAI key 저장에 실패했습니다.";
+      setError(message);
+      throw connectError;
     }
-
-    setError(null);
-    setIsSubmitting(true);
-
-    window.setTimeout(() => {
-      connectOpenAi(apiKey.trim());
-      setApiKey("");
-      setIsSubmitting(false);
-    }, 900);
   };
 
   return (
@@ -83,6 +76,15 @@ export function OpenAiConnectionPage() {
                 {user?.openAiMaskedKey ?? "연결됨"}
               </p>
             </div>
+            <div className="mb-6">
+              <OpenAiKeyForm
+                title="OpenAI key 다시 저장"
+                description="오입력한 key도 이 화면에서 바로 덮어써 수정할 수 있습니다."
+                submitLabel="OpenAI key 다시 저장"
+                maskedKey={user?.openAiMaskedKey}
+                onSubmit={handleConnect}
+              />
+            </div>
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => navigate("/new")}
@@ -92,7 +94,7 @@ export function OpenAiConnectionPage() {
                 <ArrowRight className="h-4 w-4" />
               </button>
               <button
-                onClick={disconnectOpenAi}
+                onClick={() => void disconnectOpenAi()}
                 className="text-[13px] text-[#a1a1aa] transition-colors hover:text-red-500"
               >
                 연결 해제
@@ -123,38 +125,16 @@ export function OpenAiConnectionPage() {
             </div>
 
             <div className="mb-3 rounded-xl border border-[#ebe6df] bg-[#fcfbf8] p-3 text-left">
-              <label htmlFor="openai-api-key" className="mb-2 block text-[12px] text-[#7b746c]">
-                OpenAI API key
-              </label>
-              <input
-                id="openai-api-key"
-                type="password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                placeholder="sk-..."
-                className="h-11 w-full rounded-lg border border-[#e4ded6] bg-white px-3 text-[14px] outline-none transition focus:border-[#171717]"
+              <OpenAiKeyForm
+                title="OpenAI API key 연결"
+                description="저장된 key는 서버에서 암호화되며, 화면에는 마스킹 정보만 남습니다."
+                submitLabel="OpenAI 연결"
+                onSubmit={handleConnect}
               />
             </div>
             {error && <p className="mb-4 text-left text-[12px] text-red-500">{error}</p>}
 
             <div className="flex flex-col gap-3">
-              <button
-                onClick={() => void handleConnect()}
-                disabled={isSubmitting}
-                className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#111] text-[14px] text-white transition-all hover:bg-[#222] disabled:opacity-60"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    연결 중...
-                  </>
-                ) : (
-                  <>
-                    OpenAI 연결
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </button>
               <button
                 onClick={() => navigate("/pricing")}
                 className="flex h-11 items-center justify-center rounded-lg border border-[#e4e4e7] bg-white text-[14px] text-[#111] transition-colors hover:bg-[#fafafa]"

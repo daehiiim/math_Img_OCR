@@ -179,8 +179,13 @@ def _read_chat_content(resp_json: dict) -> str:
     return str(content)
 
 
-def analyze_region_with_gpt(root_path, crop_image_bytes: bytes, region_type: str) -> dict:
-    api_key = _get_openai_api_key(root_path)
+def analyze_region_with_gpt(
+    root_path,
+    crop_image_bytes: bytes,
+    region_type: str,
+    api_key: str | None = None,
+) -> dict:
+    resolved_api_key = api_key or _get_openai_api_key(root_path)
     model = "gpt-5.2"
     base_url = _get_api_setting(root_path, "OPENAI_BASE_URL", "https://api.openai.com/v1")
 
@@ -269,7 +274,7 @@ Now process the image."""
 
     response = requests.post(
         f"{base_url.rstrip('/')}/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {resolved_api_key}", "Content-Type": "application/json"},
         json=payload,
         timeout=120,
     )
@@ -302,8 +307,14 @@ Now process the image."""
     }
 
 
-def generate_explanation_with_gpt(root_path, crop_image_bytes: bytes, ocr_text: str, mathml: str) -> str:
-    api_key = _get_openai_api_key(root_path)
+def generate_explanation_with_gpt(
+    root_path,
+    crop_image_bytes: bytes,
+    ocr_text: str,
+    mathml: str,
+    api_key: str | None = None,
+) -> str:
+    resolved_api_key = api_key or _get_openai_api_key(root_path)
     model = "gpt-5.2"
     base_url = _get_api_setting(root_path, "OPENAI_BASE_URL", "https://api.openai.com/v1")
 
@@ -337,7 +348,7 @@ def generate_explanation_with_gpt(root_path, crop_image_bytes: bytes, ocr_text: 
 
     response = requests.post(
         f"{base_url.rstrip('/')}/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {resolved_api_key}", "Content-Type": "application/json"},
         json=payload,
         timeout=120,
     )

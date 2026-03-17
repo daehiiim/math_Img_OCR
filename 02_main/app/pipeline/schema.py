@@ -38,6 +38,7 @@ class JobPipelineContext(BaseModel):
     image_url: str
     image_width: int = 0
     image_height: int = 0
+    processing_type: Literal["user_api_key", "service_api"] = "service_api"
     status: Literal["created", "regions_pending", "queued", "running", "completed", "failed", "exported"]
     regions: List[RegionPipelineContext] = Field(default_factory=list)
     created_at: str

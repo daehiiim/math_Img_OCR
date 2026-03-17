@@ -27,6 +27,7 @@ class StubResponse:
 def make_settings(**billing_overrides) -> AppSettings:
     return AppSettings(
         openai_api_key=None,
+        openai_key_encryption_secret=None,
         database_url=None,
         auth=AuthSettings(
             supabase_url="https://example.supabase.co",

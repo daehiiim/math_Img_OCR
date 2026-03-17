@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
+from cryptography.fernet import Fernet
 from polar_sdk import Polar, models as polar_models
 from standardwebhooks.webhooks import Webhook, WebhookVerificationError
 
@@ -36,6 +38,19 @@ class BillingProfile:
     openai_key_masked: str | None
 
 
+@dataclass(frozen=True)
+class StoredOpenAiKey:
+    encrypted_api_key: str
+    key_last4: str
+    is_active: bool
+
+
+@dataclass(frozen=True)
+class ResolvedOpenAiApiKey:
+    api_key: str
+    processing_type: Literal["user_api_key", "service_api"]
+
+
 class PolarGatewayProtocol(Protocol):
     """Polar 통신 계층 계약이다."""
 
@@ -61,6 +76,19 @@ class BillingStoreProtocol(Protocol):
     """Billing 영속화 계층 계약이다."""
 
     def get_or_create_profile(self, user: AuthenticatedUser) -> BillingProfile: ...
+
+    def upsert_openai_key(
+        self,
+        user: AuthenticatedUser,
+        *,
+        encrypted_api_key: str,
+        key_last4: str,
+        masked_key: str,
+    ) -> BillingProfile: ...
+
+    def deactivate_openai_key(self, user: AuthenticatedUser) -> BillingProfile: ...
+
+    def get_active_openai_key(self, user: AuthenticatedUser) -> StoredOpenAiKey | None: ...
 
     def has_payment_event(self, provider: str, provider_event_id: str) -> bool: ...
 
@@ -119,6 +147,40 @@ def _normalize_int(value: Any, field_name: str) -> int:
         return int(value)
     except (TypeError, ValueError) as error:
         raise ValueError(f"invalid {field_name}") from error
+
+
+def _validate_openai_api_key(api_key: str) -> str:
+    """OpenAI API key 형식을 최소 기준으로 검증한다."""
+    normalized = str(api_key or "").strip()
+    if not normalized.startswith("sk-") or len(normalized) < 12:
+        raise ValueError("invalid OpenAI API key format")
+    return normalized
+
+
+def _mask_openai_api_key(api_key: str) -> str:
+    """UI와 profile에 저장할 마스킹 문자열을 만든다."""
+    normalized = _validate_openai_api_key(api_key)
+    return f"{normalized[:5]}••••{normalized[-4:]}"
+
+
+def _build_openai_key_cipher(secret: str | None) -> Fernet:
+    """환경 비밀값으로 Fernet 암호화기를 만든다."""
+    normalized = str(secret or "").strip()
+    if not normalized:
+        raise ValueError("OPENAI_KEY_ENCRYPTION_SECRET is not configured")
+    digest = hashlib.sha256(normalized.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _encrypt_openai_api_key(secret: str | None, api_key: str) -> str:
+    """평문 OpenAI key를 저장 가능한 암호문으로 바꾼다."""
+    return _build_openai_key_cipher(secret).encrypt(api_key.encode("utf-8")).decode("utf-8")
+
+
+def _decrypt_openai_api_key(secret: str | None, encrypted_api_key: str) -> str:
+    """암호문 OpenAI key를 실행 시점 평문으로 복원한다."""
+    decrypted = _build_openai_key_cipher(secret).decrypt(encrypted_api_key.encode("utf-8"))
+    return decrypted.decode("utf-8")
 
 
 def _read_price(product: Any) -> tuple[int, str]:
@@ -291,6 +353,14 @@ class SupabaseBillingStore:
             openai_key_masked=row.get("openai_key_masked"),
         )
 
+    def _map_openai_key(self, row: dict) -> StoredOpenAiKey:
+        """user_openai_keys row를 도메인 모델로 변환한다."""
+        return StoredOpenAiKey(
+            encrypted_api_key=str(row.get("encrypted_api_key") or ""),
+            key_last4=str(row.get("key_last4") or ""),
+            is_active=bool(row.get("is_active") or False),
+        )
+
     def _read_profile(self, client: SupabaseClient, user_id: str) -> BillingProfile | None:
         """profiles row를 읽어 BillingProfile로 바꾼다."""
         rows = client.select(
@@ -321,9 +391,88 @@ class SupabaseBillingStore:
         )
         return self._map_profile(inserted[0])
 
+    def _sync_openai_profile(
+        self,
+        client: SupabaseClient,
+        user_id: str,
+        *,
+        openai_connected: bool,
+        openai_key_masked: str | None,
+    ) -> BillingProfile:
+        """OpenAI 연결 메타를 profile과 동기화한다."""
+        self._ensure_profile(client, user_id)
+        updated = client.update(
+            "profiles",
+            filters={"user_id": f"eq.{user_id}"},
+            payload={
+                "openai_connected": openai_connected,
+                "openai_key_masked": openai_key_masked,
+            },
+        )
+        if updated:
+            return self._map_profile(updated[0])
+        return self._ensure_profile(client, user_id)
+
     def get_or_create_profile(self, user: AuthenticatedUser) -> BillingProfile:
         """사용자 profile을 읽고 없으면 기본 row를 만든다."""
         return self._ensure_profile(self._user_client(user), user.user_id)
+
+    def upsert_openai_key(
+        self,
+        user: AuthenticatedUser,
+        *,
+        encrypted_api_key: str,
+        key_last4: str,
+        masked_key: str,
+    ) -> BillingProfile:
+        """사용자 OpenAI key 암호문을 upsert하고 profile 상태를 갱신한다."""
+        client = self._user_client(user)
+        client.upsert(
+            "user_openai_keys",
+            payload=[
+                {
+                    "user_id": user.user_id,
+                    "encrypted_api_key": encrypted_api_key,
+                    "key_last4": key_last4,
+                    "is_active": True,
+                }
+            ],
+            on_conflict="user_id",
+        )
+        return self._sync_openai_profile(
+            client,
+            user.user_id,
+            openai_connected=True,
+            openai_key_masked=masked_key,
+        )
+
+    def deactivate_openai_key(self, user: AuthenticatedUser) -> BillingProfile:
+        """사용자 OpenAI key를 비활성화하고 profile 상태를 정리한다."""
+        client = self._user_client(user)
+        client.update(
+            "user_openai_keys",
+            filters={"user_id": f"eq.{user.user_id}"},
+            payload={"is_active": False},
+        )
+        return self._sync_openai_profile(
+            client,
+            user.user_id,
+            openai_connected=False,
+            openai_key_masked=None,
+        )
+
+    def get_active_openai_key(self, user: AuthenticatedUser) -> StoredOpenAiKey | None:
+        """활성 사용자 OpenAI key row를 읽는다."""
+        rows = self._user_client(user).select(
+            "user_openai_keys",
+            params={
+                "select": "encrypted_api_key,key_last4,is_active",
+                "user_id": f"eq.{user.user_id}",
+                "is_active": "eq.true",
+                "limit": "1",
+            },
+        )
+        return self._map_openai_key(rows[0]) if rows else None
 
     def has_payment_event(self, provider: str, provider_event_id: str) -> bool:
         """동일 provider event가 이미 처리되었는지 확인한다."""
@@ -508,10 +657,14 @@ class BillingService:
         store: BillingStoreProtocol,
         polar_gateway: PolarGatewayProtocol | None,
         plan_product_ids: dict[str, str],
+        service_openai_api_key: str | None,
+        openai_key_encryption_secret: str | None,
     ) -> None:
         self._store = store
         self._polar_gateway = polar_gateway
         self._plan_product_ids = plan_product_ids
+        self._service_openai_api_key = service_openai_api_key
+        self._openai_key_encryption_secret = openai_key_encryption_secret
 
     def _require_polar_gateway(self) -> PolarGatewayProtocol:
         """Polar 기능이 필요한 경로에서 gateway 존재를 보장한다."""
@@ -569,6 +722,39 @@ class BillingService:
     def get_profile(self, user: AuthenticatedUser) -> BillingProfile:
         """현재 사용자 profile을 반환한다."""
         return self._store.get_or_create_profile(user)
+
+    def save_openai_key(self, user: AuthenticatedUser, api_key: str) -> BillingProfile:
+        """사용자 OpenAI key를 암호화해 저장하고 profile을 갱신한다."""
+        normalized = _validate_openai_api_key(api_key)
+        encrypted_api_key = _encrypt_openai_api_key(self._openai_key_encryption_secret, normalized)
+        return self._store.upsert_openai_key(
+            user,
+            encrypted_api_key=encrypted_api_key,
+            key_last4=normalized[-4:],
+            masked_key=_mask_openai_api_key(normalized),
+        )
+
+    def delete_openai_key(self, user: AuthenticatedUser) -> BillingProfile:
+        """사용자 OpenAI key를 비활성화하고 profile을 갱신한다."""
+        return self._store.deactivate_openai_key(user)
+
+    def resolve_openai_api_key(self, user: AuthenticatedUser) -> ResolvedOpenAiApiKey:
+        """OCR 실행에 사용할 OpenAI key와 처리 유형을 결정한다."""
+        stored_key = self._store.get_active_openai_key(user)
+        if stored_key is not None:
+            return ResolvedOpenAiApiKey(
+                api_key=_decrypt_openai_api_key(
+                    self._openai_key_encryption_secret,
+                    stored_key.encrypted_api_key,
+                ),
+                processing_type="user_api_key",
+            )
+        if self._service_openai_api_key:
+            return ResolvedOpenAiApiKey(
+                api_key=self._service_openai_api_key,
+                processing_type="service_api",
+            )
+        raise ValueError("OpenAI API key is not configured")
 
     def get_checkout(self, checkout_id: str) -> dict:
         """Polar checkout 상태와 내부 적립 여부를 같이 반환한다."""
@@ -672,4 +858,6 @@ def build_billing_service(root_path: Path | None = None, require_polar: bool = F
         store=SupabaseBillingStore(root_path or ROOT),
         polar_gateway=gateway,
         plan_product_ids=product_ids,
+        service_openai_api_key=settings.openai_api_key,
+        openai_key_encryption_secret=settings.openai_key_encryption_secret,
     )

@@ -18,7 +18,11 @@ vi.mock("../lib/supabase", () => ({
   },
 }));
 
-import { createCheckoutSessionApi } from "./billingApi";
+import {
+  createCheckoutSessionApi,
+  deleteOpenAiKeyApi,
+  saveOpenAiKeyApi,
+} from "./billingApi";
 
 describe("billingApi", () => {
   beforeEach(() => {
@@ -187,5 +191,61 @@ describe("billingApi", () => {
         cancelUrl: "https://example.com/cancel",
       })
     ).rejects.toThrow("[400] Polar gateway is not configured");
+  });
+
+  it("sends the OpenAI key save request with auth headers and JSON body", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          credits_balance: 3,
+          used_credits: 1,
+          openai_connected: true,
+          openai_key_masked: "sk-us••••7890",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await saveOpenAiKeyApi("sk-user-1234567890");
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/billing/openai-key");
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const headers = requestInit.headers as Headers;
+
+    expect(requestInit.method).toBe("PUT");
+    expect(headers.get("Authorization")).toBe("Bearer token-456");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(requestInit.body).toBe(JSON.stringify({ api_key: "sk-user-1234567890" }));
+  });
+
+  it("sends the OpenAI key delete request with auth headers", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          credits_balance: 3,
+          used_credits: 1,
+          openai_connected: false,
+          openai_key_masked: null,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deleteOpenAiKeyApi();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/billing/openai-key");
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const headers = requestInit.headers as Headers;
+
+    expect(requestInit.method).toBe("DELETE");
+    expect(headers.get("Authorization")).toBe("Bearer token-456");
   });
 });

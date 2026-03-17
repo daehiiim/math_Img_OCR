@@ -2,10 +2,8 @@ import { Link, useLocation } from "react-router";
 import {
   LayoutDashboard,
   Upload,
-  FileText,
   Cpu,
-  BookOpen,
-  ChevronRight,
+  UserRound,
 } from "lucide-react";
 import { cn } from "./ui/utils";
 
@@ -14,13 +12,12 @@ const navItems = [
   { path: "/new", label: "새 작업", icon: Upload },
 ];
 
-const docItems = [
-  { label: "API 명세", desc: "/docs (Swagger)" },
-  { label: "파이프라인 흐름", desc: "Job → Region → Run → Export" },
-  { label: "테스트", desc: "pytest -q tests/" },
-];
+interface AppSidebarProps {
+  onOpenAccount: () => void;
+  isAccountOpen: boolean;
+}
 
-export function AppSidebar() {
+export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
   const location = useLocation();
 
   return (
@@ -66,15 +63,21 @@ export function AppSidebar() {
               </li>
             );
           })}
-        </ul>
-
-        
-        <ul className="space-y-0.5">
-          {docItems.map((item) => (
-            <li key={item.label}>
-              
-            </li>
-          ))}
+          <li>
+            <button
+              type="button"
+              onClick={onOpenAccount}
+              className={cn(
+                "flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-colors",
+                isAccountOpen
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <UserRound className="w-4 h-4" />
+              내 계정
+            </button>
+          </li>
         </ul>
       </nav>
 

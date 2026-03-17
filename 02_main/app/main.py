@@ -104,6 +104,10 @@ class BillingProfileResponse(BaseModel):
     openai_key_masked: str | None = None
 
 
+class OpenAiKeyRequest(BaseModel):
+    api_key: str
+
+
 def _signed_asset_url(current_user: AuthenticatedUser, storage_path: str | None) -> str | None:
     """Storage 내부 경로를 짧은 signed URL로 바꾼다."""
     return pipeline.create_asset_url(current_user, storage_path)
@@ -194,7 +198,13 @@ def run_pipeline(
 ) -> dict:
     """OCR 파이프라인을 실행한다."""
     try:
-        result = pipeline.run_pipeline(current_user, job_id)
+        openai_key = _get_billing_service().resolve_openai_api_key(current_user)
+        result = pipeline.run_pipeline(
+            current_user,
+            job_id,
+            api_key=openai_key.api_key,
+            processing_type=openai_key.processing_type,
+        )
         if result.get("status") == "completed":
             _get_billing_service().consume_job_credit(current_user, job_id)
         return result
@@ -275,6 +285,31 @@ def get_billing_profile(
 ) -> BillingProfileResponse:
     """현재 로그인 사용자의 크레딧 상태를 반환한다."""
     profile = _get_billing_service().get_profile(current_user)
+    return _map_billing_profile(profile)
+
+
+@app.put("/billing/openai-key", response_model=BillingProfileResponse)
+def save_openai_key(
+    payload: OpenAiKeyRequest,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> BillingProfileResponse:
+    """사용자 OpenAI key를 암호화 저장하고 연결 상태를 갱신한다."""
+    try:
+        profile = _get_billing_service().save_openai_key(current_user, payload.api_key)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return _map_billing_profile(profile)
+
+
+@app.delete("/billing/openai-key", response_model=BillingProfileResponse)
+def delete_openai_key(
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> BillingProfileResponse:
+    """사용자 OpenAI key 연결을 해제하고 profile 상태를 갱신한다."""
+    try:
+        profile = _get_billing_service().delete_openai_key(current_user)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return _map_billing_profile(profile)
 
 

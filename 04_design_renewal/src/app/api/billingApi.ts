@@ -81,6 +81,21 @@ export async function getBillingProfileApi(): Promise<BillingProfileResponse> {
   return requestJson<BillingProfileResponse>("/billing/profile", { method: "GET" });
 }
 
+export async function saveOpenAiKeyApi(apiKey: string): Promise<BillingProfileResponse> {
+  return requestJson<BillingProfileResponse>(
+    "/billing/openai-key",
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey }),
+    }
+  );
+}
+
+export async function deleteOpenAiKeyApi(): Promise<BillingProfileResponse> {
+  return requestJson<BillingProfileResponse>("/billing/openai-key", { method: "DELETE" });
+}
+
 export async function getBillingCatalogApi(): Promise<BillingPlanResponse[]> {
   const response = await requestJson<{ plans: BillingPlanResponse[] }>("/billing/catalog", { method: "GET" });
   return response.plans;

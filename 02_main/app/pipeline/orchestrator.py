@@ -107,13 +107,20 @@ def _materialize_input_image(
     return input_path
 
 
-def run_pipeline(user: PipelineUserContext, job_id: str) -> dict:
+def run_pipeline(
+    user: PipelineUserContext,
+    job_id: str,
+    *,
+    api_key: str | None = None,
+    processing_type: str = "service_api",
+) -> dict:
     """OCR/도형 분석을 수행하고 결과를 Storage와 DB에 저장한다."""
     repository = _get_repository()
     job = read_job(user, job_id)
     if not job.regions:
         raise ValueError("regions not set")
 
+    job.processing_type = processing_type
     job.status = "running"
     job.last_error = None
     for region in job.regions:
@@ -143,12 +150,23 @@ def run_pipeline(user: PipelineUserContext, job_id: str) -> dict:
                 repository.upload_bytes(user, crop_storage_path, crop_bytes, "image/png")
                 region.figure.crop_url = crop_storage_path
 
-                analyzed = analyze_region_with_gpt(ROOT, crop_bytes, region.context.type)
+                analyzed = analyze_region_with_gpt(
+                    ROOT,
+                    crop_bytes,
+                    region.context.type,
+                    api_key=api_key,
+                )
                 ocr_text = analyzed.get("ocr_text") or ""
                 mathml = analyzed.get("mathml") or ""
 
                 try:
-                    explanation = generate_explanation_with_gpt(ROOT, crop_bytes, ocr_text, mathml)
+                    explanation = generate_explanation_with_gpt(
+                        ROOT,
+                        crop_bytes,
+                        ocr_text,
+                        mathml,
+                        api_key=api_key,
+                    )
                 except Exception:
                     explanation = "연습장에 풀이를 기록하세요."
 

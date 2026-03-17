@@ -12,6 +12,7 @@ def test_get_settings_reads_env_file(tmp_path):
         "\n".join(
             [
                 "OPENAI_API_KEY=file-openai-key",
+                "OPENAI_KEY_ENCRYPTION_SECRET=file-encryption-secret",
                 "APP_URL=https://mathtohwp.vercel.app/",
                 "CORS_ALLOW_ORIGINS=https://mathtohwp.vercel.app,https://preview.mathtohwp.vercel.app/",
                 "SUPABASE_URL=https://example.supabase.co",
@@ -33,6 +34,7 @@ def test_get_settings_reads_env_file(tmp_path):
     settings = get_settings(tmp_path)
 
     assert settings.openai_api_key == "file-openai-key"
+    assert settings.openai_key_encryption_secret == "file-encryption-secret"
     assert settings.app_url == "https://mathtohwp.vercel.app"
     assert settings.cors_allow_origins == (
         "https://mathtohwp.vercel.app",
@@ -57,6 +59,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
         "\n".join(
             [
                 "OPENAI_API_KEY=file-openai-key",
+                "OPENAI_KEY_ENCRYPTION_SECRET=file-encryption-secret",
                 "APP_URL=https://file.mathtohwp.vercel.app/",
                 "SUPABASE_URL=https://file.supabase.co",
             ]
@@ -65,12 +68,14 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
     )
 
     monkeypatch.setenv("OPENAI_API_KEY", "env-openai-key")
+    monkeypatch.setenv("OPENAI_KEY_ENCRYPTION_SECRET", "env-encryption-secret")
     monkeypatch.setenv("APP_URL", "https://mathtohwp.vercel.app/")
     monkeypatch.setenv("SUPABASE_URL", "https://env.supabase.co")
 
     settings = get_settings(tmp_path)
 
     assert settings.openai_api_key == "env-openai-key"
+    assert settings.openai_key_encryption_secret == "env-encryption-secret"
     assert settings.app_url == "https://mathtohwp.vercel.app"
     assert settings.auth.supabase_url == "https://env.supabase.co"
 

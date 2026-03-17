@@ -27,6 +27,7 @@ class BillingSettings:
 @dataclass(frozen=True)
 class AppSettings:
     openai_api_key: str | None
+    openai_key_encryption_secret: str | None
     database_url: str | None
     auth: AuthSettings
     billing: BillingSettings
@@ -89,6 +90,7 @@ def get_settings(root_path: Path) -> AppSettings:
 
     return AppSettings(
         openai_api_key=_get_setting(env_values, "OPENAI_API_KEY"),
+        openai_key_encryption_secret=_get_setting(env_values, "OPENAI_KEY_ENCRYPTION_SECRET"),
         database_url=_get_setting(env_values, "DATABASE_URL"),
         app_url=_normalize_url(_get_setting(env_values, "APP_URL")),
         cors_allow_origins=_get_multi_setting(env_values, "CORS_ALLOW_ORIGINS"),

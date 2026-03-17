@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import app.auth as auth_module
 import app.main as main_module
 from app.auth import AuthenticatedUser
-from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway
+from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway, StoredOpenAiKey
 from app.config import AppSettings, AuthSettings, BillingSettings
 from app.main import app
 from tests.auth_test_utils import StubJwksResponse, build_es256_key_pair, build_es256_token
@@ -105,6 +105,7 @@ class FakeBillingStore:
         self.payment_events_by_checkout_id: dict[str, dict] = {}
         self.ledger_entries: list[dict] = []
         self.charged_jobs: set[str] = set()
+        self.openai_keys: dict[str, dict] = {}
 
     def get_or_create_profile(self, user: AuthenticatedUser) -> BillingProfile:
         return self.profiles.setdefault(
@@ -227,6 +228,55 @@ class FakeBillingStore:
         )
         return {"charged": True, "credits_balance": new_profile.credits_balance}
 
+    def upsert_openai_key(
+        self,
+        user: AuthenticatedUser,
+        *,
+        encrypted_api_key: str,
+        key_last4: str,
+        masked_key: str,
+    ) -> BillingProfile:
+        self.openai_keys[user.user_id] = {
+            "encrypted_api_key": encrypted_api_key,
+            "key_last4": key_last4,
+            "is_active": True,
+        }
+        profile = self.get_or_create_profile(user)
+        next_profile = BillingProfile(
+            user_id=profile.user_id,
+            credits_balance=profile.credits_balance,
+            used_credits=profile.used_credits,
+            openai_connected=True,
+            openai_key_masked=masked_key,
+        )
+        self.profiles[user.user_id] = next_profile
+        return next_profile
+
+    def deactivate_openai_key(self, user: AuthenticatedUser) -> BillingProfile:
+        key_row = self.openai_keys.get(user.user_id)
+        if key_row is not None:
+            key_row["is_active"] = False
+        profile = self.get_or_create_profile(user)
+        next_profile = BillingProfile(
+            user_id=profile.user_id,
+            credits_balance=profile.credits_balance,
+            used_credits=profile.used_credits,
+            openai_connected=False,
+            openai_key_masked=None,
+        )
+        self.profiles[user.user_id] = next_profile
+        return next_profile
+
+    def get_active_openai_key(self, user: AuthenticatedUser) -> dict | None:
+        key_row = self.openai_keys.get(user.user_id)
+        if not key_row or not key_row.get("is_active"):
+            return None
+        return StoredOpenAiKey(
+            encrypted_api_key=str(key_row["encrypted_api_key"]),
+            key_last4=str(key_row["key_last4"]),
+            is_active=bool(key_row["is_active"]),
+        )
+
 
 def make_user() -> AuthenticatedUser:
     return AuthenticatedUser(user_id="user-123", access_token="token-123")
@@ -243,6 +293,8 @@ def make_service():
             "starter": "prod_starter",
             "pro": "prod_pro",
         },
+        service_openai_api_key="sk-service-1234567890",
+        openai_key_encryption_secret="encryption-secret",
     )
     return service, store, gateway
 
@@ -336,10 +388,66 @@ def test_consume_job_credit_decrements_balance_only_once():
     assert store.profiles["user-123"].credits_balance == 2
 
 
+def test_save_openai_key_encrypts_and_updates_profile():
+    service, store, _ = make_service()
+
+    profile = service.save_openai_key(make_user(), "sk-user-1234567890")
+
+    key_row = store.openai_keys["user-123"]
+    assert profile.openai_connected is True
+    assert profile.openai_key_masked.endswith("7890")
+    assert key_row["is_active"] is True
+    assert key_row["key_last4"] == "7890"
+    assert key_row["encrypted_api_key"] != "sk-user-1234567890"
+
+
+def test_save_openai_key_overwrites_existing_ciphertext():
+    service, store, _ = make_service()
+    service.save_openai_key(make_user(), "sk-user-1234567890")
+    first_ciphertext = store.openai_keys["user-123"]["encrypted_api_key"]
+
+    profile = service.save_openai_key(make_user(), "sk-user-abcdef7891")
+
+    assert store.openai_keys["user-123"]["encrypted_api_key"] != first_ciphertext
+    assert store.openai_keys["user-123"]["key_last4"] == "7891"
+    assert profile.openai_key_masked.endswith("7891")
+
+
+def test_delete_openai_key_deactivates_profile_and_key():
+    service, store, _ = make_service()
+    service.save_openai_key(make_user(), "sk-user-1234567890")
+
+    profile = service.delete_openai_key(make_user())
+
+    assert profile.openai_connected is False
+    assert profile.openai_key_masked is None
+    assert store.openai_keys["user-123"]["is_active"] is False
+
+
+def test_resolve_openai_api_key_prefers_active_user_key():
+    service, _, _ = make_service()
+    service.save_openai_key(make_user(), "sk-user-1234567890")
+
+    resolved = service.resolve_openai_api_key(make_user())
+
+    assert resolved.processing_type == "user_api_key"
+    assert resolved.api_key == "sk-user-1234567890"
+
+
+def test_resolve_openai_api_key_falls_back_to_service_key():
+    service, _, _ = make_service()
+
+    resolved = service.resolve_openai_api_key(make_user())
+
+    assert resolved.processing_type == "service_api"
+    assert resolved.api_key == "sk-service-1234567890"
+
+
 def _build_auth_settings() -> AppSettings:
     """인증 회귀 테스트용 최소 설정을 만든다."""
     return AppSettings(
         openai_api_key=None,
+        openai_key_encryption_secret="encryption-secret",
         database_url=None,
         auth=AuthSettings(
             supabase_url="https://billing-auth.supabase.co",
@@ -393,6 +501,94 @@ def test_billing_profile_accepts_es256_authenticated_user(monkeypatch):
     assert response.status_code == 200
     assert response.json()["credits_balance"] == 12
     assert response.json()["openai_connected"] is True
+
+
+def test_billing_put_openai_key_accepts_es256_authenticated_user(monkeypatch):
+    private_key, jwk = build_es256_key_pair("billing-openai-put-kid")
+    token = build_es256_token(private_key, "billing-openai-put-kid", "user-123")
+
+    monkeypatch.setattr(auth_module, "get_settings", lambda root_path: _build_auth_settings())
+    monkeypatch.setattr(
+        auth_module.requests,
+        "get",
+        lambda url, timeout=5: StubJwksResponse({"keys": [jwk]}),
+    )
+    save_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        main_module,
+        "_get_billing_service",
+        lambda require_polar=False: type(
+            "StubBillingService",
+            (),
+            {
+                "save_openai_key": lambda self, current_user, api_key: (
+                    save_calls.append((current_user.user_id, api_key))
+                    or BillingProfile(
+                        user_id=current_user.user_id,
+                        credits_balance=5,
+                        used_credits=1,
+                        openai_connected=True,
+                        openai_key_masked="sk-us••••7890",
+                    )
+                )
+            },
+        )(),
+    )
+
+    client = TestClient(app)
+    response = client.put(
+        "/billing/openai-key",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"api_key": "sk-user-1234567890"},
+    )
+
+    assert response.status_code == 200
+    assert save_calls == [("user-123", "sk-user-1234567890")]
+    assert response.json()["openai_connected"] is True
+    assert response.json()["openai_key_masked"] == "sk-us••••7890"
+
+
+def test_billing_delete_openai_key_accepts_es256_authenticated_user(monkeypatch):
+    private_key, jwk = build_es256_key_pair("billing-openai-delete-kid")
+    token = build_es256_token(private_key, "billing-openai-delete-kid", "user-123")
+
+    monkeypatch.setattr(auth_module, "get_settings", lambda root_path: _build_auth_settings())
+    monkeypatch.setattr(
+        auth_module.requests,
+        "get",
+        lambda url, timeout=5: StubJwksResponse({"keys": [jwk]}),
+    )
+    delete_calls: list[str] = []
+    monkeypatch.setattr(
+        main_module,
+        "_get_billing_service",
+        lambda require_polar=False: type(
+            "StubBillingService",
+            (),
+            {
+                "delete_openai_key": lambda self, current_user: (
+                    delete_calls.append(current_user.user_id)
+                    or BillingProfile(
+                        user_id=current_user.user_id,
+                        credits_balance=5,
+                        used_credits=1,
+                        openai_connected=False,
+                        openai_key_masked=None,
+                    )
+                )
+            },
+        )(),
+    )
+
+    client = TestClient(app)
+    response = client.delete(
+        "/billing/openai-key",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert delete_calls == ["user-123"]
+    assert response.json()["openai_connected"] is False
 
 
 def test_billing_checkout_accepts_es256_authenticated_user(monkeypatch):

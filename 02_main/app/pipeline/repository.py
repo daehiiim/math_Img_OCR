@@ -125,6 +125,7 @@ class SupabasePipelineRepository:
             image_url=image_path,
             image_width=image_width,
             image_height=image_height,
+            processing_type="service_api",
             status="regions_pending",
             created_at=now,
             updated_at=now,
@@ -136,7 +137,7 @@ class SupabasePipelineRepository:
         job_rows = client.select(
             "ocr_jobs",
             params={
-                "select": "id,file_name,source_image_path,image_width,image_height,status,last_error,hwpx_export_path,created_at,updated_at",
+                "select": "id,file_name,source_image_path,image_width,image_height,processing_type,status,last_error,hwpx_export_path,created_at,updated_at",
                 "id": f"eq.{job_id}",
             },
         )
@@ -189,6 +190,7 @@ class SupabasePipelineRepository:
             image_url=str(job_row.get("source_image_path") or ""),
             image_width=int(job_row.get("image_width") or 0),
             image_height=int(job_row.get("image_height") or 0),
+            processing_type=job_row.get("processing_type") or "service_api",
             status=job_row.get("status") or "created",
             regions=regions,
             created_at=str(job_row.get("created_at")),
@@ -208,6 +210,7 @@ class SupabasePipelineRepository:
                 "source_image_path": job.image_url,
                 "image_width": job.image_width,
                 "image_height": job.image_height,
+                "processing_type": job.processing_type,
                 "status": job.status,
                 "last_error": job.last_error,
                 "hwpx_export_path": job.hwpx_export_path,

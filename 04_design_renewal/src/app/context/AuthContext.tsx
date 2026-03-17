@@ -18,7 +18,12 @@ import {
   saveStoredProfile,
   type StoredProfile,
 } from "../lib/authStorage";
-import { getBillingProfileApi } from "../api/billingApi";
+import {
+  deleteOpenAiKeyApi,
+  getBillingProfileApi,
+  saveOpenAiKeyApi,
+  type BillingProfileResponse,
+} from "../api/billingApi";
 import { buildPublicAppUrl } from "../lib/publicAppUrl";
 import { browserSupabase, hasSupabaseAuth } from "../lib/supabase";
 
@@ -31,8 +36,8 @@ interface AuthContextType {
   isSupabaseEnabled: boolean;
   prepareLogin: (nextPath?: string) => void;
   loginWithGoogle: () => Promise<User | null>;
-  connectOpenAi: (apiKey: string) => void;
-  disconnectOpenAi: () => void;
+  connectOpenAi: (apiKey: string) => Promise<void>;
+  disconnectOpenAi: () => Promise<void>;
   purchaseCredits: (amount: number) => void;
   consumeCredit: (jobId?: string) => boolean;
   refreshProfile: () => Promise<void>;
@@ -59,8 +64,8 @@ function mergeRemoteProfile(localProfile: User, remoteProfile: Awaited<ReturnTyp
     ...localProfile,
     credits: remoteProfile.credits_balance,
     usedCredits: remoteProfile.used_credits,
-    openAiConnected: localProfile.openAiConnected || remoteProfile.openai_connected,
-    openAiMaskedKey: localProfile.openAiMaskedKey ?? remoteProfile.openai_key_masked ?? null,
+    openAiConnected: remoteProfile.openai_connected,
+    openAiMaskedKey: remoteProfile.openai_key_masked ?? null,
   };
 }
 
@@ -151,6 +156,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const applyRemoteProfile = useCallback(
+    (remoteProfile: BillingProfileResponse) => {
+      setUser((prev) => {
+        if (!prev) {
+          return prev;
+        }
+
+        const nextProfile = mergeRemoteProfile(prev, remoteProfile);
+        saveStoredProfile(nextProfile);
+        return nextProfile;
+      });
+    },
+    []
+  );
+
   const prepareLogin = useCallback((nextPath = "/workspace") => {
     savePendingPath(nextPath);
   }, []);
@@ -173,24 +193,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const connectOpenAi = useCallback(
-    (apiKey: string) => {
-      const maskedKey = apiKey.length > 8 ? `${apiKey.slice(0, 5)}••••${apiKey.slice(-4)}` : "연결됨";
-      updateUser((prev) => ({
-        ...prev,
-        openAiConnected: true,
-        openAiMaskedKey: maskedKey,
-      }));
+    async (apiKey: string) => {
+      const remoteProfile = await saveOpenAiKeyApi(apiKey.trim());
+      applyRemoteProfile(remoteProfile);
     },
-    [updateUser]
+    [applyRemoteProfile]
   );
 
-  const disconnectOpenAi = useCallback(() => {
-    updateUser((prev) => ({
-      ...prev,
-      openAiConnected: false,
-      openAiMaskedKey: null,
-    }));
-  }, []);
+  const disconnectOpenAi = useCallback(async () => {
+    const remoteProfile = await deleteOpenAiKeyApi();
+    applyRemoteProfile(remoteProfile);
+  }, [applyRemoteProfile]);
 
   const purchaseCredits = useCallback(
     (amount: number) => {

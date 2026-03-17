@@ -223,3 +223,44 @@ def test_execute_hwpx_export_uploads_exported_file(monkeypatch, tmp_path):
     assert result["download_url"].endswith(".hwpx")
     assert saved_job.status == "exported"
     assert result["download_url"] in repository.assets
+
+
+def test_run_pipeline_uses_user_api_key_and_persists_processing_type(monkeypatch):
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes())
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [8, 0], [8, 8], [0, 8]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    analyze_calls: list[str] = []
+
+    def fake_analyze_region_with_gpt(root_path: Path, crop_image_bytes: bytes, region_type: str, api_key: str | None = None):
+        analyze_calls.append(api_key or "")
+        return {
+            "ocr_text": "문제",
+            "mathml": "<math>x</math>",
+            "diagram_svg": "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'/>",
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "설명")
+    monkeypatch.setattr(orchestrator, "render_svg_to_png", lambda svg_text, png_path: png_path.write_bytes(make_png_bytes(10, 10)))
+
+    result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+    )
+    saved_job = orchestrator.read_job(user, job.job_id)
+
+    assert result["status"] == "completed"
+    assert analyze_calls == ["sk-user-1234567890"]
+    assert saved_job.processing_type == "user_api_key"

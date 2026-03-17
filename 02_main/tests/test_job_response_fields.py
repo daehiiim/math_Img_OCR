@@ -26,6 +26,7 @@ def _build_auth_settings() -> AppSettings:
     """Jobs 인증 회귀 테스트용 최소 설정을 만든다."""
     return AppSettings(
         openai_api_key=None,
+        openai_key_encryption_secret=None,
         database_url=None,
         auth=AuthSettings(
             supabase_url="https://jobs-auth.supabase.co",
