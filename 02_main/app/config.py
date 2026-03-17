@@ -30,6 +30,8 @@ class AppSettings:
     database_url: str | None
     auth: AuthSettings
     billing: BillingSettings
+    app_url: str | None = None
+    cors_allow_origins: tuple[str, ...] = ()
 
 
 def _load_env_file(root_path: Path) -> dict[str, str]:
@@ -59,6 +61,28 @@ def _get_setting(env_values: dict[str, str], key: str) -> str | None:
     return value.strip()
 
 
+def _normalize_url(value: str | None) -> str | None:
+    """URL 설정값의 마지막 슬래시를 제거한다."""
+    if value is None:
+        return None
+    normalized = value.strip().rstrip("/")
+    return normalized or None
+
+
+def _get_multi_setting(env_values: dict[str, str], key: str) -> tuple[str, ...]:
+    """쉼표 구분 URL 설정값을 정규화된 튜플로 반환한다."""
+    raw_value = _get_setting(env_values, key)
+    if raw_value is None:
+        return ()
+
+    values = []
+    for entry in raw_value.split(","):
+        normalized = _normalize_url(entry)
+        if normalized:
+            values.append(normalized)
+    return tuple(values)
+
+
 def get_settings(root_path: Path) -> AppSettings:
     """OCR API가 필요로 하는 인증/과금 설정 묶음을 반환한다."""
     env_values = _load_env_file(root_path)
@@ -66,6 +90,8 @@ def get_settings(root_path: Path) -> AppSettings:
     return AppSettings(
         openai_api_key=_get_setting(env_values, "OPENAI_API_KEY"),
         database_url=_get_setting(env_values, "DATABASE_URL"),
+        app_url=_normalize_url(_get_setting(env_values, "APP_URL")),
+        cors_allow_origins=_get_multi_setting(env_values, "CORS_ALLOW_ORIGINS"),
         auth=AuthSettings(
             supabase_url=_get_setting(env_values, "SUPABASE_URL"),
             supabase_anon_key=_get_setting(env_values, "SUPABASE_ANON_KEY"),

@@ -20,6 +20,7 @@ import {
 } from "../api/billingApi";
 import { useAuth } from "../context/AuthContext";
 import { formatBillingAmount, normalizeBillingCurrency } from "../lib/billingCurrency";
+import { buildPublicAppUrl } from "../lib/publicAppUrl";
 
 type PlanId = "single" | "starter" | "pro";
 
@@ -216,8 +217,10 @@ export function PaymentPage() {
     setStatusMessage(null);
 
     try {
-      const successUrl = `${window.location.origin}/payment/${resolvedPlan.planId}?checkout=success&checkout_id={CHECKOUT_ID}`;
-      const cancelUrl = `${window.location.origin}/payment/${resolvedPlan.planId}?checkout=cancel`;
+      const successUrl = buildPublicAppUrl(
+        `/payment/${resolvedPlan.planId}?checkout=success&checkout_id={CHECKOUT_ID}`
+      );
+      const cancelUrl = buildPublicAppUrl(`/payment/${resolvedPlan.planId}?checkout=cancel`);
       const session = await createCheckoutSessionApi({
         planId: resolvedPlan.planId,
         successUrl,
@@ -235,7 +238,7 @@ export function PaymentPage() {
     setPaymentError(null);
 
     try {
-      const result = await createCustomerPortalApi(`${window.location.origin}/payment/${resolvedPlan.planId}`);
+      const result = await createCustomerPortalApi(buildPublicAppUrl(`/payment/${resolvedPlan.planId}`));
       window.location.assign(result.customer_portal_url);
     } catch (error) {
       setPortalLoading(false);

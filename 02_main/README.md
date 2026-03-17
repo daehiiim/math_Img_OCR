@@ -11,16 +11,19 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+- 브라우저 인증이나 결제 복귀 흐름까지 확인하려면 `.env`에 `APP_URL=https://mathtohwp.vercel.app` 또는 허용할 프런트 도메인을 함께 설정해야 합니다.
+
 ### Docker
 ```bash
 docker compose up --build
 ```
 
 - Swagger: `http://localhost:8000/docs`
-- CORS 기본 허용: `http://localhost:5173`, `http://127.0.0.1:5173`
+- CORS 기본 허용은 더 이상 localhost가 아니다. `CORS_ALLOW_ORIGINS`가 없으면 `APP_URL` 1개만 허용한다.
 
 ## 필수 환경변수
 
+- `APP_URL`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -30,6 +33,10 @@ docker compose up --build
 - `POLAR_PRODUCT_SINGLE_ID`
 - `POLAR_PRODUCT_STARTER_ID`
 - `POLAR_PRODUCT_PRO_ID`
+
+## 선택 환경변수
+
+- `CORS_ALLOW_ORIGINS` (`https://a.example.com,https://b.example.com` 형식)
 
 ## 인증 규칙
 

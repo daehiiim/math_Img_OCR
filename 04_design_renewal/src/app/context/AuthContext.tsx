@@ -19,6 +19,7 @@ import {
   type StoredProfile,
 } from "../lib/authStorage";
 import { getBillingProfileApi } from "../api/billingApi";
+import { buildPublicAppUrl } from "../lib/publicAppUrl";
 import { browserSupabase, hasSupabaseAuth } from "../lib/supabase";
 
 export type User = StoredProfile;
@@ -159,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await browserSupabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/login`,
+          redirectTo: buildPublicAppUrl("/login"),
         },
       });
       return null;

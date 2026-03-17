@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
@@ -11,22 +11,24 @@ from pydantic import BaseModel, Field, field_validator
 from app import pipeline
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingProfile, build_billing_service
+from app.config import get_settings
 
 app = FastAPI(title="Math Region OCR MVP API", version="0.1.0")
+ROOT = Path(__file__).resolve().parents[1]
 
-ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv(
-        "CORS_ALLOW_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://0.0.0.0:5173,http://localhost:4173,http://127.0.0.1:4173,http://0.0.0.0:4173",
-    ).split(",")
-    if origin.strip()
-]
+
+def _get_allowed_origins() -> list[str]:
+    """환경설정 기준으로 허용할 프런트 origin 목록을 계산한다."""
+    settings = get_settings(ROOT)
+    if settings.cors_allow_origins:
+        return list(settings.cors_allow_origins)
+    if settings.app_url:
+        return [settings.app_url]
+    return []
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$",
+    allow_origins=_get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
