@@ -24,6 +24,7 @@ describe("jobApi", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     getSessionMock.mockClear();
     delete (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__;
     delete (globalThis as { __MATH_OCR_ALLOW_LOCAL_API_FALLBACK__?: boolean }).__MATH_OCR_ALLOW_LOCAL_API_FALLBACK__;
@@ -137,5 +138,35 @@ describe("jobApi", () => {
     await getJobApi("job-3");
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/jobs/job-3");
+  });
+
+  it("ignores absolute env API bases on hosted deployments and keeps same-origin job paths", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "https://mathocr-146126176673.us-central1.run.app");
+    vi.stubGlobal(
+      "location",
+      new URL("https://mathtohwpx-git-codex-google-oauth-app-url-daehiiim.vercel.app/workspace") as unknown as Location
+    );
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          job_id: "job-4",
+          status: "completed",
+          file_name: "sample.png",
+          image_url: "/runtime/jobs/job-4/input/sample.png",
+          image_width: 10,
+          image_height: 10,
+          regions: [],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getJobApi("job-4");
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/jobs/job-4");
   });
 });

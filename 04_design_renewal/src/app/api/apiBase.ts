@@ -48,13 +48,7 @@ function getProcessEnvApiBase(): string | undefined {
 }
 
 // runtime override 와 env 값을 우선순위에 맞춰 읽는다.
-function getConfiguredApiBase(): string | undefined {
-  const runtimeConfig = getRuntimeConfig();
-  if (hasRuntimeApiBaseOverride(runtimeConfig)) {
-    const runtimeBase = runtimeConfig.__MATH_OCR_API_BASE__;
-    return typeof runtimeBase === "string" ? normalizeApiBase(runtimeBase) : "";
-  }
-
+function getConfiguredApiBaseFromEnv(): string | undefined {
   const processEnvBase = getProcessEnvApiBase();
   if (typeof processEnvBase === "string") {
     return processEnvBase;
@@ -63,6 +57,17 @@ function getConfiguredApiBase(): string | undefined {
   const viteEnvBase = typeof __MATH_OCR_VITE_API_BASE__ === "string" ? __MATH_OCR_VITE_API_BASE__ : "";
   if (viteEnvBase?.trim()) {
     return normalizeApiBase(viteEnvBase);
+  }
+
+  return undefined;
+}
+
+// 런타임 override 는 배포 환경에서도 명시 설정으로 항상 우선한다.
+function getRuntimeOverrideApiBase(): string | undefined {
+  const runtimeConfig = getRuntimeConfig();
+  if (hasRuntimeApiBaseOverride(runtimeConfig)) {
+    const runtimeBase = runtimeConfig.__MATH_OCR_API_BASE__;
+    return typeof runtimeBase === "string" ? normalizeApiBase(runtimeBase) : "";
   }
 
   return undefined;
@@ -89,12 +94,23 @@ function canUseLocalApiFallback(hostname: string | undefined): boolean {
 
 // 배포 환경 규칙에 맞춰 최종 API base URL 을 계산한다.
 export function getApiBaseUrl(): string {
-  const configuredBase = getConfiguredApiBase();
-  if (typeof configuredBase === "string") {
-    return configuredBase;
+  const hostname = globalThis.location?.hostname;
+  const runtimeOverrideBase = getRuntimeOverrideApiBase();
+  if (typeof runtimeOverrideBase === "string") {
+    return runtimeOverrideBase;
   }
 
-  if (canUseLocalApiFallback(globalThis.location?.hostname)) {
+  // Vercel/운영 배포에서는 same-origin 프록시 계약을 우선하고 env 절대 URL은 로컬 개발에서만 사용한다.
+  if (hostname && !canUseLocalApiFallback(hostname)) {
+    return "";
+  }
+
+  const configuredEnvBase = getConfiguredApiBaseFromEnv();
+  if (typeof configuredEnvBase === "string") {
+    return configuredEnvBase;
+  }
+
+  if (canUseLocalApiFallback(hostname)) {
     return getLocalApiBaseUrl();
   }
 
