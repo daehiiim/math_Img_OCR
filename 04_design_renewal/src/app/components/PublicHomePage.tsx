@@ -15,18 +15,18 @@ import { useAuth } from "../context/AuthContext";
 
 const steps = [
   {
-    title: "문제 이미지를 올립니다",
-    body: "시험지, 프린트물, 풀이 메모를 그대로 가져와 다중 영역으로 나눌 준비를 합니다.",
+    title: "사진을 찍으세요.",
+    body: "시험지, 프린트물, 풀이 메모를 그대로 가져오세요.",
     icon: FileImage,
   },
   {
-    title: "수식과 도형을 정리합니다",
-    body: "OCR 결과를 보고 SVG 편집기로 선, 점선, 곡선, 텍스트를 다듬어 HWPX 품질을 올립니다.",
+    title: "검토하세요.",
+    body: "OCR 결과를 보고 내용을 검토하세요.",
     icon: Layers3,
   },
   {
-    title: "HWPX로 바로 넘깁니다",
-    body: "수업 자료, 학원 문서, 문제 은행 템플릿으로 곧바로 이어지게 구성합니다.",
+    title: "변환하세요.",
+    body: "HWPX로 자료를 출력하세요.",
     icon: ScanText,
   },
 ];
@@ -46,18 +46,17 @@ export function PublicHomePage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#171717] text-white">
               M
             </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.22em] text-[#7c6f64]">
-                Math OCR Studio
+            <div className="space-y-1">
+              <p className="text-[15px] font-semibold uppercase tracking-[0.18em] text-[#5f5246] sm:text-[16px]">
+                MATH OCR
               </p>
-              <p className="text-[15px] tracking-[-0.02em]">이미지에서 HWPX까지</p>
+              <p className="text-[13px] tracking-[-0.02em] text-[#4c453e] sm:text-[14px]">
+                이미지에서 HWPX까지
+              </p>
             </div>
           </button>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={() => navigate("/pricing")}>
-              가격
-            </Button>
             <Button
               variant={isAuthenticated ? "outline" : "default"}
               onClick={() => navigate(isAuthenticated ? "/workspace" : "/login")}
@@ -78,19 +77,14 @@ export function PublicHomePage() {
           >
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#d2c7bc] bg-[#f6eee4] px-3 py-1 text-[12px] text-[#7c5e44]">
               <BadgeCheck className="h-3.5 w-3.5" />
-              수학 문서 변환에 맞춘 OCR 워크스테이션
+              어떤 문제 사진이라도 한글 파일로
             </div>
-            <h1 className="max-w-3xl text-[40px] leading-[1.02] tracking-[-0.05em] lg:text-[68px]">
-              로그인은 늦게,
-              <br />
-              문서 생산성은
-              <br />
-              바로 시작.
+            <h1 className="max-w-[900px] text-[26px] leading-[1.08] tracking-[-0.05em] sm:text-[42px] lg:text-[56px]">
+              컴퓨터에서도, 휴대폰에서도 문제를 한글로.
             </h1>
             <p className="mt-6 max-w-2xl text-[16px] leading-7 text-[#5b554f] lg:text-[18px]">
-              먼저 홈페이지를 둘러보고, 새 작업을 눌러 이미지를 올리는 순간에만 로그인하도록
-              흐름을 바꿉니다. 로그인 후에는 OpenAI API key 연결을 우선 제안하고,
-              연결하지 않으면 크레딧 구매로 자연스럽게 이어집니다.
+              <span className="block">로그인 없이 시작하고, 문서 제작도 간단히.</span>
+              <span className="block">바로 결과를 만들어내는 워크스테이션</span>
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button onClick={() => navigate("/new")} className="gap-2">
@@ -117,18 +111,18 @@ export function PublicHomePage() {
                 <div className="flex items-start gap-3">
                   <KeyRound className="mt-0.5 h-5 w-5 text-[#f6c17f]" />
                   <div>
-                    <p className="text-[15px]">OpenAI API key 우선 연결</p>
+                    <p className="text-[15px]">무료 이용</p>
                     <p className="mt-1 text-[13px] leading-6 text-white/65">
-                      무료 처리 모드는 사용자 소유 키를 사용합니다.
+                      본인의 OpenAI API key를 가지고 있다면 무료로 사용하십시오.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="mt-0.5 h-5 w-5 text-[#9bd2c5]" />
                   <div>
-                    <p className="text-[15px]">성공 시점 과금</p>
+                    <p className="text-[15px]">더 편하게</p>
                     <p className="mt-1 text-[13px] leading-6 text-white/65">
-                      OCR 완료 및 결과 저장 성공 후에만 크레딧을 1회 차감합니다.
+                      간편하게 로그인하고 모든 기능을 사용하고 싶으면 크레딧을 구매하세요
                     </p>
                   </div>
                 </div>
@@ -140,13 +134,10 @@ export function PublicHomePage() {
                 Editor Rule
               </p>
               <p className="mt-4 text-[20px] leading-8 tracking-[-0.03em]">
-                SVG 편집기는 유지합니다.
-                <br />
-                선, 점선, 곡선, 텍스트 보정은 그대로.
+                선, 점선, 곡선, 텍스트 보정까지.
               </p>
               <p className="mt-4 text-[14px] leading-6 text-[#645b53]">
-                브라우저 편집 품질 자체는 후속 과제로 두고, 이번 단계는 저장 규칙과 HWPX 반영
-                경로를 깨지 않는 데 집중합니다.
+                SVG 편집기를 이용해 그림을 자유롭게 수정해보세요.
               </p>
             </div>
           </motion.div>
