@@ -8,17 +8,20 @@ const {
   createCustomerPortalApiMock,
   getBillingCatalogApiMock,
   getCheckoutSessionStatusApiMock,
+  purchaseCreditsMock,
   refreshProfileMock,
 } = vi.hoisted(() => ({
   createCheckoutSessionApiMock: vi.fn(),
   createCustomerPortalApiMock: vi.fn(),
   getBillingCatalogApiMock: vi.fn(),
   getCheckoutSessionStatusApiMock: vi.fn(),
+  purchaseCreditsMock: vi.fn(),
   refreshProfileMock: vi.fn(async () => undefined),
 }));
 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({
+    purchaseCredits: purchaseCreditsMock,
     refreshProfile: refreshProfileMock,
     isAuthenticated: true,
     isLoading: false,
@@ -38,7 +41,9 @@ import { PaymentPage } from "./PaymentPage";
 describe("PaymentPage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     refreshProfileMock.mockClear();
+    purchaseCreditsMock.mockClear();
     createCheckoutSessionApiMock.mockReset();
     createCustomerPortalApiMock.mockReset();
     getBillingCatalogApiMock.mockResolvedValue([
@@ -132,5 +137,96 @@ describe("PaymentPage", () => {
         "https://mathtohwp.vercel.app/payment/starter"
       )
     );
+  });
+
+  it("mock 모드 성공 결제는 크레딧을 한 번만 반영한다", async () => {
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+    getCheckoutSessionStatusApiMock.mockResolvedValue({
+      checkout_id: "chk_mock_success",
+      status: "succeeded",
+      credits_applied: true,
+    });
+
+    const view = render(
+      <MemoryRouter initialEntries={["/payment/starter?checkout=success&checkout_id=chk_mock_success"]}>
+        <Routes>
+          <Route path="/payment/:planId" element={<PaymentPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("결제가 완료되었습니다")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(purchaseCreditsMock).toHaveBeenCalledWith(100);
+    });
+    expect(refreshProfileMock).not.toHaveBeenCalled();
+
+    view.unmount();
+
+    render(
+      <MemoryRouter initialEntries={["/payment/starter?checkout=success&checkout_id=chk_mock_success"]}>
+        <Routes>
+          <Route path="/payment/:planId" element={<PaymentPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText("결제가 완료되었습니다");
+    expect(purchaseCreditsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("mock 모드 취소 결제는 오류만 보여주고 크레딧은 바꾸지 않는다", async () => {
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+
+    render(
+      <MemoryRouter initialEntries={["/payment/starter?checkout=cancel&checkout_id=chk_mock_cancel"]}>
+        <Routes>
+          <Route path="/payment/:planId" element={<PaymentPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("결제가 취소되었습니다. 다시 시도해주세요.")).toBeInTheDocument();
+    expect(purchaseCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("mock 모드 실패 결제는 오류만 보여주고 크레딧은 바꾸지 않는다", async () => {
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+    getCheckoutSessionStatusApiMock.mockResolvedValue({
+      checkout_id: "chk_mock_fail",
+      status: "failed",
+      credits_applied: false,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/payment/starter?checkout=success&checkout_id=chk_mock_fail"]}>
+        <Routes>
+          <Route path="/payment/:planId" element={<PaymentPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("결제가 완료되지 않았습니다. 다시 시도해주세요.")).toBeInTheDocument();
+    expect(purchaseCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("mock 모드에서는 portal 버튼을 비활성화하고 안내 문구를 노출한다", async () => {
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+    getCheckoutSessionStatusApiMock.mockResolvedValue({
+      checkout_id: "chk_mock_portal",
+      status: "succeeded",
+      credits_applied: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/payment/starter?checkout=success&checkout_id=chk_mock_portal"]}>
+        <Routes>
+          <Route path="/payment/:planId" element={<PaymentPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("mock 모드에서는 주문/영수증 포털을 제공하지 않습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /주문\/영수증 관리/i })).toBeDisabled();
   });
 });

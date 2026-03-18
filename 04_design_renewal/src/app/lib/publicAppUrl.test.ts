@@ -28,4 +28,10 @@ describe("publicAppUrl", () => {
   it("localhost origin만 있으면 APP_URL 설정 누락 오류를 발생시킨다", () => {
     expect(() => buildPublicAppUrl("/login")).toThrow("APP_URL is not configured");
   });
+
+  it("mock 모드에서는 localhost origin을 공개 앱 URL로 사용한다", () => {
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+
+    expect(buildPublicAppUrl("/payment/starter")).toBe("http://localhost:5173/payment/starter");
+  });
 });

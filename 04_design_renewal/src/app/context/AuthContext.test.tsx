@@ -24,6 +24,12 @@ const { signInWithOAuthMock, signOutMock, getUserMock, onAuthStateChangeMock } =
   })),
 }));
 
+const { supabaseState } = vi.hoisted(() => ({
+  supabaseState: {
+    hasSupabaseAuth: true,
+  },
+}));
+
 vi.mock("../api/billingApi", () => ({
   getBillingProfileApi: getBillingProfileApiMock,
   saveOpenAiKeyApi: saveOpenAiKeyApiMock,
@@ -31,21 +37,29 @@ vi.mock("../api/billingApi", () => ({
 }));
 
 vi.mock("../lib/supabase", () => ({
-  hasSupabaseAuth: true,
-  browserSupabase: {
-    auth: {
-      getUser: getUserMock,
-      onAuthStateChange: onAuthStateChangeMock,
-      signInWithOAuth: signInWithOAuthMock,
-      signOut: signOutMock,
-    },
+  get hasSupabaseAuth() {
+    return supabaseState.hasSupabaseAuth;
+  },
+  get browserSupabase() {
+    if (!supabaseState.hasSupabaseAuth) {
+      return null;
+    }
+
+    return {
+      auth: {
+        getUser: getUserMock,
+        onAuthStateChange: onAuthStateChangeMock,
+        signInWithOAuth: signInWithOAuthMock,
+        signOut: signOutMock,
+      },
+    };
   },
 }));
 
 import { AuthProvider, useAuth } from "./AuthContext";
 
 function AuthHarness() {
-  const { loginWithGoogle, connectOpenAi, disconnectOpenAi, user } = useAuth();
+  const { authErrorMessage, connectOpenAi, disconnectOpenAi, loginWithGoogle, user } = useAuth();
 
   return (
     <div>
@@ -61,6 +75,8 @@ function AuthHarness() {
       <span data-testid="openai-state">{user?.openAiConnected ? "connected" : "disconnected"}</span>
       <span data-testid="masked-key">{user?.openAiMaskedKey ?? "none"}</span>
       <span data-testid="credits">{user?.credits ?? 0}</span>
+      <span data-testid="email">{user?.email ?? "none"}</span>
+      <span data-testid="auth-error">{authErrorMessage ?? "none"}</span>
     </div>
   );
 }
@@ -74,7 +90,9 @@ describe("AuthContext", () => {
     onAuthStateChangeMock.mockClear();
     saveOpenAiKeyApiMock.mockReset();
     deleteOpenAiKeyApiMock.mockReset();
+    supabaseState.hasSupabaseAuth = true;
     delete (globalThis as { __MATH_OCR_PUBLIC_APP_URL__?: string }).__MATH_OCR_PUBLIC_APP_URL__;
+    vi.unstubAllEnvs();
     window.localStorage.clear();
   });
 
@@ -99,6 +117,40 @@ describe("AuthContext", () => {
         },
       })
     );
+  });
+
+  it("mock 모드에서는 OAuth 없이 로컬 테스트 사용자를 만든다", async () => {
+    const user = userEvent.setup();
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+
+    render(
+      <AuthProvider>
+        <AuthHarness />
+      </AuthProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "로그인" }));
+
+    expect(signInWithOAuthMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("email")).toHaveTextContent("local-ui-mock@example.com");
+    expect(screen.getByTestId("auth-error")).toHaveTextContent("none");
+  });
+
+  it("mock 모드가 아니고 인증 설정이 없으면 안내 메시지만 노출한다", async () => {
+    supabaseState.hasSupabaseAuth = false;
+
+    render(
+      <AuthProvider>
+        <AuthHarness />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("auth-error")).toHaveTextContent(
+        "로컬 UI mock 모드를 켜거나 Supabase 인증 환경값을 설정해주세요."
+      );
+    });
+    expect(screen.getByTestId("email")).toHaveTextContent("none");
   });
 
   it("remote billing profile values override stale local OpenAI state", async () => {

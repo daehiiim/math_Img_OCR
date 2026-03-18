@@ -19,6 +19,8 @@ vi.mock("../lib/supabase", () => ({
 }));
 
 import {
+  getBillingCatalogApi,
+  getCheckoutSessionStatusApi,
   createCheckoutSessionApi,
   deleteOpenAiKeyApi,
   saveOpenAiKeyApi,
@@ -32,6 +34,8 @@ describe("billingApi", () => {
     getSessionMock.mockClear();
     delete (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__;
     delete (globalThis as { __MATH_OCR_ALLOW_LOCAL_API_FALLBACK__?: boolean }).__MATH_OCR_ALLOW_LOCAL_API_FALLBACK__;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it("attaches the Supabase session token to billing requests", async () => {
@@ -191,6 +195,71 @@ describe("billingApi", () => {
         cancelUrl: "https://example.com/cancel",
       })
     ).rejects.toThrow("결제 서버 설정이 아직 완료되지 않았습니다. 관리자 설정을 확인해 주세요.");
+  });
+
+  it("mock 모드에서는 fetch 없이 fallback catalog를 반환한다", async () => {
+    const fetchMock = vi.fn();
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+    vi.stubGlobal("fetch", fetchMock);
+
+    const plans = await getBillingCatalogApi();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(plans).toEqual([
+      { plan_id: "single", title: "Single", amount: 1000, currency: "krw", credits: 1 },
+      { plan_id: "starter", title: "Starter", amount: 19000, currency: "krw", credits: 100 },
+      { plan_id: "pro", title: "Pro", amount: 29000, currency: "krw", credits: 200 },
+    ]);
+  });
+
+  it("mock 모드에서는 현재 결제 페이지 쿼리로 checkout 결과를 고정한다", async () => {
+    const fetchMock = vi.fn();
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+    vi.stubEnv("VITE_LOCAL_UI_MOCK_PAYMENT_OUTCOME", "success");
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal(
+      "location",
+      new URL("http://localhost:5173/payment/starter?mock_payment=cancel") as unknown as Location
+    );
+
+    const session = await createCheckoutSessionApi({
+      planId: "starter",
+      successUrl: "http://localhost:5173/payment/starter?checkout=success&checkout_id={CHECKOUT_ID}",
+      cancelUrl: "http://localhost:5173/payment/starter?checkout=cancel",
+    });
+    const status = await getCheckoutSessionStatusApi(session.checkout_id);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(session.checkout_url).toContain("checkout=cancel");
+    expect(session.checkout_url).toContain(`checkout_id=${session.checkout_id}`);
+    expect(status).toEqual({
+      checkout_id: session.checkout_id,
+      status: "canceled",
+      credits_applied: false,
+    });
+  });
+
+  it("mock 결과값이 잘못되면 success로 안전하게 fallback 한다", async () => {
+    vi.stubEnv("VITE_LOCAL_UI_MOCK", "true");
+    vi.stubEnv("VITE_LOCAL_UI_MOCK_PAYMENT_OUTCOME", "unknown");
+    vi.stubGlobal(
+      "location",
+      new URL("http://localhost:5173/payment/starter?mock_payment=unknown") as unknown as Location
+    );
+
+    const session = await createCheckoutSessionApi({
+      planId: "starter",
+      successUrl: "http://localhost:5173/payment/starter?checkout=success&checkout_id={CHECKOUT_ID}",
+      cancelUrl: "http://localhost:5173/payment/starter?checkout=cancel",
+    });
+    const status = await getCheckoutSessionStatusApi(session.checkout_id);
+
+    expect(session.checkout_url).toContain("checkout=success");
+    expect(status).toEqual({
+      checkout_id: session.checkout_id,
+      status: "succeeded",
+      credits_applied: true,
+    });
   });
 
   it("maps missing OpenAI encryption settings to a friendly Korean message", async () => {
