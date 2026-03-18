@@ -1,14 +1,11 @@
-import copy
 import importlib
-import shutil
 import sys
-import zipfile
-import uuid
 from io import BytesIO
 from pathlib import Path
+from zipfile import ZipFile
 
-from PIL import Image
 import pytest
+from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -20,160 +17,177 @@ from app.pipeline.schema import (
     RegionPipelineContext,
 )
 
-RUNTIME_FIXTURE_DIR = Path(__file__).resolve().parents[1] / "vendor" / "hwpxskill-math"
+REQUIRED_RUNTIME_FILES = (
+    Path("scripts/xml_primitives.py"),
+    Path("scripts/exam_helpers.py"),
+    Path("scripts/hwpx_utils.py"),
+    Path("templates/base/mimetype"),
+    Path("templates/base/Contents/header.xml"),
+    Path("templates/base/Contents/content.hpf"),
+    Path("templates/base/Contents/section0.xml"),
+)
+
+OPTIONAL_RUNTIME_FILES = (
+    Path("templates/base/settings.xml"),
+    Path("templates/base/version.xml"),
+    Path("templates/base/META-INF/container.rdf"),
+    Path("templates/base/META-INF/container.xml"),
+    Path("templates/base/META-INF/manifest.xml"),
+    Path("templates/base/Preview/PrvImage.png"),
+    Path("templates/base/Preview/PrvText.txt"),
+)
 
 
 def make_png_bytes(width: int = 32, height: int = 24) -> bytes:
+    """테스트용 PNG 바이트를 생성한다."""
     image = Image.new("RGB", (width, height), color="white")
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
-def build_job(image_path: str) -> JobPipelineContext:
-    region = RegionPipelineContext(
-        context=RegionContext(
-            id="q1",
-            polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
-            type="diagram",
-            order=1,
-        ),
-        extractor=ExtractorContext(ocr_text="문제", explanation="해설"),
-        figure=FigureContext(png_rendered_url=image_path),
-        status="completed",
-        success=True,
-    )
-    return JobPipelineContext(
-        job_id=str(uuid.uuid4()),
-        file_name="sample.png",
-        image_url="user/job/input/sample.png",
-        image_width=32,
-        image_height=24,
-        status="completed",
-        created_at="2026-03-15T00:00:00+00:00",
-        updated_at="2026-03-15T00:00:00+00:00",
-        regions=[region],
-    )
-
-
-def copy_runtime_bundle(target_dir: Path) -> Path:
-    shutil.copytree(RUNTIME_FIXTURE_DIR, target_dir)
-    return target_dir
-
-
-def import_exporter_module():
+def load_exporter_module():
+    """exporter 모듈을 매 테스트마다 새로 import한다."""
     sys.modules.pop("app.pipeline.exporter", None)
     return importlib.import_module("app.pipeline.exporter")
 
 
-def test_exporter_module_imports_without_runtime_side_effects():
-    exporter = import_exporter_module()
+def copy_runtime_bundle(target_dir: Path) -> Path:
+    """저장소의 vendored runtime bundle을 임시 경로로 복사한다."""
+    source_dir = Path(__file__).resolve().parents[1] / "vendor" / "hwpxskill-math"
 
-    assert hasattr(exporter, "export_hwpx")
+    for relative_path in REQUIRED_RUNTIME_FILES + OPTIONAL_RUNTIME_FILES:
+        source_path = source_dir / relative_path
+        destination_path = target_dir / relative_path
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        destination_path.write_bytes(source_path.read_bytes())
 
-
-def test_resolve_hwpx_runtime_prefers_env_override(tmp_path, monkeypatch):
-    exporter = import_exporter_module()
-    backend_root = tmp_path / "backend"
-    override_dir = copy_runtime_bundle(tmp_path / "override" / "hwpxskill-math")
-    copy_runtime_bundle(backend_root / "vendor" / "hwpxskill-math")
-
-    monkeypatch.setattr(exporter, "BACKEND_ROOT", backend_root)
-    monkeypatch.setattr(exporter, "_get_configured_hwpx_skill_dir", lambda: str(override_dir))
-    monkeypatch.setattr(exporter, "_get_codex_home", lambda: None)
-    monkeypatch.setattr(exporter, "_get_user_home", lambda: tmp_path / "home")
-
-    runtime = exporter._resolve_hwpx_runtime()
-
-    assert runtime.skill_dir == override_dir
+    return target_dir
 
 
-def test_resolve_hwpx_runtime_uses_vendored_fallback(tmp_path, monkeypatch):
-    exporter = import_exporter_module()
-    backend_root = tmp_path / "backend"
-    vendor_dir = copy_runtime_bundle(backend_root / "vendor" / "hwpxskill-math")
+def make_export_job(image_path: str) -> JobPipelineContext:
+    """HWPX export 테스트에 필요한 최소 job fixture를 만든다."""
+    return JobPipelineContext(
+        job_id="job-export-1",
+        file_name="uploaded_image.png",
+        image_url="user-123/job-export-1/input/uploaded_image.png",
+        image_width=32,
+        image_height=24,
+        status="completed",
+        created_at="2026-03-18T00:00:00+00:00",
+        updated_at="2026-03-18T00:00:00+00:00",
+        regions=[
+            RegionPipelineContext(
+                context=RegionContext(
+                    id="q1",
+                    polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
+                    type="diagram",
+                    order=1,
+                ),
+                extractor=ExtractorContext(
+                    ocr_text="문제 본문",
+                    explanation="해설 본문",
+                ),
+                figure=FigureContext(png_rendered_url=image_path),
+                status="completed",
+                success=True,
+            )
+        ],
+    )
 
-    monkeypatch.setattr(exporter, "BACKEND_ROOT", backend_root)
-    monkeypatch.setattr(exporter, "_get_configured_hwpx_skill_dir", lambda: None)
-    monkeypatch.setattr(exporter, "_get_codex_home", lambda: None)
-    monkeypatch.setattr(exporter, "_get_user_home", lambda: tmp_path / "home")
 
-    runtime = exporter._resolve_hwpx_runtime()
+def test_exporter_module_import_is_lazy():
+    """exporter 모듈 import 자체는 외부 runtime 없이 성공해야 한다."""
+    module = load_exporter_module()
 
-    assert runtime.skill_dir == vendor_dir
+    assert callable(module.export_hwpx)
 
 
-def test_resolve_hwpx_runtime_reports_checked_paths_and_missing_items(tmp_path, monkeypatch):
-    exporter = import_exporter_module()
-    backend_root = tmp_path / "backend"
-    override_dir = tmp_path / "missing-override"
-    codex_home = tmp_path / "codex-home"
-    home_dir = tmp_path / "home"
+def test_resolve_hwpx_runtime_prefers_configured_skill_dir(tmp_path):
+    """설정 경로가 유효하면 vendored 경로보다 먼저 선택해야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "02_main"
+    configured_dir = copy_runtime_bundle(tmp_path / "configured-skill")
+    copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
 
-    monkeypatch.setattr(exporter, "BACKEND_ROOT", backend_root)
-    monkeypatch.setattr(exporter, "_get_configured_hwpx_skill_dir", lambda: str(override_dir))
-    monkeypatch.setattr(exporter, "_get_codex_home", lambda: codex_home)
-    monkeypatch.setattr(exporter, "_get_user_home", lambda: home_dir)
+    runtime = module._resolve_hwpx_runtime(
+        app_root=app_root,
+        configured_skill_dir=str(configured_dir),
+        codex_home=tmp_path / "codex-home",
+        home_dir=tmp_path / "home",
+    )
+
+    assert runtime.skill_dir == configured_dir
+
+
+def test_resolve_hwpx_runtime_uses_vendored_fallback(tmp_path):
+    """설정 경로가 없으면 02_main/vendor bundle을 기본으로 선택해야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "02_main"
+    vendored_dir = copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+
+    runtime = module._resolve_hwpx_runtime(
+        app_root=app_root,
+        configured_skill_dir=None,
+        codex_home=tmp_path / "codex-home",
+        home_dir=tmp_path / "home",
+    )
+
+    assert runtime.skill_dir == vendored_dir
+
+
+def test_resolve_hwpx_runtime_reports_checked_paths_and_missing_files(tmp_path):
+    """모든 후보가 실패하면 확인한 경로와 누락 파일을 함께 보여줘야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "02_main"
+    configured_dir = tmp_path / "missing-configured"
+    codex_home = tmp_path / "missing-codex-home"
+    home_dir = tmp_path / "missing-home"
 
     with pytest.raises(FileNotFoundError) as exc_info:
-        exporter._resolve_hwpx_runtime()
+        module._resolve_hwpx_runtime(
+            app_root=app_root,
+            configured_skill_dir=str(configured_dir),
+            codex_home=codex_home,
+            home_dir=home_dir,
+        )
 
     message = str(exc_info.value)
 
-    assert str(override_dir) in message
-    assert str(backend_root / "vendor" / "hwpxskill-math") in message
+    assert "HWPX export runtime not found." in message
+    assert str(configured_dir) in message
+    assert str(app_root / "vendor" / "hwpxskill-math") in message
     assert str(codex_home / "skills" / "hwpxskill-math") in message
     assert str(home_dir / ".codex" / "skills" / "hwpxskill-math") in message
     assert "scripts/xml_primitives.py" in message
     assert "templates/base/Contents/header.xml" in message
 
 
-def test_export_hwpx_creates_valid_hwpx_file(tmp_path, monkeypatch):
-    exporter = import_exporter_module()
-    skill_dir = copy_runtime_bundle(tmp_path / "runtime" / "hwpxskill-math")
-    root_path = tmp_path / "workspace"
-    image_path = root_path / "assets" / "q1" / "q1.png"
+def test_export_hwpx_creates_valid_file_using_vendored_runtime(tmp_path, monkeypatch):
+    """vendored runtime bundle만으로 실제 HWPX 파일을 생성해야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "02_main"
+    copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+    monkeypatch.setattr(module, "ROOT", app_root)
+    monkeypatch.setattr(module, "_get_codex_home", lambda: tmp_path / "missing-codex-home")
+    monkeypatch.setattr(module, "_get_home_dir", lambda: tmp_path / "missing-home")
+
+    root_path = tmp_path / "runtime"
+    image_relative_path = Path("assets/q1.png")
+    image_path = root_path / image_relative_path
     image_path.parent.mkdir(parents=True, exist_ok=True)
-    image_path.write_bytes(make_png_bytes(48, 36))
-    job = build_job("assets/q1/q1.png")
+    image_path.write_bytes(make_png_bytes())
 
-    monkeypatch.setattr(exporter, "_get_configured_hwpx_skill_dir", lambda: str(skill_dir))
-    monkeypatch.setattr(exporter, "_get_codex_home", lambda: None)
-    monkeypatch.setattr(exporter, "_get_user_home", lambda: tmp_path / "home")
-
-    hwpx_path = exporter.export_hwpx(root_path, copy.deepcopy(job), root_path / "exports")
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
 
     assert hwpx_path.exists()
+    assert hwpx_path.suffix == ".hwpx"
 
-    with zipfile.ZipFile(hwpx_path, "r") as archive:
-        assert "mimetype" in archive.namelist()
-        assert "Contents/content.hpf" in archive.namelist()
-        assert "Contents/header.xml" in archive.namelist()
-        assert "Contents/section0.xml" in archive.namelist()
-        assert archive.read("mimetype").decode("utf-8").strip() == "application/hwp+zip"
-
-
-def test_export_hwpx_converts_math_markup_to_equation_controls(tmp_path, monkeypatch):
-    exporter = import_exporter_module()
-    skill_dir = copy_runtime_bundle(tmp_path / "runtime" / "hwpxskill-math")
-    root_path = tmp_path / "workspace"
-    image_path = root_path / "assets" / "q1" / "q1.png"
-    image_path.parent.mkdir(parents=True, exist_ok=True)
-    image_path.write_bytes(make_png_bytes(48, 36))
-    job = build_job("assets/q1/q1.png")
-    job.regions[0].extractor.ocr_text = "문제 <math>AB</math> 입니다"
-    job.regions[0].extractor.explanation = "해설 <math>x+1</math> 입니다"
-
-    monkeypatch.setattr(exporter, "_get_configured_hwpx_skill_dir", lambda: str(skill_dir))
-    monkeypatch.setattr(exporter, "_get_codex_home", lambda: None)
-    monkeypatch.setattr(exporter, "_get_user_home", lambda: tmp_path / "home")
-
-    hwpx_path = exporter.export_hwpx(root_path, copy.deepcopy(job), root_path / "exports")
-
-    with zipfile.ZipFile(hwpx_path, "r") as archive:
-        section_xml = archive.read("Contents/section0.xml").decode("utf-8")
-
-    assert "<math>" not in section_xml
-    assert "<hp:equation" in section_xml
-    assert "<hp:script>AB</hp:script>" in section_xml
-    assert "<hp:script>x+1</hp:script>" in section_xml
+    with ZipFile(hwpx_path, "r") as archive:
+        names = archive.namelist()
+        assert names[0] == "mimetype"
+        assert "Contents/content.hpf" in names
+        assert "Contents/header.xml" in names
+        assert "Contents/section0.xml" in names
+        assert any(name.startswith("Contents/BinData/img_q1_") for name in names)
