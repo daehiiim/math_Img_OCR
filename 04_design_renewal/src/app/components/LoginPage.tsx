@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { resolvePostLoginPath } from "../lib/authFlow";
 
 export function LoginPage() {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { Check, ArrowLeft, Sparkles } from "lucide-react";
 
 import { getBillingCatalogApi, type BillingPlanResponse } from "../api/billingApi";

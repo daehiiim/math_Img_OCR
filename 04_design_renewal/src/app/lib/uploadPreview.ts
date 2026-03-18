@@ -38,7 +38,9 @@ export function validateImageFile(file: File): string | null {
 
 // 데모용 data url을 브라우저 File 객체로 변환한다.
 export function dataUrlToFile(dataUrl: string, fileName: string): File {
-  return new File([decodeDataUrlBody(dataUrl)], fileName, {
+  const bytes = Uint8Array.from(decodeDataUrlBody(dataUrl));
+
+  return new File([bytes], fileName, {
     type: readMimeType(dataUrl),
   });
 }

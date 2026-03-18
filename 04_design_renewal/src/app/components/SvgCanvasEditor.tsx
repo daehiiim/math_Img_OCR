@@ -235,8 +235,8 @@ function getElementBBox(el: SVGElement, svg?: SVGSVGElement | null): BBox | null
   }
 }
 
-function getUnifiedBBox(elements: SVGElement[]): BBox | null {
-  const boxes = elements.map((el) => getElementBBox(el, svgRef.current)).filter((b): b is BBox => b !== null);
+function getUnifiedBBox(elements: SVGElement[], svg?: SVGSVGElement | null): BBox | null {
+  const boxes = elements.map((el) => getElementBBox(el, svg)).filter((b): b is BBox => b !== null);
   if (boxes.length === 0) return null;
   const minX = Math.min(...boxes.map((b) => b.x));
   const minY = Math.min(...boxes.map((b) => b.y));

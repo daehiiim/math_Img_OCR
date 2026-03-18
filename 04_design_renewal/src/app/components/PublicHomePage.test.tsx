@@ -28,4 +28,18 @@ describe("PublicHomePage", () => {
     expect(screen.getByText("검토하세요.")).toBeInTheDocument();
     expect(screen.getByText("변환하세요.")).toBeInTheDocument();
   });
+
+  it("단계 설명의 줄바꿈 문자를 화면 줄바꿈으로 처리할 수 있는 클래스를 적용한다", () => {
+    render(
+      <MemoryRouter>
+        <PublicHomePage />
+      </MemoryRouter>
+    );
+
+    const firstStepBody = screen
+      .getByText(/시험지, 프린트물, 풀이를 업로드하세요\./)
+      .closest("p");
+
+    expect(firstStepBody).toHaveClass("whitespace-pre-line");
+  });
 });

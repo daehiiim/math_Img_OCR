@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import {
   ArrowRight,
   BadgeCheck,
@@ -16,17 +16,17 @@ import { useAuth } from "../context/AuthContext";
 const steps = [
   {
     title: "사진을 찍으세요.",
-    body: "시험지, 프린트물, 풀이 메모를 그대로 가져오세요.",
+    body: "시험지, 프린트물, 풀이를 업로드하세요.\n자동으로 문항, 해설, 이미지를 만들어줍니다.",
     icon: FileImage,
   },
   {
     title: "검토하세요.",
-    body: "OCR 결과를 보고 내용을 검토하세요.",
+    body: "결과를 보고 내용을 검토하세요.\n필요하면 수정하세요.",
     icon: Layers3,
   },
   {
     title: "변환하세요.",
-    body: "HWPX로 자료를 출력하세요.",
+    body: "HWPX로 자료를 출력하세요.\n버튼 한 번이면 사진이 한글파일로 완성됩니다.",
     icon: ScanText,
   },
 ];
@@ -59,7 +59,9 @@ export function PublicHomePage() {
           <div className="flex items-center gap-2">
             <Button
               variant={isAuthenticated ? "outline" : "default"}
-              onClick={() => navigate(isAuthenticated ? "/workspace" : "/login")}
+              onClick={() =>
+                navigate(isAuthenticated ? "/workspace" : "/login")
+              }
             >
               {isAuthenticated ? "내 작업실" : "로그인"}
             </Button>
@@ -83,7 +85,9 @@ export function PublicHomePage() {
               컴퓨터에서도, 휴대폰에서도 문제를 한글로.
             </h1>
             <p className="mt-6 max-w-2xl text-[16px] leading-7 text-[#5b554f] lg:text-[18px]">
-              <span className="block">로그인 없이 시작하고, 문서 제작도 간단히.</span>
+              <span className="block">
+                로그인 없이 시작하고, 문서 제작도 간단히.
+              </span>
               <span className="block">바로 결과를 만들어내는 워크스테이션</span>
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -105,15 +109,15 @@ export function PublicHomePage() {
           >
             <div className="rounded-[30px] bg-[#171717] p-7 text-white shadow-[0_28px_80px_rgba(23,23,23,0.22)]">
               <p className="text-[12px] uppercase tracking-[0.2em] text-white/50">
-                Access Policy
+                이용 정책
               </p>
               <div className="mt-5 space-y-4">
                 <div className="flex items-start gap-3">
                   <KeyRound className="mt-0.5 h-5 w-5 text-[#f6c17f]" />
                   <div>
-                    <p className="text-[15px]">무료 이용</p>
+                    <p className="text-[15px]">누구나 무료 이용</p>
                     <p className="mt-1 text-[13px] leading-6 text-white/65">
-                      본인의 OpenAI API key를 가지고 있다면 무료로 사용하십시오.
+                      본인의 OpenAI API key를 가지고 있다면 무료로 사용하십시오
                     </p>
                   </div>
                 </div>
@@ -122,7 +126,8 @@ export function PublicHomePage() {
                   <div>
                     <p className="text-[15px]">더 편하게</p>
                     <p className="mt-1 text-[13px] leading-6 text-white/65">
-                      간편하게 로그인하고 모든 기능을 사용하고 싶으면 크레딧을 구매하세요
+                      간편하게 로그인하고 모든 기능을 사용하고 싶으면 크레딧을
+                      구매하세요
                     </p>
                   </div>
                 </div>
@@ -131,13 +136,14 @@ export function PublicHomePage() {
 
             <div className="rounded-[30px] border border-black/5 bg-[#ebe4d7] p-7">
               <p className="text-[12px] uppercase tracking-[0.2em] text-[#7b6b58]">
-                Editor Rule
+                이미지 제작
               </p>
               <p className="mt-4 text-[20px] leading-8 tracking-[-0.03em]">
-                선, 점선, 곡선, 텍스트 보정까지.
+                어떤 이미지라도 완벽하게 추출하니까.
               </p>
               <p className="mt-4 text-[14px] leading-6 text-[#645b53]">
-                SVG 편집기를 이용해 그림을 자유롭게 수정해보세요.
+                이제는 캡쳐해서 만들지 마세요. 직접 만든 것 처럼 생성되는
+                이미지.
               </p>
             </div>
           </motion.div>
@@ -158,8 +164,12 @@ export function PublicHomePage() {
               <p className="text-[13px] uppercase tracking-[0.18em] text-[#8a8176]">
                 Step 0{index + 1}
               </p>
-              <h2 className="mt-3 text-[24px] tracking-[-0.03em]">{step.title}</h2>
-              <p className="mt-3 text-[14px] leading-6 text-[#615950]">{step.body}</p>
+              <h2 className="mt-3 text-[24px] tracking-[-0.03em]">
+                {step.title}
+              </h2>
+              <p className="mt-3 whitespace-pre-line text-[14px] leading-6 text-[#615950]">
+                {step.body}
+              </p>
             </motion.div>
           ))}
         </section>
