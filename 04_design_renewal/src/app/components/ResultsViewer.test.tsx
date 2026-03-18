@@ -28,6 +28,27 @@ async function openSvgTab(): Promise<void> {
 }
 
 describe("ResultsViewer", () => {
+  it("완료된 영역에는 OCR 결과, SVG 벡터, 해설 탭만 노출한다", () => {
+    const region = makeRegion({
+      explanation: "해설 텍스트",
+      mathml: "<math>x+1</math>",
+    });
+
+    render(
+      <ResultsViewer
+        regions={[region]}
+        onSaveEditedSvg={vi.fn(async () => undefined)}
+        onLoadRegionSvg={vi.fn(async () => "<svg />")}
+      />
+    );
+
+    expect(screen.getByRole("tab", { name: /ocr 결과/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /svg 벡터/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /해설/i })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /mathml/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /raw/i })).not.toBeInTheDocument();
+  });
+
   it("원본 signed SVG 미리보기 URL을 그대로 유지한다", async () => {
     const region = makeRegion({
       svgUrl: "https://signed.example/q1.svg?token=abc",

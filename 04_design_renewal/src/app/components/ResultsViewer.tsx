@@ -1,5 +1,5 @@
 import { Suspense, Component, lazy, useState } from "react";
-import { Check, Copy, FileText, Image, Code, Loader2, Pencil } from "lucide-react";
+import { Check, Copy, FileText, Image, Loader2, Pencil } from "lucide-react";
 
 import type { Region, RegionType } from "../store/jobStore";
 import { buildAssetPreviewUrl } from "../lib/assetPreviewUrl";
@@ -180,14 +180,6 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
                       <FileText className="h-3.5 w-3.5" />
                       해설
                     </TabsTrigger>
-                    <TabsTrigger value="mathml" className="gap-1.5">
-                      <Code className="h-3.5 w-3.5" />
-                      MathML
-                    </TabsTrigger>
-                    <TabsTrigger value="raw" className="gap-1.5">
-                      <Code className="h-3.5 w-3.5" />
-                      Raw
-                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="ocr" className="mt-3">
@@ -264,50 +256,6 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
                   <TabsContent value="explain" className="mt-3">
                     <div className="rounded-lg bg-muted/50 p-4">
                       <pre className="whitespace-pre-wrap font-mono text-[13px]">{region.explanation || "해설 없음"}</pre>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="mathml" className="mt-3">
-                    <div className="relative overflow-x-auto rounded-lg bg-muted/50 p-4">
-                      <pre className="whitespace-pre-wrap font-mono text-[11px] text-muted-foreground">
-                        {region.mathml || "MathML 없음"}
-                      </pre>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="raw" className="mt-3">
-                    <div className="relative overflow-x-auto rounded-lg bg-muted/50 p-4">
-                      <pre className="font-mono text-[11px] text-muted-foreground">
-                        {JSON.stringify(
-                          {
-                            region_id: region.id,
-                            type: region.type,
-                            polygon: region.polygon,
-                            order: region.order,
-                            status: region.status,
-                            outputs: {
-                              ocr: region.ocrText ? "inline" : null,
-                              svg: region.svgUrl || null,
-                              edited_svg: region.editedSvgUrl || null,
-                              crop: region.cropUrl || null,
-                            },
-                          },
-                          null,
-                          2
-                        )}
-                      </pre>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-2 top-2"
-                        onClick={() => copyText(JSON.stringify(region, null, 2), `raw-${region.id}`)}
-                      >
-                        {copiedId === `raw-${region.id}` ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-500" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
                     </div>
                   </TabsContent>
                 </Tabs>
