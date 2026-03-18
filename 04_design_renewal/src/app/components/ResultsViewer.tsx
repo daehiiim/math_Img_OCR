@@ -1,9 +1,9 @@
 import { Suspense, Component, lazy, useState } from "react";
-import { Check, Copy, FileText, Image, Loader2, Pencil } from "lucide-react";
+import { FileText, Image, Loader2, Pencil } from "lucide-react";
 
 import type { Region, RegionType } from "../store/jobStore";
 import { buildAssetPreviewUrl } from "../lib/assetPreviewUrl";
-import { copyToClipboard } from "../utils/clipboard";
+import { parseMathMarkupPreview } from "../lib/mathMarkupPreview";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -57,19 +57,50 @@ class SvgEditorErrorBoundary extends Component<
 
 const LazySvgCanvasEditor = lazy(() => import("./SvgCanvasEditor"));
 
+interface MathMarkupPreviewProps {
+  value?: string;
+  emptyLabel: string;
+}
+
+/** 수식 마크업을 읽기 좋은 미리보기 텍스트로 렌더링한다. */
+function MathMarkupPreview({ value, emptyLabel }: MathMarkupPreviewProps) {
+  if (!value || !value.trim()) {
+    return <p className="text-[13px] text-muted-foreground">{emptyLabel}</p>;
+  }
+
+  const lines = parseMathMarkupPreview(value);
+
+  return (
+    <div className="space-y-1 text-[13px] leading-6 text-foreground">
+      {lines.map((segments, lineIndex) => (
+        <p key={`${lineIndex}-${segments.length}`} className="min-h-[1.5rem] whitespace-pre-wrap break-words">
+          {segments.length > 0 ? (
+            segments.map((segment, segmentIndex) =>
+              segment.kind === "formula" ? (
+                <span
+                  key={`${lineIndex}-${segmentIndex}-${segment.value}`}
+                  className="mx-[1px] inline rounded-md border border-amber-300/70 bg-amber-100/80 px-1.5 py-0.5 font-semibold text-amber-950"
+                >
+                  {segment.value}
+                </span>
+              ) : (
+                <span key={`${lineIndex}-${segmentIndex}-${segment.value}`}>{segment.value}</span>
+              )
+            )
+          ) : (
+            <span className="whitespace-pre"> </span>
+          )}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: ResultsViewerProps) {
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingRegionId, setEditingRegionId] = useState<string | null>(null);
   const [editingSvgText, setEditingSvgText] = useState("");
   const [svgEditorError, setSvgEditorError] = useState<string | null>(null);
   const [svgLoading, setSvgLoading] = useState(false);
-
-  const copyText = (text: string, id: string) => {
-    copyToClipboard(text).then(() => {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    });
-  };
 
   const startEditSvg = async (region: Region) => {
     if (!region.svgUrl && !region.editedSvgUrl) {
@@ -183,23 +214,11 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
                   </TabsList>
 
                   <TabsContent value="ocr" className="mt-3">
-                    <div className="relative rounded-lg bg-muted/50 p-4">
-                      <pre className="whitespace-pre-wrap font-mono text-[13px]">{region.ocrText}</pre>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-2 top-2"
-                        onClick={() => copyText(region.ocrText || "", `ocr-${region.id}`)}
-                      >
-                        {copiedId === `ocr-${region.id}` ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-500" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
+                    <div className="rounded-lg bg-muted/50 p-4">
+                      <MathMarkupPreview value={region.ocrText} emptyLabel="OCR 결과 없음" />
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                      ⓘ 백엔드 OCR 결과를 그대로 표시합니다.
+                      ⓘ 화면에서는 수식 태그를 숨긴 미리보기만 보여주며, HWPX 내보내기 원본은 그대로 유지됩니다.
                     </p>
                   </TabsContent>
 
@@ -255,7 +274,7 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
 
                   <TabsContent value="explain" className="mt-3">
                     <div className="rounded-lg bg-muted/50 p-4">
-                      <pre className="whitespace-pre-wrap font-mono text-[13px]">{region.explanation || "해설 없음"}</pre>
+                      <MathMarkupPreview value={region.explanation} emptyLabel="해설 없음" />
                     </div>
                   </TabsContent>
                 </Tabs>

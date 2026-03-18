@@ -151,3 +151,29 @@ def test_export_hwpx_creates_valid_hwpx_file(tmp_path, monkeypatch):
         assert "Contents/header.xml" in archive.namelist()
         assert "Contents/section0.xml" in archive.namelist()
         assert archive.read("mimetype").decode("utf-8").strip() == "application/hwp+zip"
+
+
+def test_export_hwpx_converts_math_markup_to_equation_controls(tmp_path, monkeypatch):
+    exporter = import_exporter_module()
+    skill_dir = copy_runtime_bundle(tmp_path / "runtime" / "hwpxskill-math")
+    root_path = tmp_path / "workspace"
+    image_path = root_path / "assets" / "q1" / "q1.png"
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(make_png_bytes(48, 36))
+    job = build_job("assets/q1/q1.png")
+    job.regions[0].extractor.ocr_text = "문제 <math>AB</math> 입니다"
+    job.regions[0].extractor.explanation = "해설 <math>x+1</math> 입니다"
+
+    monkeypatch.setattr(exporter, "_get_configured_hwpx_skill_dir", lambda: str(skill_dir))
+    monkeypatch.setattr(exporter, "_get_codex_home", lambda: None)
+    monkeypatch.setattr(exporter, "_get_user_home", lambda: tmp_path / "home")
+
+    hwpx_path = exporter.export_hwpx(root_path, copy.deepcopy(job), root_path / "exports")
+
+    with zipfile.ZipFile(hwpx_path, "r") as archive:
+        section_xml = archive.read("Contents/section0.xml").decode("utf-8")
+
+    assert "<math>" not in section_xml
+    assert "<hp:equation" in section_xml
+    assert "<hp:script>AB</hp:script>" in section_xml
+    assert "<hp:script>x+1</hp:script>" in section_xml

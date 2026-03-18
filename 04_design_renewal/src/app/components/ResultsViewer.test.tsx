@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -91,5 +91,50 @@ describe("ResultsViewer", () => {
       "src",
       "https://signed.example/q1.edited.svg?token=edit&v=3"
     );
+  });
+
+  it("OCR 결과 탭에서 math 마크업을 숨기고 수식을 강조 텍스트로 보여준다", () => {
+    const region = makeRegion({
+      ocrText: "정답은 <math>x+1</math> 입니다",
+    });
+
+    render(
+      <ResultsViewer
+        regions={[region]}
+        onSaveEditedSvg={vi.fn(async () => undefined)}
+        onLoadRegionSvg={vi.fn(async () => "<svg />")}
+      />
+    );
+
+    const panel = screen.getByRole("tabpanel", { name: /ocr 결과/i });
+
+    expect(within(panel).getByText(/정답은/)).toBeInTheDocument();
+    expect(within(panel).getByText("x+1")).toBeInTheDocument();
+    expect(within(panel).queryByText(/<math>/i)).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("해설 탭에서도 math 마크업을 숨기고 복사 버튼을 노출하지 않는다", async () => {
+    const user = userEvent.setup();
+    const region = makeRegion({
+      explanation: "해설은 <math>AB</math> 입니다",
+    });
+
+    render(
+      <ResultsViewer
+        regions={[region]}
+        onSaveEditedSvg={vi.fn(async () => undefined)}
+        onLoadRegionSvg={vi.fn(async () => "<svg />")}
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: /해설/i }));
+
+    const panel = screen.getByRole("tabpanel", { name: /해설/i });
+
+    expect(within(panel).getByText(/해설은/)).toBeInTheDocument();
+    expect(within(panel).getByText("AB")).toBeInTheDocument();
+    expect(within(panel).queryByText(/<math>/i)).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button")).not.toBeInTheDocument();
   });
 });
