@@ -66,4 +66,31 @@ describe("LoginPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Google 계정으로 로그인" })).toBeDisabled();
   });
+
+  it("mock 로그인 완료 후에는 원래 요청 경로로 바로 복귀한다", async () => {
+    useAuthMock.mockReturnValue({
+      authErrorMessage: null,
+      clearPostLoginPath: vi.fn(),
+      isAuthenticated: true,
+      isLoading: false,
+      isLocalUiMock: true,
+      loginWithGoogle: vi.fn(async () => null),
+      readPostLoginPath: vi.fn(() => "/workspace"),
+      user: {
+        openAiConnected: false,
+        credits: 0,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/workspace" element={<div>workspace</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("workspace")).toBeInTheDocument();
+  });
 });

@@ -32,6 +32,20 @@ npm run dev -- --host 0.0.0.0 --port 5173
 - 프런트 URL: `http://localhost:5173`
 - 기본 API base: `VITE_API_BASE_URL=http://localhost:8000`
 
+### 2-1) 로컬 UI mock 로그인/결제
+```bash
+cd 04_design_renewal
+set VITE_LOCAL_UI_MOCK=true
+set VITE_LOCAL_UI_MOCK_PAYMENT_OUTCOME=success
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+- mock 모드는 프런트 로그인과 결제 UI만 대체합니다.
+- Google OAuth, Supabase 세션, Polar checkout 없이 `/login`, `/pricing`, `/payment/:planId` 흐름을 확인할 수 있습니다.
+- 결제 결과는 기본값 `VITE_LOCAL_UI_MOCK_PAYMENT_OUTCOME` 또는 현재 결제 페이지의 `?mock_payment=success|cancel|fail` 쿼리로 바꿀 수 있습니다.
+- mock 성공은 로컬 프로필 크레딧만 증가시키며, OCR 업로드/백엔드 저장소/실제 billing 적립 검증은 포함하지 않습니다.
+- production/preview 환경에서는 이 값을 설정하지 않습니다.
+
 ### 3) 루트 Docker 실행
 ```bash
 docker compose up --build

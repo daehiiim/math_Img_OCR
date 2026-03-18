@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { resolvePostLoginPath } from "../lib/authFlow";
 
 export function LoginPage() {
@@ -23,17 +23,20 @@ export function LoginPage() {
     }
 
     const nextPath = readPostLoginPath();
-    const destination = resolvePostLoginPath(
-      {
-        openAiConnected: user.openAiConnected,
-        credits: user.credits,
-      },
-      nextPath
-    );
+    // mock 모드에서는 로그인 직전 요청 경로를 그대로 복원해 UI 흐름을 검증한다.
+    const destination = isLocalUiMock
+      ? nextPath
+      : resolvePostLoginPath(
+          {
+            openAiConnected: user.openAiConnected,
+            credits: user.credits,
+          },
+          nextPath
+        );
 
     clearPostLoginPath();
     navigate(destination, { replace: true });
-  }, [clearPostLoginPath, isAuthenticated, navigate, readPostLoginPath, user]);
+  }, [clearPostLoginPath, isAuthenticated, isLocalUiMock, navigate, readPostLoginPath, user]);
 
   if (isLoading) {
     return null;

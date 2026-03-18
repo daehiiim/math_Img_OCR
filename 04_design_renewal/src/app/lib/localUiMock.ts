@@ -152,7 +152,13 @@ export function readLocalUiMockCheckoutStatus(checkoutId: string) {
 export function applyLocalUiMockCheckoutCredits(checkoutId: string): boolean {
   const records = readMockCheckouts();
   const record = records[checkoutId];
-  if (!record || record.outcome !== "success" || record.creditsApplied) {
+  if (!record) {
+    records[checkoutId] = { outcome: "success", creditsApplied: true };
+    writeMockCheckouts(records);
+    return true;
+  }
+
+  if (record.outcome !== "success" || record.creditsApplied) {
     return false;
   }
 
