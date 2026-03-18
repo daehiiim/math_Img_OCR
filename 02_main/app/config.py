@@ -31,6 +31,7 @@ class AppSettings:
     database_url: str | None
     auth: AuthSettings
     billing: BillingSettings
+    hwpx_skill_dir: str | None = None
     app_url: str | None = None
     cors_allow_origins: tuple[str, ...] = ()
 
@@ -91,6 +92,7 @@ def get_settings(root_path: Path) -> AppSettings:
     return AppSettings(
         openai_api_key=_get_setting(env_values, "OPENAI_API_KEY"),
         openai_key_encryption_secret=_get_setting(env_values, "OPENAI_KEY_ENCRYPTION_SECRET"),
+        hwpx_skill_dir=_get_setting(env_values, "HWPX_SKILL_DIR"),
         database_url=_get_setting(env_values, "DATABASE_URL"),
         app_url=_normalize_url(_get_setting(env_values, "APP_URL")),
         cors_allow_origins=_get_multi_setting(env_values, "CORS_ALLOW_ORIGINS"),

@@ -13,6 +13,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 - 백엔드 런타임 설정의 단일 소스는 `02_main/.env` 이다. 저장소 루트 `.env` 는 백엔드 설정 파일로 사용하지 않는다.
 - 브라우저 인증이나 결제 복귀 흐름까지 확인하려면 `.env`에 `APP_URL=https://mathtohwp.vercel.app` 또는 허용할 프런트 도메인을 함께 설정해야 합니다.
+- HWPX export는 기본적으로 `02_main/vendor/hwpxskill-math` 번들을 사용한다. 다른 로컬 경로를 써야 하면 `HWPX_SKILL_DIR`로만 override 한다.
 
 ### Docker
 ```bash
@@ -39,6 +40,7 @@ docker compose up --build
 ## 선택 환경변수
 
 - `CORS_ALLOW_ORIGINS` (`https://a.example.com,https://b.example.com` 형식)
+- `HWPX_SKILL_DIR` (비워 두면 vendored runtime bundle 사용, 값이 있으면 해당 경로를 최우선으로 사용)
 
 ## 인증 규칙
 

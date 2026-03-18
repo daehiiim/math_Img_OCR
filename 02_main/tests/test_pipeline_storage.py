@@ -1,11 +1,12 @@
 import copy
+import importlib
 import sys
-import types
 import uuid
 from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -213,9 +214,8 @@ def test_execute_hwpx_export_uploads_exported_file(monkeypatch, tmp_path):
         output_path.write_bytes(b"hwpx-content")
         return output_path
 
-    exporter_module = types.ModuleType("app.pipeline.exporter")
-    exporter_module.export_hwpx = fake_export_hwpx
-    monkeypatch.setitem(sys.modules, "app.pipeline.exporter", exporter_module)
+    exporter_module = importlib.import_module("app.pipeline.exporter")
+    monkeypatch.setattr(exporter_module, "export_hwpx", fake_export_hwpx)
 
     result = orchestrator.execute_hwpx_export(user, job.job_id)
     saved_job = orchestrator.read_job(user, job.job_id)
@@ -223,6 +223,49 @@ def test_execute_hwpx_export_uploads_exported_file(monkeypatch, tmp_path):
     assert result["download_url"].endswith(".hwpx")
     assert saved_job.status == "exported"
     assert result["download_url"] in repository.assets
+
+
+def test_execute_hwpx_export_wraps_exporter_error_details(monkeypatch):
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes())
+    region = RegionPipelineContext(
+        context=RegionContext(
+            id="q1",
+            polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
+            type="diagram",
+            order=1,
+        ),
+        extractor=ExtractorContext(ocr_text="문제", explanation="해설"),
+        figure=FigureContext(
+            crop_url=f"{user.user_id}/{job.job_id}/outputs/q1_crop.png",
+            png_rendered_url=f"{user.user_id}/{job.job_id}/outputs/q1.png",
+        ),
+        status="completed",
+        success=True,
+    )
+    prepared_job = copy.deepcopy(job)
+    prepared_job.status = "completed"
+    prepared_job.regions = [region]
+    repository.save_job(user, prepared_job)
+    repository.upload_bytes(user, region.figure.png_rendered_url or "", make_png_bytes(10, 10), "image/png")
+
+    exporter_module = importlib.import_module("app.pipeline.exporter")
+
+    def fake_export_hwpx(root_path: Path, export_job: JobPipelineContext, export_dir: Path) -> Path:
+        raise FileNotFoundError(
+            "HWPX export runtime not found. checked: /runtime/vendor missing: scripts/xml_primitives.py"
+        )
+
+    monkeypatch.setattr(exporter_module, "export_hwpx", fake_export_hwpx)
+
+    with pytest.raises(ValueError) as exc_info:
+        orchestrator.execute_hwpx_export(user, job.job_id)
+
+    assert (
+        str(exc_info.value)
+        == "HWPX export failed: HWPX export runtime not found. checked: /runtime/vendor missing: scripts/xml_primitives.py"
+    )
 
 
 def test_run_pipeline_uses_user_api_key_and_persists_processing_type(monkeypatch):
