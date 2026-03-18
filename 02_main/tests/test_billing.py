@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from standardwebhooks.webhooks import Webhook
 
@@ -26,19 +27,19 @@ class FakePolarGateway:
             "prod_single": {
                 "id": "prod_single",
                 "name": "Single",
-                "prices": [{"price_amount": 100, "price_currency": "usd"}],
+                "prices": [{"price_amount": 1000, "price_currency": "krw"}],
                 "metadata": {"plan_id": "single", "credits": "1"},
             },
             "prod_starter": {
                 "id": "prod_starter",
                 "name": "Starter",
-                "prices": [{"price_amount": 1900, "price_currency": "usd"}],
+                "prices": [{"price_amount": 19000, "price_currency": "krw"}],
                 "metadata": {"plan_id": "starter", "credits": "100"},
             },
             "prod_pro": {
                 "id": "prod_pro",
                 "name": "Pro",
-                "prices": [{"price_amount": 2900, "price_currency": "usd"}],
+                "prices": [{"price_amount": 29000, "price_currency": "krw"}],
                 "metadata": {"plan_id": "pro", "credits": "200"},
             },
         }
@@ -83,15 +84,16 @@ class FakePolarGateway:
                     "external_id": "user-123",
                 },
                 "product": {
+                    "id": "prod_starter",
                     "metadata": {
                         "plan_id": "starter",
                         "credits": "100",
                     },
                     "name": "Starter",
-                    "prices": [{"price_amount": 1900, "price_currency": "usd"}],
+                    "prices": [{"price_amount": 19000, "price_currency": "krw"}],
                 },
-                "amount": 1900,
-                "currency": "usd",
+                "amount": 19000,
+                "currency": "krw",
                 "invoice_number": "INV-123",
                 "invoice_url": "https://polar.sh/invoices/INV-123",
             },
@@ -313,8 +315,8 @@ def test_create_checkout_uses_product_metadata():
     assert created["external_customer_id"] == "user-123"
     assert created["plan"].plan_id == "starter"
     assert created["plan"].credits == 100
-    assert created["plan"].amount == 1900
-    assert created["plan"].currency == "usd"
+    assert created["plan"].amount == 19000
+    assert created["plan"].currency == "krw"
     assert result["checkout_url"] == "https://sandbox-checkout.polar.sh/checkout/chk_test_123"
     assert result["checkout_id"] == "chk_test_123"
 
@@ -328,8 +330,71 @@ def test_list_plans_returns_polar_catalog_metadata():
     starter = plans[1]
     assert starter["title"] == "Starter"
     assert starter["credits"] == 100
-    assert starter["amount"] == 1900
-    assert starter["currency"] == "usd"
+    assert starter["amount"] == 19000
+    assert starter["currency"] == "krw"
+
+
+def test_create_checkout_rejects_non_krw_product_currency():
+    service, _, gateway = make_service()
+    gateway.products["prod_starter"]["prices"] = [{"price_amount": 19000, "price_currency": "usd"}]
+
+    with pytest.raises(ValueError) as error:
+        service.create_checkout(
+            make_user(),
+            plan_id="starter",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+        )
+
+    assert str(error.value) == "product currency mismatch"
+
+
+def test_create_checkout_rejects_missing_product_price():
+    service, _, gateway = make_service()
+    gateway.products["prod_starter"].pop("prices", None)
+
+    with pytest.raises(ValueError) as error:
+        service.create_checkout(
+            make_user(),
+            plan_id="starter",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+        )
+
+    assert str(error.value) == "missing product price"
+
+
+def test_apply_order_paid_event_requires_plan_id_metadata():
+    service, _, gateway = make_service()
+    event = gateway.verify_event(b"{}", "signature")
+    event["data"]["product"]["metadata"].pop("plan_id")
+
+    with pytest.raises(ValueError) as error:
+        service.apply_webhook_event(event)
+
+    assert str(error.value) == "missing plan_id metadata"
+
+
+def test_apply_order_paid_event_requires_valid_credits_metadata():
+    service, _, gateway = make_service()
+    event = gateway.verify_event(b"{}", "signature")
+    event["data"]["product"]["metadata"]["credits"] = "abc"
+
+    with pytest.raises(ValueError) as error:
+        service.apply_webhook_event(event)
+
+    assert str(error.value) == "invalid credits metadata"
+
+
+def test_apply_order_paid_event_rejects_mismatched_configured_product_id():
+    service, _, gateway = make_service()
+    event = gateway.verify_event(b"{}", "signature")
+    event["data"]["product"]["id"] = "prod_other"
+
+    with pytest.raises(ValueError) as error:
+        service.apply_webhook_event(event)
+
+    assert str(error.value) == "configured Polar product id mismatch"
 
 
 def test_apply_order_paid_event_is_idempotent():
@@ -636,8 +701,8 @@ def test_billing_checkout_accepts_es256_authenticated_user(monkeypatch):
                     "checkout_url": "https://example.com/checkout",
                     "plan_id": plan_id,
                     "credits": 100,
-                    "amount": 1900,
-                    "currency": "usd",
+                    "amount": 19000,
+                    "currency": "krw",
                 }
             },
         )(),

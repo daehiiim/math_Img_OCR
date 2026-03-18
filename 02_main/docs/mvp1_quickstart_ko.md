@@ -32,13 +32,14 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 ## 3) Polar 결제 준비
 
-- Polar Dashboard에 USD one-time product 3개 생성
+- 운영 상품은 Polar production에 one-time product 3개로 관리
+- 운영 상품 통화는 모두 KRW 고정 가격 유지
 - 각 상품 metadata에 `plan_id`, `credits` 설정
 - `POLAR_PRODUCT_SINGLE_ID`, `POLAR_PRODUCT_STARTER_ID`, `POLAR_PRODUCT_PRO_ID` 환경변수 설정
 - Stripe Connect Express payout account를 Polar Finance에서 연결
 - webhook endpoint를 `POST /billing/webhooks/polar`로 등록
-- 사전 점검은 `py scripts/polar_sandbox_preflight.py`로 먼저 확인
-- catalog 생성/확인은 `py scripts/bootstrap_polar_sandbox_catalog.py`로 처리 가능
+- 운영 사전 점검은 `py scripts/polar_production_preflight.py`로 먼저 확인
+- 로컬 sandbox 리허설은 `py scripts/polar_sandbox_preflight.py`, catalog 생성은 `py scripts/bootstrap_polar_sandbox_catalog.py`로 처리 가능
 
 ## 4) 기본 API 흐름
 
@@ -62,4 +63,5 @@ pytest -q tests/test_config.py tests/test_billing.py
 pytest -q tests/test_job_response_fields.py
 ```
 
-운영 연동은 `polar_sandbox_runbook_ko.md`를 기준으로 진행한다.
+운영 연동은 `polar_production_runbook_ko.md`를 기준으로 진행한다.
+로컬 sandbox 리허설은 `polar_sandbox_runbook_ko.md`를 참고한다.

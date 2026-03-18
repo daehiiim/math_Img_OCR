@@ -9,6 +9,7 @@ from app.polar_preflight import (
     build_next_steps,
     build_env_checks,
     check_billing_catalog,
+    check_polar_products,
     check_supabase_payment_columns,
     collect_preflight_checks,
 )
@@ -73,6 +74,16 @@ def test_build_env_checks_requires_sandbox_server_for_sandbox_flow():
     assert "sandbox" in polar_server_check.detail
 
 
+def test_build_env_checks_requires_production_server_for_live_flow():
+    settings = make_settings(polar_server="sandbox")
+
+    checks = build_env_checks(settings, billing_mode="production")
+
+    polar_server_check = next(check for check in checks if check.key == "env.polar_server")
+    assert polar_server_check.status == "fail"
+    assert "production" in polar_server_check.detail
+
+
 def test_check_supabase_payment_columns_reports_ok_on_success():
     def requester(url: str, *, headers: dict, params: dict, timeout: int):
         assert url == "https://example.supabase.co/rest/v1/payment_events"
@@ -120,6 +131,87 @@ def test_check_billing_catalog_reports_ok_on_success():
     check = check_billing_catalog("http://localhost:8000", requester=requester)
 
     assert check.status == "ok"
+
+
+def test_check_polar_products_reports_ok_for_valid_live_products():
+    products = {
+        "prod_single": {
+            "id": "prod_single",
+            "title": "Single",
+            "amount": 1000,
+            "currency": "krw",
+            "metadata": {"plan_id": "single", "credits": "1"},
+        },
+        "prod_starter": {
+            "id": "prod_starter",
+            "title": "Starter",
+            "amount": 19000,
+            "currency": "krw",
+            "metadata": {"plan_id": "starter", "credits": "100"},
+        },
+        "prod_pro": {
+            "id": "prod_pro",
+            "title": "Pro",
+            "amount": 29000,
+            "currency": "krw",
+            "metadata": {"plan_id": "pro", "credits": "200"},
+        },
+    }
+
+    checks = check_polar_products(
+        make_settings(polar_server="production"),
+        product_reader=lambda product_id: products[product_id],
+    )
+
+    assert [check.status for check in checks] == ["ok", "ok", "ok"]
+
+
+def test_check_polar_products_reports_token_mismatch_from_production_reader():
+    checks = check_polar_products(
+        make_settings(polar_server="production"),
+        product_reader=lambda product_id: (_ for _ in ()).throw(
+            ValueError("POLAR_ACCESS_TOKEN does not match POLAR_SERVER")
+        ),
+    )
+
+    assert checks[0].status == "fail"
+    assert "POLAR_ACCESS_TOKEN does not match POLAR_SERVER" in checks[0].detail
+
+
+def test_check_polar_products_reports_missing_metadata_and_currency_mismatch():
+    products = {
+        "prod_single": {
+            "id": "prod_single",
+            "title": "Single",
+            "amount": 1000,
+            "currency": "krw",
+            "metadata": {"credits": "1"},
+        },
+        "prod_starter": {
+            "id": "prod_starter",
+            "title": "Starter",
+            "amount": 19000,
+            "currency": "usd",
+            "metadata": {"plan_id": "starter", "credits": "100"},
+        },
+        "prod_pro": {
+            "id": "prod_pro",
+            "title": "Pro",
+            "amount": 29000,
+            "currency": "krw",
+            "metadata": {"plan_id": "pro", "credits": "200"},
+        },
+    }
+
+    checks = check_polar_products(
+        make_settings(polar_server="production"),
+        product_reader=lambda product_id: products[product_id],
+    )
+
+    assert checks[0].status == "fail"
+    assert "missing plan_id metadata" in checks[0].detail
+    assert checks[1].status == "fail"
+    assert "product currency mismatch" in checks[1].detail
 
 
 def test_collect_preflight_checks_warns_when_tunnel_binary_is_missing():

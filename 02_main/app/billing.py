@@ -21,6 +21,10 @@ OPENAI_KEY_ENCRYPTION_SECRET_MISSING = "OPENAI_KEY_ENCRYPTION_SECRET is not conf
 POLAR_ACCESS_TOKEN_MISSING = "POLAR_ACCESS_TOKEN is not configured"
 POLAR_SERVER_LIVE_BILLING_REQUIRED = "POLAR_SERVER must be production for live billing"
 POLAR_ACCESS_TOKEN_SERVER_MISMATCH = "POLAR_ACCESS_TOKEN does not match POLAR_SERVER"
+POLAR_PRODUCT_PRICE_MISSING = "missing product price"
+POLAR_PRODUCT_CURRENCY_MISMATCH = "product currency mismatch"
+POLAR_PRODUCT_ID_MISMATCH = "configured Polar product id mismatch"
+POLAR_REQUIRED_CURRENCY = "krw"
 
 
 @dataclass(frozen=True)
@@ -195,7 +199,7 @@ def _read_price(product: Any) -> tuple[int, str]:
         currency = getattr(price, "price_currency", None)
         if amount is not None and currency:
             return int(amount), str(getattr(currency, "value", currency)).lower()
-    raise ValueError("product price is missing")
+    raise ValueError(POLAR_PRODUCT_PRICE_MISSING)
 
 
 def _read_product_metadata(product: Any) -> dict[str, Any]:
@@ -206,22 +210,69 @@ def _read_product_metadata(product: Any) -> dict[str, Any]:
     return dict(metadata)
 
 
-def _map_product_to_plan(plan_id: str, product_id: str, product: dict) -> BillingPlan:
-    """Polar product 응답을 애플리케이션 결제 플랜으로 변환한다."""
-    metadata = product.get("metadata") or {}
-    actual_plan_id = _normalize_text(metadata.get("plan_id"), "plan_id metadata")
-    if actual_plan_id != plan_id:
-        raise ValueError("polar product metadata plan_id mismatch")
+def _read_product_price_fields(
+    product: dict[str, Any],
+    *,
+    amount: Any | None = None,
+    currency: Any | None = None,
+) -> tuple[Any, Any]:
+    """상품 dict에서 금액과 통화 원본 값을 읽는다."""
     prices = product.get("prices") or []
     first_price = prices[0] if prices else {}
-    amount = product.get("amount", first_price.get("price_amount"))
-    currency = product.get("currency", first_price.get("price_currency"))
+    resolved_amount = product.get("amount") if amount is None else amount
+    resolved_currency = product.get("currency") if currency is None else currency
+    if resolved_amount is None:
+        resolved_amount = first_price.get("price_amount")
+    if resolved_currency is None or str(resolved_currency).strip() == "":
+        resolved_currency = first_price.get("price_currency")
+    if resolved_amount is None or resolved_currency is None:
+        raise ValueError(POLAR_PRODUCT_PRICE_MISSING)
+    return resolved_amount, resolved_currency
+
+
+def _normalize_product_currency(value: Any) -> str:
+    """운영 결제 통화를 KRW로 강제한다."""
+    normalized = _normalize_text(value, "product currency").lower()
+    if normalized != POLAR_REQUIRED_CURRENCY:
+        raise ValueError(POLAR_PRODUCT_CURRENCY_MISMATCH)
+    return normalized
+
+
+def _resolve_billing_product_id(product: dict[str, Any], configured_product_id: str | None) -> str:
+    """실제 상품 ID와 설정 상품 ID의 정합성을 검증한다."""
+    actual_product_id = _normalize_optional_text(product.get("id"))
+    configured_id = _normalize_optional_text(configured_product_id)
+    if actual_product_id and configured_id and actual_product_id != configured_id:
+        raise ValueError(POLAR_PRODUCT_ID_MISMATCH)
+    if actual_product_id:
+        return actual_product_id
+    return _normalize_text(configured_product_id, "product id")
+
+
+def build_validated_plan_from_product(
+    product: dict[str, Any],
+    *,
+    expected_plan_id: str,
+    configured_product_id: str | None,
+    amount: Any | None = None,
+    currency: Any | None = None,
+) -> BillingPlan:
+    """상품 payload를 운영 결제 규칙에 맞는 플랜으로 정규화한다."""
+    metadata = product.get("metadata") or {}
+    actual_plan_id = _normalize_text(metadata.get("plan_id"), "plan_id metadata")
+    if actual_plan_id != expected_plan_id:
+        raise ValueError("polar product metadata plan_id mismatch")
+    resolved_amount, resolved_currency = _read_product_price_fields(
+        product,
+        amount=amount,
+        currency=currency,
+    )
     return BillingPlan(
         plan_id=actual_plan_id,
-        product_id=product_id,
+        product_id=_resolve_billing_product_id(product, configured_product_id),
         title=_normalize_text(product.get("title") or product.get("name"), "product title"),
-        amount=_normalize_int(amount, "product amount"),
-        currency=_normalize_text(currency, "product currency").lower(),
+        amount=_normalize_int(resolved_amount, "product amount"),
+        currency=_normalize_product_currency(resolved_currency),
         credits=_normalize_int(metadata.get("credits"), "credits metadata"),
     )
 
@@ -706,7 +757,11 @@ class BillingService:
         if not product_id:
             raise ValueError("unsupported billing plan")
         product = self._require_polar_gateway().get_product(product_id)
-        return _map_product_to_plan(plan_id, product_id, product)
+        return build_validated_plan_from_product(
+            product,
+            expected_plan_id=plan_id,
+            configured_product_id=product_id,
+        )
 
     def list_plans(self) -> list[dict]:
         """허용된 Polar 상품 3개를 가격표 응답으로 반환한다."""
@@ -822,19 +877,14 @@ class BillingService:
         customer = order.get("customer") or {}
         product = order.get("product") or {}
         metadata = product.get("metadata") or {}
-        plan_id = _normalize_text(metadata.get("plan_id"), "plan_id")
-        prices = product.get("prices") or []
-        first_price = prices[0] if prices else {}
-        amount = order.get("total_amount") or order.get("amount") or first_price.get("price_amount")
-        currency = order.get("currency") or first_price.get("price_currency")
+        plan_id = _normalize_text(metadata.get("plan_id"), "plan_id metadata")
         user_id = _normalize_text(customer.get("external_id") or order.get("metadata", {}).get("user_id"), "user_id")
-        plan = BillingPlan(
-            plan_id=plan_id,
-            product_id=_normalize_optional_text(product.get("id")) or _normalize_text(self._plan_product_ids.get(plan_id), "product id"),
-            title=_normalize_text(product.get("name") or product.get("title"), "product title"),
-            amount=_normalize_int(amount, "order amount"),
-            currency=_normalize_text(currency, "order currency").lower(),
-            credits=_normalize_int(metadata.get("credits"), "credits"),
+        plan = build_validated_plan_from_product(
+            product,
+            expected_plan_id=plan_id,
+            configured_product_id=self._plan_product_ids.get(plan_id),
+            amount=order.get("total_amount") or order.get("amount"),
+            currency=order.get("currency"),
         )
         result = self._store.record_completed_payment(
             provider="polar",

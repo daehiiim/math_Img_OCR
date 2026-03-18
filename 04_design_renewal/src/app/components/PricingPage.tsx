@@ -25,9 +25,9 @@ interface PlanCard extends BillingPlanResponse, PlanDecoration {
 }
 
 const fallbackCatalog: BillingPlanResponse[] = [
-  { plan_id: "single", title: "Single", amount: 100, currency: "usd", credits: 1 },
-  { plan_id: "starter", title: "Starter", amount: 1900, currency: "usd", credits: 100 },
-  { plan_id: "pro", title: "Pro", amount: 2900, currency: "usd", credits: 200 },
+  { plan_id: "single", title: "Single", amount: 1000, currency: "krw", credits: 1 },
+  { plan_id: "starter", title: "Starter", amount: 19000, currency: "krw", credits: 100 },
+  { plan_id: "pro", title: "Pro", amount: 29000, currency: "krw", credits: 200 },
 ];
 
 const planDecorations: Record<PlanId, PlanDecoration> = {

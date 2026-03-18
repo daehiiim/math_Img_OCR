@@ -32,4 +32,17 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("KRW").length).toBeGreaterThan(0);
     expect(screen.getByText("실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.")).toBeInTheDocument();
   });
+
+  it("catalog 요청이 실패해도 KRW fallback 가격을 유지한다", async () => {
+    getBillingCatalogApiMock.mockRejectedValueOnce(new Error("catalog blocked"));
+
+    render(
+      <MemoryRouter>
+        <PricingPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("₩19,000")).toBeInTheDocument();
+    expect(screen.getAllByText("KRW").length).toBeGreaterThan(0);
+  });
 });

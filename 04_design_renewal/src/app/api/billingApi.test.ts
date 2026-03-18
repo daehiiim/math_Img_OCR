@@ -249,6 +249,26 @@ describe("billingApi", () => {
     ).rejects.toThrow("결제를 위해 서버의 POLAR_ACCESS_TOKEN 설정이 필요합니다.");
   });
 
+  it("maps Polar catalog metadata issues to an operator-friendly Korean message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ detail: "missing plan_id metadata" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+
+    await expect(
+      createCheckoutSessionApi({
+        planId: "starter",
+        successUrl: "https://example.com/success",
+        cancelUrl: "https://example.com/cancel",
+      })
+    ).rejects.toThrow("결제 상품 설정이 잘못되었습니다. 관리자에게 문의해 주세요.");
+  });
+
   it("sends the OpenAI key save request with auth headers and JSON body", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(

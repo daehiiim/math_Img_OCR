@@ -55,7 +55,37 @@ docker compose up --build
 - `GET /billing/portal`
 - `POST /billing/webhooks/polar`
 
-## Polar sandbox 사전 점검
+## Polar 운영 계약
+
+- 운영 결제의 단일 진실 원천은 Polar production 상품과 가격 설정이다.
+- 운영 상품 3개는 모두 `one-time`, `KRW` 고정 가격이어야 한다.
+- 각 상품 metadata 키는 정확히 `plan_id`, `credits`를 사용해야 한다.
+- `plan_id` 값은 각각 `single`, `starter`, `pro`와 일치해야 한다.
+- Cloud Run 환경변수 `POLAR_PRODUCT_*`는 Polar Dashboard의 실제 Product ID와 동일해야 한다.
+
+## Polar 사전 점검
+
+운영 배포 전에는 production 사전 점검을 먼저 실행한다.
+
+```bash
+py scripts/polar_production_preflight.py
+```
+
+로컬 백엔드까지 함께 점검하려면 아래처럼 실행한다.
+
+```bash
+py scripts/polar_production_preflight.py --api-base-url http://localhost:8000
+```
+
+이 스크립트는 아래를 검증한다.
+
+- `POLAR_SERVER=production` 여부
+- live `POLAR_ACCESS_TOKEN`과 `POLAR_WEBHOOK_SECRET` 존재 여부
+- `POLAR_PRODUCT_SINGLE_ID`, `POLAR_PRODUCT_STARTER_ID`, `POLAR_PRODUCT_PRO_ID` 존재 여부
+- Polar production 상품 3개의 `plan_id`, `credits`, `KRW` 가격 정합성
+- 선택적으로 `/billing/catalog` 응답 정합성
+
+로컬 리허설에는 sandbox 사전 점검을 사용한다.
 
 ```bash
 py scripts/polar_sandbox_preflight.py
@@ -67,7 +97,7 @@ py scripts/polar_sandbox_preflight.py
 py scripts/polar_sandbox_preflight.py --api-base-url http://localhost:8000
 ```
 
-sandbox 상품 3개를 코드로 맞추려면 아래 스크립트를 사용합니다.
+sandbox 상품 3개를 코드로 맞추려면 아래 스크립트를 사용한다.
 
 ```bash
 py scripts/bootstrap_polar_sandbox_catalog.py
@@ -79,4 +109,5 @@ py scripts/bootstrap_polar_sandbox_catalog.py
 pytest -q tests/test_auth.py tests/test_billing.py tests/test_job_response_fields.py
 ```
 
-운영 연동 체크리스트는 `docs/polar_sandbox_runbook_ko.md`를 참고하면 됩니다.
+운영 연동 체크리스트는 `docs/polar_production_runbook_ko.md`를 참고한다.
+로컬 sandbox 리허설은 `docs/polar_sandbox_runbook_ko.md`를 참고한다.

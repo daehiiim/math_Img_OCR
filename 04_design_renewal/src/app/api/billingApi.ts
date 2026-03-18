@@ -62,6 +62,16 @@ function mapBillingDetailToMessage(detail: string): string {
   if (detail === "Polar gateway is not configured") {
     return "결제 서버 설정이 아직 완료되지 않았습니다. 관리자 설정을 확인해 주세요.";
   }
+  if (
+    detail === "missing plan_id metadata" ||
+    detail === "polar product metadata plan_id mismatch" ||
+    detail === "invalid credits metadata" ||
+    detail === "missing product price" ||
+    detail === "product currency mismatch" ||
+    detail === "configured Polar product id mismatch"
+  ) {
+    return "결제 상품 설정이 잘못되었습니다. 관리자에게 문의해 주세요.";
+  }
   return detail;
 }
 
