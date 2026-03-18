@@ -12,8 +12,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 - 백엔드 런타임 설정의 단일 소스는 `02_main/.env` 이다. 저장소 루트 `.env` 는 백엔드 설정 파일로 사용하지 않는다.
-- 브라우저 인증이나 결제 복귀 흐름까지 확인하려면 `.env`에 `APP_URL=https://mathtohwp.vercel.app` 또는 허용할 프런트 도메인을 함께 설정해야 합니다.
-- HWPX export는 기본적으로 `02_main/vendor/hwpxskill-math` 번들을 사용한다. 다른 로컬 경로를 써야 하면 `HWPX_SKILL_DIR`로만 override 한다.
+- 브라우저 인증이나 결제 복귀 흐름까지 확인하려면 `.env`에 `APP_URL=https://mathtohwp.vercel.app` 또는 허용할 프런트 도메인을 함께 설정해야 한다.
+- HWPX export는 기본적으로 `02_main/vendor/hwpxskill-math` 번들을 사용한다. 다른 로컬 경로를 써야 하면 `HWPX_SKILL_DIR`로 override 한다.
 
 ### Docker
 ```bash
@@ -40,7 +40,14 @@ docker compose up --build
 ## 선택 환경변수
 
 - `CORS_ALLOW_ORIGINS` (`https://a.example.com,https://b.example.com` 형식)
-- `HWPX_SKILL_DIR` (비워 두면 vendored runtime bundle 사용, 값이 있으면 해당 경로를 최우선으로 사용)
+- `HWPX_SKILL_DIR` (기본값 비움. 특수한 로컬 skill 경로를 강제로 우선 사용해야 할 때만 설정)
+
+## HWPX export runtime
+
+- 기본값은 `02_main/vendor/hwpxskill-math` 이다.
+- override가 필요하면 `.env` 또는 OS 환경변수에 `HWPX_SKILL_DIR` 을 설정한다.
+- fallback 순서는 `HWPX_SKILL_DIR` -> `02_main/vendor/hwpxskill-math` -> `CODEX_HOME/skills/hwpxskill-math` -> `~/.codex/skills/hwpxskill-math` 이다.
+- runtime 탐색이 모두 실패하면 에러 메시지에 `checked:` 와 `missing:` 이 함께 포함되어 어떤 경로를 확인했고 어떤 파일이 없었는지 그대로 노출한다.
 
 ## 인증 규칙
 
@@ -65,7 +72,7 @@ docker compose up --build
 - `plan_id` 값은 각각 `single`, `starter`, `pro`와 일치해야 한다.
 - Cloud Run 환경변수 `POLAR_PRODUCT_*`는 Polar Dashboard의 실제 Product ID와 동일해야 한다.
 
-## Polar 사전 점검
+## Polar production 사전 점검
 
 운영 배포 전에는 production 사전 점검을 먼저 실행한다.
 
@@ -87,13 +94,15 @@ py scripts/polar_production_preflight.py --api-base-url http://localhost:8000
 - Polar production 상품 3개의 `plan_id`, `credits`, `KRW` 가격 정합성
 - 선택적으로 `/billing/catalog` 응답 정합성
 
+## Polar sandbox 사전 점검
+
 로컬 리허설에는 sandbox 사전 점검을 사용한다.
 
 ```bash
 py scripts/polar_sandbox_preflight.py
 ```
 
-로컬 백엔드까지 함께 점검하려면 아래처럼 실행합니다.
+로컬 백엔드까지 함께 점검하려면 아래처럼 실행한다.
 
 ```bash
 py scripts/polar_sandbox_preflight.py --api-base-url http://localhost:8000

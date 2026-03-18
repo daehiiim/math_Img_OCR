@@ -5,8 +5,8 @@ import uuid
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
 import pytest
+from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -225,36 +225,19 @@ def test_execute_hwpx_export_uploads_exported_file(monkeypatch, tmp_path):
     assert result["download_url"] in repository.assets
 
 
-def test_execute_hwpx_export_wraps_exporter_error_details(monkeypatch):
+def test_execute_hwpx_export_wraps_exporter_error(monkeypatch):
     repository = install_memory_repository(monkeypatch)
     user = make_user()
     job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes())
-    region = RegionPipelineContext(
-        context=RegionContext(
-            id="q1",
-            polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
-            type="diagram",
-            order=1,
-        ),
-        extractor=ExtractorContext(ocr_text="문제", explanation="해설"),
-        figure=FigureContext(
-            crop_url=f"{user.user_id}/{job.job_id}/outputs/q1_crop.png",
-            png_rendered_url=f"{user.user_id}/{job.job_id}/outputs/q1.png",
-        ),
-        status="completed",
-        success=True,
-    )
     prepared_job = copy.deepcopy(job)
     prepared_job.status = "completed"
-    prepared_job.regions = [region]
     repository.save_job(user, prepared_job)
-    repository.upload_bytes(user, region.figure.png_rendered_url or "", make_png_bytes(10, 10), "image/png")
 
     exporter_module = importlib.import_module("app.pipeline.exporter")
 
     def fake_export_hwpx(root_path: Path, export_job: JobPipelineContext, export_dir: Path) -> Path:
-        raise FileNotFoundError(
-            "HWPX export runtime not found. checked: /runtime/vendor missing: scripts/xml_primitives.py"
+        raise RuntimeError(
+            "HWPX export runtime not found. checked: C:/runtime missing: scripts/xml_primitives.py"
         )
 
     monkeypatch.setattr(exporter_module, "export_hwpx", fake_export_hwpx)
@@ -264,7 +247,7 @@ def test_execute_hwpx_export_wraps_exporter_error_details(monkeypatch):
 
     assert (
         str(exc_info.value)
-        == "HWPX export failed: HWPX export runtime not found. checked: /runtime/vendor missing: scripts/xml_primitives.py"
+        == "HWPX export failed: HWPX export runtime not found. checked: C:/runtime missing: scripts/xml_primitives.py"
     )
 
 
