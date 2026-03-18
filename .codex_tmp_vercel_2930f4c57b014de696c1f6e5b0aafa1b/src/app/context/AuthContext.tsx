@@ -294,11 +294,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return prev;
       }
 
-      if (isLocalUiMock) {
-        clearStoredProfile(prev.email);
-        return null;
-      }
-
+      clearStoredProfile(prev.email);
       saveStoredProfile({
         ...prev,
         openAiConnected: false,
