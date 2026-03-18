@@ -2,6 +2,7 @@ import { Suspense, Component, lazy, useState } from "react";
 import { Check, Copy, FileText, Image, Code, Loader2, Pencil } from "lucide-react";
 
 import type { Region, RegionType } from "../store/jobStore";
+import { buildAssetPreviewUrl } from "../lib/assetPreviewUrl";
 import { copyToClipboard } from "../utils/clipboard";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -130,6 +131,9 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
       {regions.map((region) => {
         const color = getRegionColor(region.type);
         const isEditing = editingRegionId === region.id;
+        const previewUrl = region.editedSvgUrl
+          ? buildAssetPreviewUrl(region.editedSvgUrl, region.editedSvgVersion)
+          : region.svgUrl;
 
         return (
           <Card key={region.id}>
@@ -209,9 +213,9 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
 
                   <TabsContent value="svg" className="mt-3 space-y-3">
                     <div className="flex items-center justify-center rounded-lg border bg-white p-4">
-                      {region.editedSvgUrl || region.svgUrl ? (
+                      {previewUrl ? (
                         <img
-                          src={`${region.editedSvgUrl || region.svgUrl}?v=${region.editedSvgVersion || Date.now()}`}
+                          src={previewUrl}
                           alt={`${region.id} svg`}
                           className="w-full max-w-md"
                         />
