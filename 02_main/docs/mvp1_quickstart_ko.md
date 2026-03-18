@@ -40,7 +40,24 @@ npm run dev -- --host 0.0.0.0 --port 5173
 - 사전 점검은 `py scripts/polar_sandbox_preflight.py`로 먼저 확인
 - catalog 생성/확인은 `py scripts/bootstrap_polar_sandbox_catalog.py`로 처리 가능
 
-## 4) 기본 API 흐름
+## 4) Cloud Run 운영 전환 핵심값
+
+- Vercel:
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+  - `VITE_API_BASE_URL=https://<service>-<hash>-an.a.run.app`
+- Cloud Run:
+  - `APP_ENV=production`
+  - `CORS_ALLOW_ORIGINS=https://mathtohwp.vercel.app`
+  - Supabase / Polar / OpenAI 운영 환경변수 일체
+- Supabase:
+  - `SITE_URL=https://mathtohwp.vercel.app`
+  - OAuth redirect allowlist에 `https://mathtohwp.vercel.app/**` 추가
+- Polar:
+  - success / cancel URL은 `https://mathtohwp.vercel.app`
+  - webhook URL은 Cloud Run 도메인 기준 `POST /billing/webhooks/polar`
+
+## 5) 기본 API 흐름
 
 1. `POST /jobs` 이미지 업로드
 2. `PUT /jobs/{job_id}/regions` 영역 저장
@@ -50,7 +67,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 6. `POST /billing/webhooks/polar` 크레딧 적립
 7. `POST /jobs/{job_id}/export/hwpx` 내보내기
 
-## 5) 테스트
+## 6) 테스트
 
 ### 결제/설정 테스트
 ```bash
@@ -62,4 +79,4 @@ pytest -q tests/test_config.py tests/test_billing.py
 pytest -q tests/test_job_response_fields.py
 ```
 
-운영 연동은 `polar_sandbox_runbook_ko.md`를 기준으로 진행한다.
+운영 연동은 `cloud_run_supabase_free_runbook_ko.md`와 `polar_sandbox_runbook_ko.md`를 기준으로 진행한다.

@@ -1,6 +1,5 @@
 import { browserSupabase } from "../lib/supabase";
-
-const DEFAULT_API_BASE = "http://localhost:8000";
+import { getApiBaseUrl } from "./apiBase";
 
 export type BackendRegionStatus = "pending" | "running" | "completed" | "failed";
 export type BackendJobStatus =
@@ -45,12 +44,6 @@ export interface RegionPayload {
   polygon: number[][];
   type: "text" | "diagram" | "mixed";
   order: number;
-}
-
-function getApiBaseUrl(): string {
-  const viteEnvBase = (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL;
-  const runtimeBase = (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__;
-  return (viteEnvBase || runtimeBase || DEFAULT_API_BASE).replace(/\/$/, "");
 }
 
 async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> {

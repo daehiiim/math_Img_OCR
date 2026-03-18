@@ -37,9 +37,19 @@ docker compose up --build
 
 루트 Docker는 내부적으로 `02_main` 백엔드를 실행합니다.
 
+## 운영 아키텍처
+
+- 프런트엔드: `Vercel`
+- 백엔드 API: `Google Cloud Run`
+- 인증/DB/Storage: `Supabase`
+- 결제: `Polar hosted checkout + webhook`
+
+운영 전환 체크리스트와 환경변수 매핑은 `02_main/docs/cloud_run_supabase_free_runbook_ko.md`를 기준으로 관리합니다.
+
 ## 주요 문서
 
 - 백엔드 가이드: `02_main/README.md`
 - 백엔드 빠른 시작: `02_main/docs/mvp1_quickstart_ko.md`
+- Cloud Run 운영 런북: `02_main/docs/cloud_run_supabase_free_runbook_ko.md`
 - Polar sandbox 런북: `02_main/docs/polar_sandbox_runbook_ko.md`
 - 구현 계획 문서: `docs/plans/*`

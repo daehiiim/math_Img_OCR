@@ -18,9 +18,11 @@ docker compose up --build
 
 - Swagger: `http://localhost:8000/docs`
 - CORS 기본 허용: `http://localhost:5173`, `http://127.0.0.1:5173`
+- Dockerfile은 `PORT` 환경변수를 우선 사용하므로 Cloud Run 기본 포트 주입과 호환된다.
 
 ## 필수 환경변수
 
+- `APP_ENV`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -30,6 +32,20 @@ docker compose up --build
 - `POLAR_PRODUCT_SINGLE_ID`
 - `POLAR_PRODUCT_STARTER_ID`
 - `POLAR_PRODUCT_PRO_ID`
+- `CORS_ALLOW_ORIGINS`
+
+## Cloud Run 운영 기준
+
+- 권장 아키텍처: `Vercel + Cloud Run + Supabase + Polar`
+- 프런트 운영 도메인: `https://mathtohwp.vercel.app`
+- Cloud Run 운영 환경변수:
+  - `APP_ENV=production`
+  - `CORS_ALLOW_ORIGINS=https://mathtohwp.vercel.app`
+  - `CORS_ALLOW_ORIGIN_REGEX`는 비워 두거나 제거
+- 프런트 운영 환경변수:
+  - `VITE_API_BASE_URL=https://<service>-<hash>-an.a.run.app`
+
+상세 운영 절차는 `docs/cloud_run_supabase_free_runbook_ko.md`를 참고한다.
 
 ## 인증 규칙
 
@@ -70,4 +86,4 @@ py scripts/bootstrap_polar_sandbox_catalog.py
 pytest -q tests/test_auth.py tests/test_billing.py tests/test_job_response_fields.py
 ```
 
-운영 연동 체크리스트는 `docs/polar_sandbox_runbook_ko.md`를 참고하면 됩니다.
+운영 연동 체크리스트는 `docs/cloud_run_supabase_free_runbook_ko.md`와 `docs/polar_sandbox_runbook_ko.md`를 함께 참고하면 됩니다.

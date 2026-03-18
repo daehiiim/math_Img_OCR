@@ -12,21 +12,50 @@ from app import pipeline
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingProfile, build_billing_service
 
+DEFAULT_LOCAL_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://0.0.0.0:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://0.0.0.0:4173",
+]
+DEFAULT_LOCAL_CORS_ORIGIN_REGEX = (
+    r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|"
+    r"172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$"
+)
+
+
+def _parse_cors_origins(raw_value: str) -> list[str]:
+    """CORS origin 목록 문자열을 공백 제거 후 배열로 변환한다."""
+    return [origin.strip() for origin in raw_value.split(",") if origin.strip()]
+
+
+def resolve_cors_settings() -> tuple[list[str], str | None]:
+    """실행 환경에 맞는 CORS origin 목록과 regex 설정을 계산한다."""
+    app_env = os.getenv("APP_ENV", "development").strip().lower()
+    default_origins = ",".join(DEFAULT_LOCAL_CORS_ORIGINS if app_env != "production" else [])
+    allowed_origins = _parse_cors_origins(os.getenv("CORS_ALLOW_ORIGINS", default_origins))
+    configured_regex = os.getenv("CORS_ALLOW_ORIGIN_REGEX")
+
+    if configured_regex is not None:
+        allow_origin_regex = configured_regex.strip() or None
+    elif app_env in {"development", "test"}:
+        allow_origin_regex = DEFAULT_LOCAL_CORS_ORIGIN_REGEX
+    else:
+        allow_origin_regex = None
+
+    return allowed_origins, allow_origin_regex
+
+
 app = FastAPI(title="Math Region OCR MVP API", version="0.1.0")
 
-ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv(
-        "CORS_ALLOW_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://0.0.0.0:5173,http://localhost:4173,http://127.0.0.1:4173,http://0.0.0.0:4173",
-    ).split(",")
-    if origin.strip()
-]
+ALLOWED_ORIGINS, ALLOW_ORIGIN_REGEX = resolve_cors_settings()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$",
+    allow_origin_regex=ALLOW_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

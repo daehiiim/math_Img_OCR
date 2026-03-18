@@ -54,4 +54,16 @@ describe("jobApi", () => {
     expect(getSessionMock).toHaveBeenCalledTimes(1);
     expect(headers.get("Authorization")).toBe("Bearer token-123");
   });
+
+  it("blocks non-local deployments when the API base URL is missing", async () => {
+    (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__ = "";
+    (globalThis as { __MATH_OCR_ALLOW_LOCAL_API_FALLBACK__?: boolean }).__MATH_OCR_ALLOW_LOCAL_API_FALLBACK__ = false;
+
+    await expect(getJobApi("job-1")).rejects.toThrow(
+      "API base URL is not configured. Set VITE_API_BASE_URL for deployed environments."
+    );
+
+    delete (globalThis as { __MATH_OCR_API_BASE__?: string }).__MATH_OCR_API_BASE__;
+    delete (globalThis as { __MATH_OCR_ALLOW_LOCAL_API_FALLBACK__?: boolean }).__MATH_OCR_ALLOW_LOCAL_API_FALLBACK__;
+  });
 });
