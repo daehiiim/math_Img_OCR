@@ -14,6 +14,7 @@ interface RegionEditorProps {
   imageHeight: number;
   regions: Region[];
   onSaveRegions: (regions: Region[]) => Promise<void> | void;
+  onRegionsChange?: (regions: Region[]) => void;
   disabled?: boolean;
 }
 
@@ -27,6 +28,7 @@ export function RegionEditor({
   imageHeight,
   regions: initialRegions,
   onSaveRegions,
+  onRegionsChange,
   disabled = false,
 }: RegionEditorProps) {
   const [regions, setRegions] = useState<Region[]>(() =>
@@ -41,8 +43,21 @@ export function RegionEditor({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setRegions(initialRegions.map((region) => ({ ...region, type: "mixed" })));
+    const nextRegions = initialRegions.map((region) => ({ ...region, type: "mixed" }));
+    setRegions(nextRegions);
   }, [initialRegions]);
+
+  /** 내부 영역 상태와 부모 동기화를 한 번에 갱신한다. */
+  const updateRegions = useCallback(
+    (updater: (regions: Region[]) => Region[]) => {
+      setRegions((prev) => {
+        const nextRegions = updater(prev);
+        onRegionsChange?.(nextRegions);
+        return nextRegions;
+      });
+    },
+    [onRegionsChange]
+  );
 
   const getScaledPos = useCallback(
     (e: React.MouseEvent) => {
@@ -106,13 +121,13 @@ export function RegionEditor({
       order: regions.length + 1,
     };
 
-    setRegions((prev) => [...prev, newRegion]);
+    updateRegions((prev) => [...prev, newRegion]);
     setStartPoint(null);
     setCurrentPoint(null);
-  }, [drawing, startPoint, currentPoint, regions.length]);
+  }, [drawing, startPoint, currentPoint, regions.length, updateRegions]);
 
   const removeRegion = (id: string) => {
-    setRegions((prev) =>
+    updateRegions((prev) =>
       prev
         .filter((r) => r.id !== id)
         .map((r, i) => ({ ...r, order: i + 1 }))
@@ -156,7 +171,7 @@ export function RegionEditor({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setRegions([])}
+          onClick={() => updateRegions(() => [])}
           disabled={disabled || regions.length === 0}
         >
           <RotateCcw className="w-3.5 h-3.5 mr-1" />

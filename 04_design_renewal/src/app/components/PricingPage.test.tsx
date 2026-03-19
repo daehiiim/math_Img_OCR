@@ -33,7 +33,7 @@ describe("PricingPage", () => {
     expect(screen.getByText("실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.")).toBeInTheDocument();
   });
 
-  it("catalog 요청이 실패해도 KRW fallback 가격을 유지한다", async () => {
+  it("catalog 요청이 실패하면 live fallback을 숨기고 점검 안내만 보여준다", async () => {
     getBillingCatalogApiMock.mockRejectedValueOnce(new Error("catalog blocked"));
 
     render(
@@ -42,7 +42,22 @@ describe("PricingPage", () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText("₩19,000")).toBeInTheDocument();
-    expect(screen.getAllByText("KRW").length).toBeGreaterThan(0);
+    expect(await screen.findByText("결제 설정 점검 중")).toBeInTheDocument();
+    expect(screen.queryByText("₩19,000")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "구매" })).not.toBeInTheDocument();
+  });
+
+  it("catalog가 빈 배열이어도 live fallback을 노출하지 않는다", async () => {
+    getBillingCatalogApiMock.mockResolvedValueOnce([]);
+
+    render(
+      <MemoryRouter>
+        <PricingPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("결제 설정 점검 중")).toBeInTheDocument();
+    expect(screen.queryByText("₩19,000")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "구매" })).not.toBeInTheDocument();
   });
 });

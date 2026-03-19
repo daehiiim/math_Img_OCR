@@ -69,7 +69,7 @@ describe("PaymentPage", () => {
     expect(screen.getByText("실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.")).toBeInTheDocument();
   });
 
-  it("catalog 요청이 실패해도 KRW fallback 가격을 유지한다", async () => {
+  it("catalog 요청이 실패하면 live fallback 가격 대신 점검 상태를 보여준다", async () => {
     getBillingCatalogApiMock.mockRejectedValueOnce(new Error("catalog blocked"));
 
     render(
@@ -80,8 +80,25 @@ describe("PaymentPage", () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText("₩19,000")).toBeInTheDocument();
-    expect(screen.getByText("KRW")).toBeInTheDocument();
+    expect(await screen.findByText("결제 설정 점검 중")).toBeInTheDocument();
+    expect(screen.queryByText("₩19,000")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /설정 점검 중/i })).toBeDisabled();
+  });
+
+  it("catalog가 빈 배열이어도 live fallback 가격을 노출하지 않는다", async () => {
+    getBillingCatalogApiMock.mockResolvedValueOnce([]);
+
+    render(
+      <MemoryRouter initialEntries={["/payment/starter"]}>
+        <Routes>
+          <Route path="/payment/:planId" element={<PaymentPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("결제 설정 점검 중")).toBeInTheDocument();
+    expect(screen.queryByText("₩19,000")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /설정 점검 중/i })).toBeDisabled();
   });
 
   it("checkout 리다이렉트 URL을 공개 앱 URL 기준으로 생성한다", async () => {

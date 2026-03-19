@@ -25,6 +25,10 @@ export function resolvePostLoginPath(
   state: Pick<UploadGateState, "openAiConnected" | "credits">,
   nextPath = "/new"
 ): string {
+  if (nextPath.startsWith("/new?resumeDraft=1")) {
+    return nextPath;
+  }
+
   if (state.openAiConnected || state.credits > 0) {
     return nextPath;
   }

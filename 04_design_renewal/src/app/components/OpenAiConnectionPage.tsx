@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
@@ -15,10 +15,15 @@ import { useAuth } from "../context/AuthContext";
 import { OpenAiKeyForm } from "./OpenAiKeyForm";
 
 export function OpenAiConnectionPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const { user, connectOpenAi, disconnectOpenAi } = useAuth();
   const isConnected = user?.openAiConnected ?? false;
   const [error, setError] = useState<string | null>(null);
+  const returnTo = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("returnTo") || "/new";
+  }, [location.search]);
 
   const handleConnect = async (apiKey: string) => {
     try {
@@ -39,7 +44,7 @@ export function OpenAiConnectionPage() {
       className="w-full max-w-[440px]"
     >
       <button
-        onClick={() => navigate("/new")}
+        onClick={() => navigate(returnTo)}
         className="mb-6 flex items-center gap-1.5 text-[13px] text-[#71717a] transition-colors hover:text-[#111] cursor-pointer"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
@@ -87,7 +92,7 @@ export function OpenAiConnectionPage() {
             </div>
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => navigate("/new")}
+                onClick={() => navigate(returnTo)}
                 className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#111] text-[14px] text-white transition-all hover:bg-[#222]"
               >
                 새 작업으로 이동
@@ -136,7 +141,9 @@ export function OpenAiConnectionPage() {
 
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => navigate("/pricing")}
+                onClick={() =>
+                  navigate(returnTo ? `/pricing?returnTo=${encodeURIComponent(returnTo)}` : "/pricing")
+                }
                 className="flex h-11 items-center justify-center rounded-lg border border-[#e4e4e7] bg-white text-[14px] text-[#111] transition-colors hover:bg-[#fafafa]"
               >
                 크레딧 구매로 이동

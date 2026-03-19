@@ -53,7 +53,39 @@ vi.mock("../context/JobContext", () => ({
 }));
 
 vi.mock("./RegionEditor", () => ({
-  RegionEditor: () => <div>RegionEditor</div>,
+  RegionEditor: ({
+    regions,
+    onRegionsChange,
+  }: {
+    regions: Job["regions"];
+    onRegionsChange?: (regions: Job["regions"]) => void;
+  }) => (
+    <div>
+      <div>RegionEditor</div>
+      <button
+        type="button"
+        onClick={() =>
+          onRegionsChange?.([
+            ...regions,
+            {
+              id: `q${regions.length + 1}`,
+              polygon: [
+                [0, 0],
+                [10, 0],
+                [10, 10],
+                [0, 10],
+              ],
+              type: "mixed",
+              order: regions.length + 1,
+              status: "pending",
+            },
+          ])
+        }
+      >
+        영역 편집
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("./ResultsViewer", () => ({
@@ -252,5 +284,29 @@ describe("JobDetailPage", () => {
 
     expect(screen.getByRole("button", { name: /^HWPX 내보내기$/i })).toBeEnabled();
     expect(screen.getByText(/결과가 남은 1개 영역은 HWPX로 내보낼 수 있습니다\./i)).toBeInTheDocument();
+  });
+
+  it("편집 중인 영역 기준으로 예상 차감 크레딧을 다시 계산한다", async () => {
+    const user = userEvent.setup();
+    mockAuthUser = {
+      ...mockAuthUser,
+      credits: 10,
+      openAiConnected: false,
+      openAiMaskedKey: null,
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("0 크레딧")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "영역 편집" }));
+
+    expect(screen.getByText("3 크레딧")).toBeInTheDocument();
   });
 });

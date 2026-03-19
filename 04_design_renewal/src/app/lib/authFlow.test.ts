@@ -62,4 +62,16 @@ describe("resolvePostLoginPath", () => {
       })
     ).toBe("/connect-openai");
   });
+
+  it("draft 복원 경로는 사용 가능 상태가 아니어도 그대로 유지한다", () => {
+    expect(
+      resolvePostLoginPath(
+        {
+          openAiConnected: false,
+          credits: 0,
+        },
+        "/new?resumeDraft=1"
+      )
+    ).toBe("/new?resumeDraft=1");
+  });
 });

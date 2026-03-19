@@ -5,6 +5,23 @@ import { describe, expect, it, vi } from "vitest";
 import { RegionEditor } from "./RegionEditor";
 
 describe("RegionEditor", () => {
+  it("초기 렌더에서는 부모 영역 변경 콜백을 호출하지 않는다", () => {
+    const onRegionsChange = vi.fn();
+
+    render(
+      <RegionEditor
+        imageUrl="https://signed.example/source.png"
+        imageWidth={400}
+        imageHeight={300}
+        regions={[]}
+        onSaveRegions={vi.fn(async () => undefined)}
+        onRegionsChange={onRegionsChange}
+      />
+    );
+
+    expect(onRegionsChange).not.toHaveBeenCalled();
+  });
+
   it("영역 타입 선택 없이 저장 payload를 항상 mixed로 보낸다", async () => {
     const user = userEvent.setup();
     const onSaveRegions = vi.fn(async () => undefined);

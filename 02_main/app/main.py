@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Literal
 
@@ -16,6 +17,7 @@ from app.supabase import SupabaseApiError
 
 app = FastAPI(title="Math Region OCR MVP API", version="0.1.0")
 ROOT = Path(__file__).resolve().parents[1]
+logger = logging.getLogger(__name__)
 SCHEMA_MISMATCH_DETAIL = "배포 DB 스키마가 최신이 아닙니다."
 STORAGE_FAILURE_DETAIL = "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."
 USER_OPENAI_KEY_CONFIG_DETAIL = "사용자 OpenAI 키 설정이 완료되지 않았습니다."
@@ -198,6 +200,7 @@ def _map_runtime_value_error(error: ValueError) -> HTTPException | None:
 def _raise_runtime_http_error(error: Exception) -> None:
     """런타임 인프라 예외를 사용자용 HTTP 오류로 정규화한다."""
     if isinstance(error, SupabaseApiError):
+        logger.exception("Supabase runtime error: %s", error)
         if _is_schema_mismatch_message(str(error)):
             raise HTTPException(status_code=500, detail=SCHEMA_MISMATCH_DETAIL) from error
         raise HTTPException(status_code=503, detail=STORAGE_FAILURE_DETAIL) from error
@@ -284,6 +287,8 @@ def save_regions(
         return pipeline.save_regions(current_user, job_id, [region.model_dump() for region in payload.regions])
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
+    except SupabaseApiError as error:
+        _raise_runtime_http_error(error)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 

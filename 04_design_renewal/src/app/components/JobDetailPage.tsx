@@ -19,6 +19,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { useJobs } from "../context/JobContext";
+import { calculateRequiredCredits } from "../lib/executionCredits";
 import { type ProgressJobStatus, getJobStepIndex } from "../lib/jobPresentation";
 import type { JobExecutionOptions, JobStatus, Region } from "../store/jobStore";
 import { copyToClipboard } from "../utils/clipboard";
@@ -49,29 +50,6 @@ function isResultVisible(status: JobStatus): boolean {
   return status === "running" || status === "completed" || status === "failed" || status === "exported";
 }
 
-/** 선택한 작업과 영역별 과금 상태를 기준으로 이번 실행의 최대 차감 크레딧을 계산한다. */
-function calculateRequiredCredits(
-  options: JobExecutionOptions,
-  openAiConnected: boolean,
-  regions: Region[]
-): number {
-  let requiredCredits = 0;
-
-  for (const region of regions) {
-    if (options.doImageStylize && !region.imageCharged) {
-      requiredCredits += 1;
-    }
-    if (options.doOcr && !openAiConnected && !region.ocrCharged) {
-      requiredCredits += 1;
-    }
-    if (options.doExplanation && !openAiConnected && !region.explanationCharged) {
-      requiredCredits += 1;
-    }
-  }
-
-  return requiredCredits;
-}
-
 /** 문제 또는 해설 텍스트가 있으면 내보내기 가능 영역으로 본다. */
 function isExportableRegion(region: Region): boolean {
   return Boolean(region.ocrText?.trim() || region.explanation?.trim());
@@ -89,13 +67,15 @@ export function JobDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isHydratingJob, setIsHydratingJob] = useState(false);
   const [hasHydrationError, setHasHydrationError] = useState(false);
+  const [draftRegions, setDraftRegions] = useState<Region[] | null>(null);
   const [executionOptions, setExecutionOptions] = useState<JobExecutionOptions>(defaultExecutionOptions);
 
   const job = getJob(jobId || "");
+  const activeRegions = draftRegions ?? job?.regions ?? [];
   const requiredCredits = calculateRequiredCredits(
     executionOptions,
     Boolean(user?.openAiConnected),
-    job?.regions ?? []
+    activeRegions
   );
   const hasSelectedAction =
     executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
@@ -141,6 +121,14 @@ export function JobDetailPage() {
       return;
     }
 
+    setDraftRegions(job.regions);
+  }, [job]);
+
+  useEffect(() => {
+    if (!job) {
+      return;
+    }
+
     if (job.status === "running") {
       const total = job.regions.length;
       const completed = job.regions.filter((region) => region.status === "completed").length;
@@ -174,6 +162,7 @@ export function JobDetailPage() {
 
       try {
         await saveRegions(jobId, regions);
+        setDraftRegions(regions);
         toast.success("영역이 저장되었습니다.");
       } catch (error) {
         const message = error instanceof Error ? error.message : "영역 저장 중 오류가 발생했습니다.";
@@ -385,8 +374,9 @@ export function JobDetailPage() {
                 imageUrl={job.imageUrl}
                 imageWidth={job.imageWidth}
                 imageHeight={job.imageHeight}
-                regions={job.regions}
+                regions={draftRegions ?? job.regions}
                 onSaveRegions={handleSaveRegions}
+                onRegionsChange={setDraftRegions}
                 disabled={job.status === "running" || job.status === "completed" || job.status === "exported"}
               />
             </CardContent>
@@ -471,6 +461,11 @@ export function JobDetailPage() {
                   <p className="mt-1 text-muted-foreground">
                     선택한 문제 수 기준으로 잔액을 먼저 확인하고, 실행 후 실제 성공한 작업만 차감합니다.
                   </p>
+                  {draftRegions !== null && draftRegions !== job.regions ? (
+                    <p className="mt-1 text-amber-700">
+                      현재 편집 중인 draft 기준 예상 차감입니다.
+                    </p>
+                  ) : null}
                 </div>
 
               {(job.status === "created" || job.status === "regions_pending") ? (

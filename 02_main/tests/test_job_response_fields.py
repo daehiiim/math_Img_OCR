@@ -168,3 +168,65 @@ def test_get_job_returns_storage_failure_detail_for_supabase_error(monkeypatch):
 
     assert response.status_code == 503
     assert response.json()["detail"] == "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."
+
+
+def test_save_regions_returns_schema_mismatch_detail_for_supabase_error(monkeypatch):
+    user = AuthenticatedUser(user_id="user-123", access_token="token-123")
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    monkeypatch.setattr(
+        "app.main.pipeline.save_regions",
+        lambda current_user, job_id, regions: (_ for _ in ()).throw(
+            SupabaseApiError('column image_charged does not exist in relation "ocr_job_regions"')
+        ),
+    )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.put(
+        "/jobs/job-123/regions",
+        json={
+            "regions": [
+                {
+                    "id": "q1",
+                    "polygon": [[1, 1], [11, 1], [11, 11], [1, 11]],
+                    "type": "mixed",
+                    "order": 1,
+                }
+            ]
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "배포 DB 스키마가 최신이 아닙니다."
+
+
+def test_save_regions_returns_storage_failure_detail_for_supabase_error(monkeypatch):
+    user = AuthenticatedUser(user_id="user-123", access_token="token-123")
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    monkeypatch.setattr(
+        "app.main.pipeline.save_regions",
+        lambda current_user, job_id, regions: (_ for _ in ()).throw(SupabaseApiError("storage request timeout")),
+    )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.put(
+        "/jobs/job-123/regions",
+        json={
+            "regions": [
+                {
+                    "id": "q1",
+                    "polygon": [[1, 1], [11, 1], [11, 11], [1, 11]],
+                    "type": "mixed",
+                    "order": 1,
+                }
+            ]
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."

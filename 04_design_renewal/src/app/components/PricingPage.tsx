@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { Check, ArrowLeft, Sparkles } from "lucide-react";
 
@@ -9,6 +9,7 @@ import {
   formatBillingUnitPrice,
   normalizeBillingCurrency,
 } from "../lib/billingCurrency";
+import { isLocalUiMockEnabled } from "../lib/localUiMock";
 
 type PlanId = "single" | "starter" | "pro";
 
@@ -65,8 +66,14 @@ function buildPlanCards(catalog: BillingPlanResponse[]): PlanCard[] {
 }
 
 export function PricingPage() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const [catalog, setCatalog] = useState<BillingPlanResponse[]>(fallbackCatalog);
+  const isLocalUiMock = isLocalUiMockEnabled();
+  const [catalog, setCatalog] = useState<BillingPlanResponse[]>(() =>
+    isLocalUiMock ? fallbackCatalog : []
+  );
+  const [catalogLoadFailed, setCatalogLoadFailed] = useState(false);
+  const returnTo = new URLSearchParams(location.search).get("returnTo");
 
   useEffect(() => {
     let active = true;
@@ -76,10 +83,18 @@ export function PricingPage() {
         const plans = await getBillingCatalogApi();
         if (active && plans.length > 0) {
           setCatalog(plans);
+          setCatalogLoadFailed(false);
+          return;
+        }
+
+        if (active) {
+          setCatalogLoadFailed(true);
+          setCatalog(isLocalUiMock ? fallbackCatalog : []);
         }
       } catch {
         if (active) {
-          setCatalog(fallbackCatalog);
+          setCatalogLoadFailed(true);
+          setCatalog(isLocalUiMock ? fallbackCatalog : []);
         }
       }
     };
@@ -92,6 +107,7 @@ export function PricingPage() {
   }, []);
 
   const plans = useMemo(() => buildPlanCards(catalog), [catalog]);
+  const isCatalogIssue = catalogLoadFailed && !isLocalUiMock;
 
   return (
     <motion.div
@@ -118,9 +134,17 @@ export function PricingPage() {
         <div className="mt-4 inline-flex flex-col gap-1 rounded-2xl border border-[#ece7dd] bg-[#fbf7f1] px-5 py-3 text-[13px] text-[#6b6258]">
           <p>실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.</p>
         </div>
+        {isCatalogIssue && (
+          <p className="mt-3 text-[13px] text-amber-700">결제 설정 점검 중</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        {!isCatalogIssue && plans.length === 0 ? (
+          <div className="rounded-xl border border-[#e4e4e7] bg-white p-7 text-[14px] text-[#71717a] md:col-span-3">
+            플랜 정보를 불러오는 중입니다.
+          </div>
+        ) : null}
         {plans.map((plan, index) => (
           <motion.div
             key={plan.plan_id}
@@ -163,18 +187,26 @@ export function PricingPage() {
 
               <button
                 onClick={() =>
-                  navigate(`/payment/${plan.plan_id}`, {
-                    state: {
-                      title: plan.title,
-                      price: plan.priceLabel,
-                      amount: plan.amount,
-                      currency: plan.currency,
-                      credits: plan.credits,
-                    },
-                  })
+                  navigate(
+                    `/payment/${plan.plan_id}${
+                      returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""
+                    }`,
+                    {
+                      state: {
+                        title: plan.title,
+                        price: plan.priceLabel,
+                        amount: plan.amount,
+                        currency: plan.currency,
+                        credits: plan.credits,
+                      },
+                    }
+                  )
                 }
+                disabled={isCatalogIssue}
                 className={`mb-7 h-10 w-full cursor-pointer rounded-lg text-[14px] transition-all active:scale-[0.98] ${
-                  plan.highlight
+                  isCatalogIssue
+                    ? "cursor-not-allowed border border-[#e4e4e7] bg-[#fafafa] text-[#a1a1aa]"
+                    : plan.highlight
                     ? "bg-[#14532d] text-white hover:bg-[#0f3f22]"
                     : "border border-[#e4e4e7] bg-[#fafafa] text-[#111] hover:bg-[#f4f4f5]"
                 }`}

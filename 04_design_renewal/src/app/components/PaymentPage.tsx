@@ -33,6 +33,28 @@ interface PaymentLocationState {
   credits?: number;
 }
 
+/** 결제 이후 되돌아갈 경로를 유지한 결제 URL을 만든다. */
+function buildPaymentRoute(
+  planId: PlanId,
+  options: {
+    checkout?: "success" | "cancel";
+    returnTo?: string | null;
+  } = {}
+): string {
+  const params = new URLSearchParams();
+
+  if (options.checkout) {
+    params.set("checkout", options.checkout);
+  }
+
+  if (options.returnTo) {
+    params.set("returnTo", options.returnTo);
+  }
+
+  const query = params.toString();
+  return query ? `/payment/${planId}?${query}` : `/payment/${planId}`;
+}
+
 interface ResolvedPlan {
   planId: PlanId;
   title: string;
@@ -62,20 +84,26 @@ const terminalFailureStatuses = new Set(["canceled", "cancelled", "expired", "fa
 function resolvePlan(
   planIdParam: string | undefined,
   state: PaymentLocationState,
-  catalog: BillingPlanResponse[]
+  catalog: BillingPlanResponse[],
+  allowFallbackCatalog: boolean
 ): ResolvedPlan {
   const planId = (planIdParam as PlanId) || "starter";
-  const fallbackPlan = catalog.find((plan) => plan.plan_id === planId) ?? fallbackCatalog[1];
-  const amount = state.amount ?? fallbackPlan.amount;
-  const currency = state.currency ?? fallbackPlan.currency;
+  const catalogPlan = catalog.find((plan) => plan.plan_id === planId);
+  const fallbackPlan =
+    catalogPlan ??
+    (allowFallbackCatalog
+      ? fallbackCatalog.find((plan) => plan.plan_id === planId) ?? fallbackCatalog[1]
+      : null);
+  const amount = state.amount ?? fallbackPlan?.amount ?? 0;
+  const currency = state.currency ?? fallbackPlan?.currency ?? "krw";
 
   return {
     planId,
-    title: state.title ?? fallbackPlan.title,
-    credits: state.credits ?? fallbackPlan.credits,
+    title: state.title ?? fallbackPlan?.title ?? "상품 정보 확인 중",
+    credits: state.credits ?? fallbackPlan?.credits ?? 0,
     amount,
     currency,
-    priceLabel: state.price ?? formatBillingAmount(amount, currency),
+    priceLabel: state.price ?? (amount > 0 ? formatBillingAmount(amount, currency) : "확인 중"),
   };
 }
 
@@ -93,8 +121,12 @@ export function PaymentPage() {
   const isLocalUiMock = isLocalUiMockEnabled();
 
   const state = (location.state as PaymentLocationState) || {};
+  const returnTo = new URLSearchParams(location.search).get("returnTo");
 
-  const [catalog, setCatalog] = useState<BillingPlanResponse[]>(fallbackCatalog);
+  const [catalog, setCatalog] = useState<BillingPlanResponse[]>(() =>
+    isLocalUiMock ? fallbackCatalog : []
+  );
+  const [catalogLoadFailed, setCatalogLoadFailed] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState("card");
   const [paying, setPaying] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
@@ -111,10 +143,18 @@ export function PaymentPage() {
         const plans = await getBillingCatalogApi();
         if (active && plans.length > 0) {
           setCatalog(plans);
+          setCatalogLoadFailed(false);
+          return;
+        }
+
+        if (active) {
+          setCatalogLoadFailed(true);
+          setCatalog(isLocalUiMock ? fallbackCatalog : []);
         }
       } catch {
         if (active) {
-          setCatalog(fallbackCatalog);
+          setCatalogLoadFailed(true);
+          setCatalog(isLocalUiMock ? fallbackCatalog : []);
         }
       }
     };
@@ -136,9 +176,12 @@ export function PaymentPage() {
   }, [isExplicitlyUnauthenticated, isLoading, location.pathname, location.search, navigate, prepareLogin]);
 
   const resolvedPlan = useMemo(
-    () => resolvePlan(planId, state, catalog),
-    [catalog, planId, state]
+    () => resolvePlan(planId, state, catalog, isLocalUiMock),
+    [catalog, isLocalUiMock, planId, state]
   );
+  const isCatalogIssue = catalogLoadFailed && !isLocalUiMock;
+  const isCatalogPending =
+    !isLocalUiMock && !catalogLoadFailed && catalog.length === 0 && state.amount === undefined;
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -227,9 +270,17 @@ export function PaymentPage() {
 
     try {
       const successUrl = buildPublicAppUrl(
-        `/payment/${resolvedPlan.planId}?checkout=success&checkout_id={CHECKOUT_ID}`
+        `${buildPaymentRoute(resolvedPlan.planId, {
+          checkout: "success",
+          returnTo,
+        })}&checkout_id={CHECKOUT_ID}`
       );
-      const cancelUrl = buildPublicAppUrl(`/payment/${resolvedPlan.planId}?checkout=cancel`);
+      const cancelUrl = buildPublicAppUrl(
+        buildPaymentRoute(resolvedPlan.planId, {
+          checkout: "cancel",
+          returnTo,
+        })
+      );
       const session = await createCheckoutSessionApi({
         planId: resolvedPlan.planId,
         successUrl,
@@ -297,10 +348,10 @@ export function PaymentPage() {
             </p>
             <div className="mt-6 flex w-full flex-col gap-3">
               <button
-                onClick={() => navigate("/workspace")}
+                onClick={() => navigate(returnTo || "/workspace")}
                 className="h-11 w-full cursor-pointer rounded-lg bg-[#14532d] text-[14px] text-white transition-colors hover:bg-[#0f3f22]"
               >
-                워크스페이스로 이동
+                {returnTo ? "이전 화면으로 이동" : "워크스페이스로 이동"}
               </button>
               <button
                 onClick={handleOpenPortal}
@@ -328,7 +379,11 @@ export function PaymentPage() {
             transition={{ duration: 0.2 }}
           >
             <button
-              onClick={() => navigate("/pricing")}
+              onClick={() =>
+                navigate(
+                  returnTo ? `/pricing?returnTo=${encodeURIComponent(returnTo)}` : "/pricing"
+                )
+              }
               className="mb-6 flex cursor-pointer items-center gap-1.5 text-[13px] text-[#71717a] transition-colors hover:text-[#111]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
@@ -423,13 +478,23 @@ export function PaymentPage() {
               <div className="p-6">
                 <button
                   onClick={handlePay}
-                  disabled={paying || checkingPayment}
+                  disabled={paying || checkingPayment || isCatalogIssue || isCatalogPending}
                   className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#111] text-[14px] text-white transition-all hover:bg-[#222] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {paying || checkingPayment ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
                       처리 중...
+                    </>
+                  ) : isCatalogIssue ? (
+                    <>
+                      <Lock className="h-3.5 w-3.5" />
+                      설정 점검 중
+                    </>
+                  ) : isCatalogPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      상품 확인 중
                     </>
                   ) : (
                     <>
@@ -439,6 +504,16 @@ export function PaymentPage() {
                   )}
                 </button>
 
+                {isCatalogIssue && (
+                  <p className="mt-3 text-center text-[12px] text-amber-700">
+                    결제 설정 점검 중
+                  </p>
+                )}
+                {isCatalogPending && !isCatalogIssue && (
+                  <p className="mt-3 text-center text-[12px] text-[#71717a]">
+                    상품 정보를 불러오는 중입니다.
+                  </p>
+                )}
                 <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-[#a1a1aa]">
                   <ShieldCheck className="h-3 w-3" />
                   실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.
