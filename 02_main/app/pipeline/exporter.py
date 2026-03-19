@@ -278,10 +278,20 @@ def _generate_section0_xml(
     paras.append(runtime.make_empty_para(idgen, para_pr=runtime.STYLE["PARA_HR"], char_pr=0))
     paras.append(runtime.make_empty_para(idgen))
 
-    for region in sorted(job.regions, key=lambda candidate: candidate.context.order):
-        order = region.context.order
+    exportable_regions = [
+        region
+        for region in sorted(job.regions, key=lambda candidate: candidate.context.order)
+        if (region.extractor.ocr_text or "").strip() or (region.extractor.explanation or "").strip()
+    ]
+
+    for order, region in enumerate(exportable_regions, start=1):
         region_id = region.context.id
-        image_url = region.figure.png_rendered_url or region.figure.crop_url
+        image_url = (
+            region.figure.styled_image_url
+            or region.figure.image_crop_url
+            or region.figure.png_rendered_url
+            or region.figure.crop_url
+        )
 
         if image_url:
             source_image = root_path / image_url

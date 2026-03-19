@@ -35,9 +35,9 @@ describe("mapBackendJob", () => {
             [10, 80],
           ],
           ocr_text: "OCR text",
-          svg_url: "/runtime/jobs/job_123/outputs/q1.svg",
-          edited_svg_url: "/runtime/jobs/job_123/outputs/q1.edited.latest.svg",
-          edited_svg_version: 3,
+          image_crop_url: "/runtime/jobs/job_123/outputs/q1.image_crop.png",
+          styled_image_url: "/runtime/jobs/job_123/outputs/q1.styled.png",
+          styled_image_model: "gemini-3-pro-image-preview",
         },
       ],
     };
@@ -54,7 +54,9 @@ describe("mapBackendJob", () => {
       type: "diagram",
       order: 2,
       ocrText: "OCR text",
-      editedSvgVersion: 3,
+      imageCropUrl: "http://localhost:8000/runtime/jobs/job_123/outputs/q1.image_crop.png",
+      styledImageUrl: "http://localhost:8000/runtime/jobs/job_123/outputs/q1.styled.png",
+      styledImageModel: "gemini-3-pro-image-preview",
     });
   });
 

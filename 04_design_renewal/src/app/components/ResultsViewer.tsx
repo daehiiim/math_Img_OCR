@@ -1,65 +1,36 @@
-import { Suspense, Component, lazy, useState } from "react";
-import { FileText, Image, Loader2, Pencil } from "lucide-react";
+import { FileText, Image } from "lucide-react";
 
-import type { Region, RegionType } from "../store/jobStore";
-import { buildAssetPreviewUrl } from "../lib/assetPreviewUrl";
+import type { Region } from "../store/jobStore";
 import { parseMathMarkupPreview } from "../lib/mathMarkupPreview";
 import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 interface ResultsViewerProps {
   regions: Region[];
-  onSaveEditedSvg: (regionId: string, svg: string) => Promise<void>;
-  onLoadRegionSvg: (regionId: string) => Promise<string>;
 }
-
-const regionTypeColors: Record<RegionType, string> = {
-  text: "#3b82f6",
-  diagram: "#8b5cf6",
-  mixed: "#f59e0b",
-};
-
-function getRegionColor(type: string | undefined): string {
-  if (type === "text" || type === "diagram" || type === "mixed") {
-    return regionTypeColors[type];
-  }
-
-  return regionTypeColors.mixed;
-}
-
-class SvgEditorErrorBoundary extends Component<
-  { children: React.ReactNode; onError: (message: string) => void },
-  { hasError: boolean }
-> {
-  constructor(props: { children: React.ReactNode; onError: (message: string) => void }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error) {
-    this.props.onError(error.message || "SVG 편집기 오류가 발생했습니다.");
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return null;
-    }
-
-    return this.props.children;
-  }
-}
-
-const LazySvgCanvasEditor = lazy(() => import("./SvgCanvasEditor"));
 
 interface MathMarkupPreviewProps {
   value?: string;
   emptyLabel: string;
+}
+
+/** 문서에 포함 가능한 텍스트가 있는지 판단한다. */
+function isExportableRegion(region: Region): boolean {
+  return Boolean(region.ocrText?.trim() || region.explanation?.trim());
+}
+
+/** 화면에 표시할 상태 라벨을 계산한다. */
+function getRegionStatusLabel(region: Region): string {
+  if (region.status === "completed") {
+    return "완료";
+  }
+
+  if (region.status === "failed") {
+    return isExportableRegion(region) ? "부분 완료" : "실패";
+  }
+
+  return region.status === "running" ? "처리 중" : "대기";
 }
 
 /** 수식 마크업을 읽기 좋은 미리보기 텍스트로 렌더링한다. */
@@ -96,57 +67,36 @@ function MathMarkupPreview({ value, emptyLabel }: MathMarkupPreviewProps) {
   );
 }
 
-export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: ResultsViewerProps) {
-  const [editingRegionId, setEditingRegionId] = useState<string | null>(null);
-  const [editingSvgText, setEditingSvgText] = useState("");
-  const [svgEditorError, setSvgEditorError] = useState<string | null>(null);
-  const [svgLoading, setSvgLoading] = useState(false);
+/** 이미지 카드 하나를 렌더링한다. */
+function PreviewImageCard({
+  title,
+  src,
+  alt,
+  badge,
+}: {
+  title: string;
+  src: string;
+  alt: string;
+  badge?: string;
+}) {
+  return (
+    <div className="space-y-2 rounded-xl border bg-card p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[12px] font-medium text-foreground">{title}</p>
+        {badge ? (
+          <Badge variant="outline" className="text-[10px]">
+            {badge}
+          </Badge>
+        ) : null}
+      </div>
+      <div className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-lg border bg-white p-3">
+        <img src={src} alt={alt} className="max-h-[240px] w-full object-contain" />
+      </div>
+    </div>
+  );
+}
 
-  const startEditSvg = async (region: Region) => {
-    if (!region.svgUrl && !region.editedSvgUrl) {
-      setSvgEditorError("편집할 SVG가 없습니다.");
-      return;
-    }
-
-    setSvgEditorError(null);
-    setSvgLoading(true);
-
-    try {
-      const text = await onLoadRegionSvg(region.id);
-      if (!text || !text.trim()) {
-        setSvgEditorError("SVG 내용이 비어 있습니다.");
-        return;
-      }
-
-      setEditingSvgText(text);
-      setEditingRegionId(region.id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "SVG 불러오기에 실패했습니다.";
-      setSvgEditorError(message);
-    } finally {
-      setSvgLoading(false);
-    }
-  };
-
-  const cancelEditSvg = () => {
-    setEditingRegionId(null);
-    setEditingSvgText("");
-    setSvgEditorError(null);
-  };
-
-  const saveEditedSvg = async (regionId: string, svg: string) => {
-    setSvgEditorError(null);
-
-    try {
-      await onSaveEditedSvg(regionId, svg);
-      setEditingRegionId(null);
-      setEditingSvgText("");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "SVG 저장에 실패했습니다.";
-      setSvgEditorError(message);
-    }
-  };
-
+export function ResultsViewer({ regions }: ResultsViewerProps) {
   if (regions.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
@@ -160,42 +110,37 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
   return (
     <div className="space-y-4">
       {regions.map((region) => {
-        const color = getRegionColor(region.type);
-        const isEditing = editingRegionId === region.id;
-        const previewUrl = region.editedSvgUrl
-          ? buildAssetPreviewUrl(region.editedSvgUrl, region.editedSvgVersion)
-          : region.svgUrl;
+        const exportable = isExportableRegion(region);
 
         return (
           <Card key={region.id}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-[14px]">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+                  <div className="h-3 w-3 rounded-full bg-primary/70" />
                   {region.id}
-                  <Badge variant="outline" className="text-[10px]">
-                    {region.type}
-                  </Badge>
-                  {region.editedSvgUrl && <Badge className="text-[10px]">SVG 수정본</Badge>}
+                  {region.styledImageModel ? (
+                    <Badge className="text-[10px]">{region.styledImageModel}</Badge>
+                  ) : null}
                 </CardTitle>
                 <Badge
-                  variant={region.status === "completed" ? "secondary" : "outline"}
+                  variant={region.status === "completed" || exportable ? "secondary" : "outline"}
                   className="gap-1 px-[8px] py-[2px]"
                 >
-                  {region.status === "completed" ? "완료" : region.status === "running" ? "처리 중" : "대기"}
+                  {getRegionStatusLabel(region)}
                 </Badge>
               </div>
             </CardHeader>
 
-            {region.status === "failed" && (
+            {region.status === "failed" ? (
               <CardContent>
                 <p className="text-[12px] text-destructive">
-                  영역 처리 실패: {region.errorReason || "원인 미상"}
+                  영역 처리 {exportable ? "경고" : "실패"}: {region.errorReason || "원인 미상"}
                 </p>
               </CardContent>
-            )}
+            ) : null}
 
-            {region.status === "completed" && (
+            {(region.status === "completed" || exportable) ? (
               <CardContent>
                 <Tabs defaultValue="ocr">
                   <TabsList>
@@ -203,9 +148,9 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
                       <FileText className="h-3.5 w-3.5" />
                       OCR 결과
                     </TabsTrigger>
-                    <TabsTrigger value="svg" className="gap-1.5">
+                    <TabsTrigger value="image-preview" className="gap-1.5">
                       <Image className="h-3.5 w-3.5" />
-                      SVG 벡터
+                      이미지 미리보기
                     </TabsTrigger>
                     <TabsTrigger value="explain" className="gap-1.5">
                       <FileText className="h-3.5 w-3.5" />
@@ -222,54 +167,32 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
                     </p>
                   </TabsContent>
 
-                  <TabsContent value="svg" className="mt-3 space-y-3">
-                    <div className="flex items-center justify-center rounded-lg border bg-white p-4">
-                      {previewUrl ? (
-                        <img
-                          src={previewUrl}
-                          alt={`${region.id} svg`}
-                          className="w-full max-w-md"
-                        />
-                      ) : (
-                        <p className="text-[12px] text-muted-foreground">SVG 결과가 없습니다.</p>
-                      )}
-                    </div>
-
-                    {!isEditing ? (
-                      <Button
-                        variant="outline"
-                        className="gap-2"
-                        disabled={svgLoading}
-                        onClick={() => void startEditSvg(region)}
-                      >
-                        {svgLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-                        {svgLoading ? "SVG 불러오는 중..." : "SVG 도형 편집"}
-                      </Button>
-                    ) : (
-                      <SvgEditorErrorBoundary
-                        key={editingRegionId}
-                        onError={(message) => {
-                          setSvgEditorError(message);
-                          setEditingRegionId(null);
-                          setEditingSvgText("");
-                        }}
-                      >
-                        <Suspense fallback={<div className="p-3 text-[12px] text-muted-foreground">SVG 편집기를 불러오는 중입니다...</div>}>
-                          <LazySvgCanvasEditor
-                            initialSvg={editingSvgText}
-                            onCancel={cancelEditSvg}
-                            onSave={async (svg) => {
-                              await saveEditedSvg(region.id, svg);
-                            }}
+                  <TabsContent value="image-preview" className="mt-3">
+                    {region.imageCropUrl || region.styledImageUrl ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {region.imageCropUrl ? (
+                          <PreviewImageCard
+                            title="원본 크롭"
+                            src={region.imageCropUrl}
+                            alt={`${region.id} original image`}
                           />
-                        </Suspense>
-                      </SvgEditorErrorBoundary>
+                        ) : null}
+                        {region.styledImageUrl ? (
+                          <PreviewImageCard
+                            title="Nano Banana 결과"
+                            src={region.styledImageUrl}
+                            alt={`${region.id} styled image`}
+                            badge={region.styledImageModel}
+                          />
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed bg-muted/30 p-6 text-center">
+                        <p className="text-[12px] text-muted-foreground">
+                          변환 대상 이미지가 없어 미리보기를 생성하지 않았습니다.
+                        </p>
+                      </div>
                     )}
-
-                    {svgEditorError && <p className="text-[12px] text-destructive">{svgEditorError}</p>}
-                    <p className="text-[11px] text-muted-foreground">
-                      ⓘ SVG 편집기로 수정 후 저장하면 HWPX 내보내기에 반영됩니다.
-                    </p>
                   </TabsContent>
 
                   <TabsContent value="explain" className="mt-3">
@@ -279,7 +202,7 @@ export function ResultsViewer({ regions, onSaveEditedSvg, onLoadRegionSvg }: Res
                   </TabsContent>
                 </Tabs>
               </CardContent>
-            )}
+            ) : null}
           </Card>
         );
       })}

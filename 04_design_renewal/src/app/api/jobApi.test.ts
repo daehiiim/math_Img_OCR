@@ -18,7 +18,7 @@ vi.mock("../lib/supabase", () => ({
   },
 }));
 
-import { getJobApi } from "./jobApi";
+import { getJobApi, runPipelineApi } from "./jobApi";
 
 describe("jobApi", () => {
   beforeEach(() => {
@@ -168,5 +168,46 @@ describe("jobApi", () => {
     await getJobApi("job-4");
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/jobs/job-4");
+  });
+
+  it("sends selected execution options when running a job", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          job_id: "job-5",
+          status: "completed",
+          executed_actions: ["ocr", "image_stylize"],
+          charged_count: 2,
+          completed_count: 2,
+          failed_count: 0,
+          exportable_count: 2,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runPipelineApi("job-5", {
+      doOcr: true,
+      doImageStylize: true,
+      doExplanation: false,
+    });
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/jobs/job-5/run");
+    expect(requestInit.method).toBe("POST");
+    expect(requestInit.body).toBe(
+      JSON.stringify({
+        do_ocr: true,
+        do_image_stylize: true,
+        do_explanation: false,
+      })
+    );
+    expect(result.charged_count).toBe(2);
+    expect(result.completed_count).toBe(2);
   });
 });

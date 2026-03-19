@@ -107,6 +107,8 @@ class FakeBillingStore:
         self.payment_events_by_checkout_id: dict[str, dict] = {}
         self.ledger_entries: list[dict] = []
         self.charged_jobs: set[str] = set()
+        self.charged_actions: set[tuple[str, str]] = set()
+        self.job_regions: dict[str, list[dict[str, object]]] = {}
         self.openai_keys: dict[str, dict] = {}
 
     def get_or_create_profile(self, user: AuthenticatedUser) -> BillingProfile:
@@ -229,6 +231,136 @@ class FakeBillingStore:
             }
         )
         return {"charged": True, "credits_balance": new_profile.credits_balance}
+
+    def ensure_job_action_credits_available(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+        actions: list[str],
+        *,
+        processing_type: str,
+    ) -> dict:
+        profile = self.get_or_create_profile(user)
+        required = len(
+            [
+                action
+                for action in actions
+                if not (
+                    processing_type == "user_api_key"
+                    and action in {"ocr", "explanation"}
+                )
+                and (job_id, action) not in self.charged_actions
+            ]
+        )
+        if profile.credits_balance < required:
+            raise ValueError("insufficient credits")
+        return {"required_credits": required, "credits_balance": profile.credits_balance}
+
+    def consume_job_action_credits(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+        actions: list[str],
+        *,
+        processing_type: str,
+    ) -> dict:
+        profile = self.get_or_create_profile(user)
+        charged_actions: list[str] = []
+        new_balance = profile.credits_balance
+        new_used_credits = profile.used_credits
+
+        for action in actions:
+            if processing_type == "user_api_key" and action in {"ocr", "explanation"}:
+                continue
+            if (job_id, action) in self.charged_actions:
+                continue
+            if new_balance <= 0:
+                raise ValueError("insufficient credits")
+            new_balance -= 1
+            new_used_credits += 1
+            self.charged_actions.add((job_id, action))
+            charged_actions.append(action)
+            self.ledger_entries.append(
+                {
+                    "user_id": user.user_id,
+                    "job_id": job_id,
+                    "delta": -1,
+                    "balance_after": new_balance,
+                    "reason": f"{action}_charge",
+                }
+            )
+
+        self.profiles[user.user_id] = BillingProfile(
+            user_id=profile.user_id,
+            credits_balance=new_balance,
+            used_credits=new_used_credits,
+            openai_connected=profile.openai_connected,
+            openai_key_masked=profile.openai_key_masked,
+        )
+        return {
+            "charged_actions": charged_actions,
+            "credits_balance": new_balance,
+        }
+
+    def ensure_job_region_credits_available(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+        *,
+        processing_type: str,
+    ) -> dict:
+        regions = self.job_regions.get(job_id, [])
+        required = 0
+        if processing_type != "user_api_key":
+            required = sum(1 for region in regions if not bool(region.get("was_charged")))
+        profile = self.get_or_create_profile(user)
+        if profile.credits_balance < required:
+            raise ValueError("insufficient credits")
+        return {"required_credits": required, "credits_balance": profile.credits_balance}
+
+    def consume_job_region_credits(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+        *,
+        processing_type: str,
+    ) -> dict:
+        profile = self.get_or_create_profile(user)
+        regions = self.job_regions.get(job_id, [])
+        if processing_type == "user_api_key":
+            return {"charged_count": 0, "credits_balance": profile.credits_balance}
+
+        chargeable_regions = [
+            region
+            for region in regions
+            if not bool(region.get("was_charged"))
+            and bool(region.get("exportable"))
+        ]
+        charged_count = len(chargeable_regions)
+        if profile.credits_balance < charged_count:
+            raise ValueError("insufficient credits")
+
+        new_balance = profile.credits_balance - charged_count
+        self.profiles[user.user_id] = BillingProfile(
+            user_id=profile.user_id,
+            credits_balance=new_balance,
+            used_credits=profile.used_credits + charged_count,
+            openai_connected=profile.openai_connected,
+            openai_key_masked=profile.openai_key_masked,
+        )
+        for region in chargeable_regions:
+            region["was_charged"] = True
+        if charged_count:
+            self.ledger_entries.append(
+                {
+                    "user_id": user.user_id,
+                    "job_id": job_id,
+                    "delta": -charged_count,
+                    "balance_after": new_balance,
+                    "reason": "ocr_success_charge",
+                }
+            )
+        return {"charged_count": charged_count, "credits_balance": new_balance}
 
     def upsert_openai_key(
         self,
@@ -451,6 +583,126 @@ def test_consume_job_credit_decrements_balance_only_once():
     assert first["credits_balance"] == 2
     assert second["charged"] is False
     assert store.profiles["user-123"].credits_balance == 2
+
+
+def test_consume_job_action_credits_charges_only_selected_actions():
+    service, store, _ = make_service()
+    store.profiles["user-123"] = BillingProfile(
+        user_id="user-123",
+        credits_balance=5,
+        used_credits=0,
+        openai_connected=False,
+        openai_key_masked=None,
+    )
+
+    preview = service.ensure_job_action_credits_available(
+        make_user(),
+        "job-123",
+        ["ocr", "image_stylize", "explanation"],
+        processing_type="service_api",
+    )
+    charged = service.consume_job_action_credits(
+        make_user(),
+        "job-123",
+        ["ocr", "image_stylize", "explanation"],
+        processing_type="service_api",
+    )
+
+    assert preview["required_credits"] == 3
+    assert charged["charged_actions"] == ["ocr", "image_stylize", "explanation"]
+    assert charged["credits_balance"] == 2
+    assert [entry["reason"] for entry in store.ledger_entries[-3:]] == [
+        "ocr_charge",
+        "image_stylize_charge",
+        "explanation_charge",
+    ]
+
+
+def test_consume_job_action_credits_skips_ocr_and_explanation_for_user_key():
+    service, store, _ = make_service()
+    store.profiles["user-123"] = BillingProfile(
+        user_id="user-123",
+        credits_balance=2,
+        used_credits=0,
+        openai_connected=True,
+        openai_key_masked="sk-us••••7890",
+    )
+
+    preview = service.ensure_job_action_credits_available(
+        make_user(),
+        "job-123",
+        ["ocr", "image_stylize", "explanation"],
+        processing_type="user_api_key",
+    )
+    charged = service.consume_job_action_credits(
+        make_user(),
+        "job-123",
+        ["ocr", "image_stylize", "explanation"],
+        processing_type="user_api_key",
+    )
+
+    assert preview["required_credits"] == 1
+    assert charged["charged_actions"] == ["image_stylize"]
+    assert charged["credits_balance"] == 1
+
+
+def test_ensure_job_region_credits_available_counts_only_uncharged_regions():
+    service, store, _ = make_service()
+    store.profiles["user-123"] = BillingProfile(
+        user_id="user-123",
+        credits_balance=3,
+        used_credits=0,
+        openai_connected=False,
+        openai_key_masked=None,
+    )
+    store.job_regions["job-123"] = [
+        {"region_id": "q1", "was_charged": False, "exportable": True},
+        {"region_id": "q2", "was_charged": True, "exportable": True},
+        {"region_id": "q3", "was_charged": False, "exportable": False},
+    ]
+
+    preview = service.ensure_job_region_credits_available(
+        make_user(),
+        "job-123",
+        processing_type="service_api",
+    )
+
+    assert preview["required_credits"] == 2
+    assert preview["credits_balance"] == 3
+
+
+def test_consume_job_region_credits_charges_exportable_regions_only_once():
+    service, store, _ = make_service()
+    store.profiles["user-123"] = BillingProfile(
+        user_id="user-123",
+        credits_balance=5,
+        used_credits=0,
+        openai_connected=False,
+        openai_key_masked=None,
+    )
+    store.job_regions["job-123"] = [
+        {"region_id": "q1", "was_charged": False, "exportable": True},
+        {"region_id": "q2", "was_charged": False, "exportable": True},
+        {"region_id": "q3", "was_charged": False, "exportable": False},
+    ]
+
+    first = service.consume_job_region_credits(
+        make_user(),
+        "job-123",
+        processing_type="service_api",
+    )
+    second = service.consume_job_region_credits(
+        make_user(),
+        "job-123",
+        processing_type="service_api",
+    )
+
+    assert first["charged_count"] == 2
+    assert first["credits_balance"] == 3
+    assert second["charged_count"] == 0
+    assert second["credits_balance"] == 3
+    assert store.ledger_entries[-1]["reason"] == "ocr_success_charge"
+    assert store.ledger_entries[-1]["delta"] == -2
 
 
 def test_save_openai_key_encrypts_and_updates_profile():

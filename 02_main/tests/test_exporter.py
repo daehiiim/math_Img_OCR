@@ -88,7 +88,7 @@ def make_export_job(image_path: str) -> JobPipelineContext:
                     ocr_text="문제 본문",
                     explanation="해설 본문",
                 ),
-                figure=FigureContext(png_rendered_url=image_path),
+                figure=FigureContext(image_crop_url=image_path),
                 status="completed",
                 success=True,
             )
@@ -191,3 +191,81 @@ def test_export_hwpx_creates_valid_file_using_vendored_runtime(tmp_path, monkeyp
         assert "Contents/header.xml" in names
         assert "Contents/section0.xml" in names
         assert any(name.startswith("Contents/BinData/img_q1_") for name in names)
+
+
+def test_export_hwpx_skips_empty_failed_regions_and_renumbers_items(tmp_path, monkeypatch):
+    """내보낼 텍스트가 없는 실패 영역은 건너뛰고 문제 번호를 다시 매겨야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "02_main"
+    copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+    monkeypatch.setattr(module, "ROOT", app_root)
+    monkeypatch.setattr(module, "_get_codex_home", lambda: tmp_path / "missing-codex-home")
+    monkeypatch.setattr(module, "_get_home_dir", lambda: tmp_path / "missing-home")
+
+    root_path = tmp_path / "runtime"
+    image_relative_path = Path("assets/q1.png")
+    image_path = root_path / image_relative_path
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(make_png_bytes())
+
+    export_job = JobPipelineContext(
+        job_id="job-export-2",
+        file_name="uploaded_image.png",
+        image_url="user-123/job-export-2/input/uploaded_image.png",
+        image_width=32,
+        image_height=24,
+        status="failed",
+        created_at="2026-03-18T00:00:00+00:00",
+        updated_at="2026-03-18T00:00:00+00:00",
+        regions=[
+            RegionPipelineContext(
+                context=RegionContext(
+                    id="q1",
+                    polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
+                    type="mixed",
+                    order=1,
+                ),
+                extractor=ExtractorContext(ocr_text="첫 번째 문제", explanation="첫 번째 해설"),
+                figure=FigureContext(image_crop_url=image_relative_path.as_posix()),
+                status="completed",
+                success=True,
+            ),
+            RegionPipelineContext(
+                context=RegionContext(
+                    id="q2",
+                    polygon=[[9, 0], [16, 0], [16, 8], [9, 8]],
+                    type="mixed",
+                    order=2,
+                ),
+                extractor=ExtractorContext(),
+                figure=FigureContext(),
+                status="failed",
+                success=False,
+                error_reason="ocr failed",
+            ),
+            RegionPipelineContext(
+                context=RegionContext(
+                    id="q3",
+                    polygon=[[17, 0], [24, 0], [24, 8], [17, 8]],
+                    type="mixed",
+                    order=3,
+                ),
+                extractor=ExtractorContext(ocr_text="세 번째 문제"),
+                figure=FigureContext(),
+                status="failed",
+                success=False,
+                error_reason="image failed",
+            ),
+        ],
+    )
+
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, export_job, export_dir)
+
+    with ZipFile(hwpx_path, "r") as archive:
+        section_xml = archive.read("Contents/section0.xml").decode("utf-8")
+
+    assert "첫 번째 문제" in section_xml
+    assert "세 번째 문제" in section_xml
+    assert "2. " in section_xml
+    assert "3. " not in section_xml

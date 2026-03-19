@@ -63,6 +63,9 @@ create table if not exists public.ocr_jobs (
   processing_type text not null check (processing_type in ('user_api_key', 'service_api')),
   status text not null check (status in ('created', 'regions_pending', 'queued', 'running', 'completed', 'failed', 'exported')),
   was_charged boolean not null default false,
+  ocr_charged boolean not null default false,
+  image_charged boolean not null default false,
+  explanation_charged boolean not null default false,
   charged_at timestamptz,
   last_error text,
   hwpx_export_path text,
@@ -87,9 +90,14 @@ create table if not exists public.ocr_job_regions (
   edited_svg_path text,
   edited_svg_version integer not null default 0 check (edited_svg_version >= 0),
   crop_path text,
+  image_crop_path text,
+  styled_image_path text,
+  styled_image_model text,
   png_rendered_path text,
   processing_ms integer,
   error_reason text,
+  was_charged boolean not null default false,
+  charged_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (job_id, region_key)
@@ -102,7 +110,17 @@ create table if not exists public.credit_ledger (
   payment_event_id uuid references public.payment_events(id) on delete set null,
   delta integer not null,
   balance_after integer not null check (balance_after >= 0),
-  reason text not null check (reason in ('ocr_success_charge', 'manual_adjustment', 'purchase', 'stripe_purchase')),
+  reason text not null check (
+    reason in (
+      'ocr_success_charge',
+      'ocr_charge',
+      'image_stylize_charge',
+      'explanation_charge',
+      'manual_adjustment',
+      'purchase',
+      'stripe_purchase'
+    )
+  ),
   created_at timestamptz not null default now()
 );
 

@@ -5,11 +5,11 @@ import {
   downloadHwpxApi,
   exportHwpxApi,
   getJobApi,
-  getRegionSvgApi,
-  saveEditedSvgApi,
   saveRegionsApi,
   runPipelineApi,
   resolveRuntimePath,
+  type RunPipelineOptions,
+  type RunPipelineResult,
 } from "../api/jobApi";
 import { mapBackendJob } from "./jobMappers";
 
@@ -25,14 +25,15 @@ export interface Region {
   ocrText?: string;
   explanation?: string;
   mathml?: string;
-  svgUrl?: string;
   cropUrl?: string;
+  imageCropUrl?: string;
+  styledImageUrl?: string;
+  styledImageModel?: string;
   processingMs?: number;
   success?: boolean;
   errorReason?: string;
-  editedSvgUrl?: string;
-  editedSvgVersion?: number;
-  svgData?: string;
+  wasCharged?: boolean;
+  chargedAt?: string;
 }
 
 export type JobStatus =
@@ -57,12 +58,7 @@ export interface Job {
   lastError?: string;
 }
 
-const POLL_INTERVAL_MS = 1200;
-const POLL_MAX_ATTEMPTS = 45;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+export interface JobExecutionOptions extends RunPipelineOptions {}
 
 function triggerDownloadBlob(blob: Blob, filename: string): void {
   const objectUrl = URL.createObjectURL(blob);
@@ -109,18 +105,18 @@ export function useJobStore() {
               lastError: undefined,
               regions: regions.map((region) => ({
                 ...region,
+                type: "mixed",
                 status: "pending",
                 ocrText: undefined,
                 explanation: undefined,
                 mathml: undefined,
-                svgUrl: undefined,
                 cropUrl: undefined,
+                imageCropUrl: undefined,
+                styledImageUrl: undefined,
+                styledImageModel: undefined,
                 processingMs: undefined,
                 success: undefined,
                 errorReason: undefined,
-                editedSvgUrl: undefined,
-                editedSvgVersion: undefined,
-                svgData: undefined,
               })),
             }
           : job
@@ -133,7 +129,7 @@ export function useJobStore() {
         regions.map((region) => ({
           id: region.id,
           polygon: region.polygon,
-          type: region.type,
+          type: "mixed",
           order: region.order,
         }))
       );
@@ -166,7 +162,7 @@ export function useJobStore() {
     }
   }, []);
 
-  const runPipeline = useCallback(async (jobId: string): Promise<void> => {
+  const runPipeline = useCallback(async (jobId: string, options: JobExecutionOptions): Promise<RunPipelineResult> => {
     setJobs((prev) =>
       prev.map((job) =>
         job.id === jobId
@@ -181,35 +177,13 @@ export function useJobStore() {
     );
 
     try {
-      await runPipelineApi(jobId);
+      const result = await runPipelineApi(jobId, options);
+      const backend = await getJobApi(jobId);
 
-      for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt += 1) {
-        const backend = await getJobApi(jobId);
-        let hydrated: Job | null = null;
-
-        setJobs((prev) =>
-          prev.map((job) => {
-            if (job.id !== jobId) {
-              return job;
-            }
-
-            hydrated = mapBackendJob(backend, job);
-            return hydrated;
-          })
-        );
-
-        if (backend.status === "completed") {
-          return;
-        }
-
-        if (backend.status === "failed") {
-          throw new Error("파이프라인 처리에 실패했습니다.");
-        }
-
-        await sleep(POLL_INTERVAL_MS);
-      }
-
-      throw new Error("처리 상태 조회 시간이 초과되었습니다.");
+      setJobs((prev) =>
+        prev.map((job) => (job.id === jobId ? mapBackendJob(backend, job) : job))
+      );
+      return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : "파이프라인 실행 중 오류가 발생했습니다.";
       setJobs((prev) =>
@@ -225,17 +199,6 @@ export function useJobStore() {
       );
       throw error;
     }
-  }, []);
-
-  const saveEditedSvg = useCallback(async (jobId: string, regionId: string, svg: string) => {
-    await saveEditedSvgApi(jobId, regionId, svg);
-    const backend = await getJobApi(jobId);
-    setJobs((prev) => prev.map((job) => (job.id === jobId ? mapBackendJob(backend, job) : job)));
-  }, []);
-
-  const loadRegionSvg = useCallback(async (jobId: string, regionId: string): Promise<string> => {
-    const data = await getRegionSvgApi(jobId, regionId);
-    return data.svg;
   }, []);
 
   const hydrateJob = useCallback(async (jobId: string): Promise<Job> => {
@@ -294,8 +257,6 @@ export function useJobStore() {
     createJob,
     saveRegions,
     runPipeline,
-    saveEditedSvg,
-    loadRegionSvg,
     hydrateJob,
     exportHwpx,
     deleteJob,

@@ -1,17 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 import {
   Plus,
   Trash2,
-  MousePointer2,
   Square,
-  Type,
-  Shapes,
-  Blend,
   RotateCcw,
 } from "lucide-react";
-import type { Region, RegionType } from "../store/jobStore";
+import type { Region } from "../store/jobStore";
 
 interface RegionEditorProps {
   imageUrl: string;
@@ -22,14 +17,9 @@ interface RegionEditorProps {
   disabled?: boolean;
 }
 
-const regionTypeConfig: Record<
-  RegionType,
-  { label: string; color: string; icon: React.ComponentType<{ className?: string }> }
-> = {
-  text: { label: "텍스트", color: "#3b82f6", icon: Type },
-  diagram: { label: "도형", color: "#8b5cf6", icon: Shapes },
-  mixed: { label: "혼합", color: "#f59e0b", icon: Blend },
-};
+const REGION_BORDER_COLOR = "#2563eb";
+const REGION_FILL_COLOR = "rgba(37, 99, 235, 0.12)";
+const REGION_LABEL_COLOR = "#1d4ed8";
 
 export function RegionEditor({
   imageUrl,
@@ -39,18 +29,19 @@ export function RegionEditor({
   onSaveRegions,
   disabled = false,
 }: RegionEditorProps) {
-  const [regions, setRegions] = useState<Region[]>(initialRegions);
+  const [regions, setRegions] = useState<Region[]>(() =>
+    initialRegions.map((region) => ({ ...region, type: "mixed" }))
+  );
   const [drawing, setDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [currentPoint, setCurrentPoint] = useState<{ x: number; y: number } | null>(null);
-  const [selectedType, setSelectedType] = useState<RegionType>("mixed");
   const [tool, setTool] = useState<"select" | "draw">("draw");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setRegions(initialRegions);
+    setRegions(initialRegions.map((region) => ({ ...region, type: "mixed" })));
   }, [initialRegions]);
 
   const getScaledPos = useCallback(
@@ -111,14 +102,14 @@ export function RegionEditor({
         [x2, y2],
         [x1, y2],
       ],
-      type: selectedType,
+      type: "mixed",
       order: regions.length + 1,
     };
 
     setRegions((prev) => [...prev, newRegion]);
     setStartPoint(null);
     setCurrentPoint(null);
-  }, [drawing, startPoint, currentPoint, regions.length, selectedType]);
+  }, [drawing, startPoint, currentPoint, regions.length]);
 
   const removeRegion = (id: string) => {
     setRegions((prev) =>
@@ -149,7 +140,6 @@ export function RegionEditor({
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-          
           <Button
             variant={tool === "draw" ? "default" : "ghost"}
             size="sm"
@@ -159,33 +149,6 @@ export function RegionEditor({
             <Square className="w-3.5 h-3.5 mr-1" />
             영역 그리기
           </Button>
-        </div>
-
-        <div className="h-6 w-px bg-border" />
-
-        <div className="flex items-center gap-1">
-          {(Object.entries(regionTypeConfig) as [RegionType, typeof regionTypeConfig.text][]).map(
-            ([type, cfg]) => {
-              const Icon = cfg.icon;
-              return (
-                <Button
-                  key={type}
-                  variant={selectedType === type ? "outline" : "ghost"}
-                  size="sm"
-                  onClick={() => setSelectedType(type)}
-                  disabled={disabled}
-                  style={
-                    selectedType === type
-                      ? { borderColor: cfg.color, color: cfg.color }
-                      : {}
-                  }
-                >
-                  <Icon className="w-3.5 h-3.5 mr-1" />
-                  {cfg.label}
-                </Button>
-              );
-            }
-          )}
         </div>
 
         <div className="h-6 w-px bg-border" />
@@ -232,7 +195,6 @@ export function RegionEditor({
           const y1 = Math.min(...ys);
           const x2 = Math.max(...xs);
           const y2 = Math.max(...ys);
-          const cfg = regionTypeConfig[region.type];
 
           return (
             <div
@@ -243,15 +205,15 @@ export function RegionEditor({
                 top: toPercent(y1, imageHeight),
                 width: toPercent(x2 - x1, imageWidth),
                 height: toPercent(y2 - y1, imageHeight),
-                borderColor: cfg.color,
-                backgroundColor: `${cfg.color}15`,
+                borderColor: REGION_BORDER_COLOR,
+                backgroundColor: REGION_FILL_COLOR,
               }}
             >
               <span
                 className="text-[10px] text-white px-1.5 py-0.5 rounded-br-sm"
-                style={{ backgroundColor: cfg.color }}
+                style={{ backgroundColor: REGION_LABEL_COLOR }}
               >
-                {region.id} ({cfg.label})
+                {region.id}
               </span>
               {!disabled && (
                 <button
@@ -289,8 +251,8 @@ export function RegionEditor({
                 Math.abs(currentPoint.y - startPoint.y),
                 imageHeight
               ),
-              borderColor: regionTypeConfig[selectedType].color,
-              backgroundColor: `${regionTypeConfig[selectedType].color}20`,
+              borderColor: REGION_BORDER_COLOR,
+              backgroundColor: REGION_FILL_COLOR,
             }}
           />
         )}
@@ -301,27 +263,21 @@ export function RegionEditor({
         <div className="space-y-2">
           <p className="text-[13px] text-muted-foreground">{regions.length}개 영역</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {regions.map((region) => {
-              const cfg = regionTypeConfig[region.type];
-              return (
+            {regions.map((region) => (
+              <div
+                key={region.id}
+                className="flex items-center gap-2 bg-accent/30 rounded-lg px-3 py-2"
+              >
                 <div
-                  key={region.id}
-                  className="flex items-center gap-2 bg-accent/30 rounded-lg px-3 py-2"
-                >
-                  <div
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: cfg.color }}
-                  />
-                  <span className="text-[13px] flex-1 font-mono">{region.id}</span>
-                  <Badge variant="outline" className="text-[10px]">
-                    {cfg.label}
-                  </Badge>
-                  <span className="text-[11px] text-muted-foreground">
-                    #{region.order}
-                  </span>
-                </div>
-              );
-            })}
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: REGION_BORDER_COLOR }}
+                />
+                <span className="text-[13px] flex-1 font-mono">{region.id}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  #{region.order}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -22,11 +22,16 @@ export interface BackendRegion {
   mathml?: string | null;
   svg_url?: string | null;
   crop_url?: string | null;
+  image_crop_url?: string | null;
+  styled_image_url?: string | null;
+  styled_image_model?: string | null;
   processing_ms?: number | null;
   success?: boolean | null;
   error_reason?: string | null;
   edited_svg_url?: string | null;
   edited_svg_version?: number | null;
+  was_charged?: boolean | null;
+  charged_at?: string | null;
 }
 
 export interface BackendJob {
@@ -36,6 +41,8 @@ export interface BackendJob {
   image_url?: string | null;
   image_width?: number | null;
   image_height?: number | null;
+  last_error?: string | null;
+  hwpx_export_path?: string | null;
   regions: BackendRegion[];
 }
 
@@ -44,6 +51,22 @@ export interface RegionPayload {
   polygon: number[][];
   type: "text" | "diagram" | "mixed";
   order: number;
+}
+
+export interface RunPipelineOptions {
+  doOcr: boolean;
+  doImageStylize: boolean;
+  doExplanation: boolean;
+}
+
+export interface RunPipelineResult {
+  job_id: string;
+  status: "completed" | "failed";
+  executed_actions?: Array<"ocr" | "image_stylize" | "explanation">;
+  charged_count: number;
+  completed_count: number;
+  failed_count: number;
+  exportable_count: number;
 }
 
 async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> {
@@ -120,9 +143,18 @@ export async function saveRegionsApi(jobId: string, regions: RegionPayload[]): P
   });
 }
 
-export async function runPipelineApi(jobId: string): Promise<{ job_id: string; status: string }> {
-  return requestJson<{ job_id: string; status: string }>(`/jobs/${jobId}/run`, {
+export async function runPipelineApi(
+  jobId: string,
+  options: RunPipelineOptions
+): Promise<RunPipelineResult> {
+  return requestJson<RunPipelineResult>(`/jobs/${jobId}/run`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      do_ocr: options.doOcr,
+      do_image_stylize: options.doImageStylize,
+      do_explanation: options.doExplanation,
+    }),
   });
 }
 
@@ -134,24 +166,6 @@ export async function exportHwpxApi(jobId: string): Promise<{ download_url: stri
   return requestJson<{ download_url: string }>(`/jobs/${jobId}/export/hwpx`, {
     method: "POST",
   });
-}
-
-export async function saveEditedSvgApi(jobId: string, regionId: string, svg: string) {
-  return requestJson<{ region_id: string; edited_svg_url: string; edited_svg_version: number }>(
-    `/jobs/${jobId}/regions/${regionId}/svg/edited`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ svg }),
-    }
-  );
-}
-
-export async function getRegionSvgApi(jobId: string, regionId: string) {
-  return requestJson<{ region_id: string; svg: string; source: string }>(
-    `/jobs/${jobId}/regions/${regionId}/svg`,
-    { method: "GET" }
-  );
 }
 
 export async function downloadHwpxApi(jobId: string): Promise<{ blob: Blob; filename: string }> {

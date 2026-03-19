@@ -8,6 +8,7 @@ from typing import Optional
 
 import requests
 
+from app.config import get_settings
 from app.pipeline.schema import ExtractorContext
 
 
@@ -45,6 +46,21 @@ def _get_openai_api_key(root_path) -> str:
         if value:
             return value
     raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY in apiKey.env")
+
+
+def _get_nano_banana_settings(root_path) -> tuple[str, str, str]:
+    """Nano Banana 호출에 필요한 모델/프로젝트/리전을 읽는다."""
+    settings = get_settings(root_path)
+    model = settings.nano_banana_model or _get_api_setting(root_path, "NANO_BANANA_MODEL")
+    project_id = settings.nano_banana_project_id or _get_api_setting(root_path, "NANO_BANANA_PROJECT_ID")
+    location = settings.nano_banana_location or _get_api_setting(root_path, "NANO_BANANA_LOCATION", "global")
+    if not model:
+        raise ValueError("NANO_BANANA_MODEL is not configured")
+    if not project_id:
+        raise ValueError("NANO_BANANA_PROJECT_ID is not configured")
+    if not location:
+        raise ValueError("NANO_BANANA_LOCATION is not configured")
+    return model, project_id, location
 
 
 def _extract_json_object(text: str) -> dict:
@@ -184,6 +200,9 @@ def analyze_region_with_gpt(
     crop_image_bytes: bytes,
     region_type: str,
     api_key: str | None = None,
+    *,
+    include_ocr: bool = True,
+    include_image_detection: bool = False,
 ) -> dict:
     resolved_api_key = api_key or _get_openai_api_key(root_path)
     model = "gpt-5.2"
@@ -234,28 +253,39 @@ C) Mathematical Diagrams
 - Do not embed base64 images.
 - The SVG must be editable vector format.
 
-3. Final Output Format
+3. Stylizable Images
+- Detect only visual elements that should become a clean exam-style image.
+- Include geometry figures, illustrative drawings, and embedded problem images.
+- Exclude answer choices, plain text paragraphs, tables, and chart-only layouts.
+- Return bbox coordinates relative to the provided crop image as [left, top, right, bottom].
+
+4. Final Output Format
 
 Return strictly in this JSON structure:
 
 {
   "text_blocks": ["text paragraph with inline <math>formulas</math>", "another paragraph"],
   "formulas": ["inline <math>formula1</math>", "display <math>formula2</math>"],
-  "diagrams": ["<svg>...</svg>", "<svg>...</svg>"]
+  "stylizable_images": [{"bbox": [0, 0, 100, 80], "kind": "geometry"}]
 }
 
-4. Important Constraints:
+5. Important Constraints:
 - Do not explain anything.
 - Do not summarize.
 - Do not interpret the math.
 - Do not add commentary.
 - Only structured extraction.
 
-5. If a region is ambiguous:
+6. If a region is ambiguous:
 - Prefer formula over plain text if it contains mathematical symbols.
-- Prefer diagram over formula if it includes geometric shapes.
+- Prefer stylizable image over formula if it contains a geometric drawing or embedded illustration.
 
 Now process the image."""
+
+    prompt += (
+        f" OCR enabled: {'yes' if include_ocr else 'no'}."
+        f" Image detection enabled: {'yes' if include_image_detection else 'no'}."
+    )
 
     payload = {
         "model": model,
@@ -286,11 +316,21 @@ Now process the image."""
 
     text_blocks = parsed.get("text_blocks") or []
     formulas = parsed.get("formulas") or []
-    diagrams = parsed.get("diagrams") or []
+    stylizable_images = parsed.get("stylizable_images") or []
 
     ocr_text = chr(10).join([str(v).strip() for v in text_blocks if str(v).strip()])
     mathml = chr(10).join([str(v).strip() for v in formulas if str(v).strip()])
-    diagram_svg = str(diagrams[0]).strip() if diagrams else ""
+    image_bbox = None
+    has_stylizable_image = False
+    if stylizable_images:
+        first_image = stylizable_images[0] or {}
+        bbox = first_image.get("bbox") if isinstance(first_image, dict) else None
+        if isinstance(bbox, list) and len(bbox) == 4:
+            try:
+                image_bbox = [int(value) for value in bbox]
+                has_stylizable_image = True
+            except (TypeError, ValueError):
+                image_bbox = None
 
     openai_request_id = (
         response.headers.get("x-request-id")
@@ -299,9 +339,10 @@ Now process the image."""
     )
 
     return {
-        "ocr_text": ocr_text,
-        "mathml": mathml,
-        "diagram_svg": diagram_svg,
+        "ocr_text": ocr_text if include_ocr else "",
+        "mathml": mathml if include_ocr else "",
+        "has_stylizable_image": has_stylizable_image if include_image_detection else False,
+        "image_bbox": image_bbox if include_image_detection else None,
         "model_used": model,
         "openai_request_id": openai_request_id,
     }
@@ -356,3 +397,53 @@ def generate_explanation_with_gpt(
         raise ValueError(f"OpenAI explain API error {response.status_code}: {response.text[:400]}")
 
     return _read_chat_content(response.json()).strip()
+
+
+def generate_styled_image_with_nano_banana(root_path, image_bytes: bytes, *, model_name: str | None = None) -> bytes:
+    """Nano Banana 모델로 수능 스타일 이미지를 생성해 PNG 바이트를 반환한다."""
+    resolved_model, project_id, location = _get_nano_banana_settings(root_path)
+    target_model = model_name or resolved_model
+
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError as error:  # pragma: no cover
+        raise ValueError("google-genai package is required for Nano Banana integration") from error
+
+    prompt = (
+        "Convert this math illustration into a clean Korean CSAT exam style image. "
+        "Keep the original structure, labels, numbers, and layout. "
+        "Use a plain white background and neat black linework. "
+        "Do not add decorative elements."
+    )
+
+    client = genai.Client(vertexai=True, project=project_id, location=location)
+    response = client.models.generate_content(
+        model=target_model,
+        contents=[
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(text=prompt),
+                    types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                ],
+            )
+        ],
+    )
+
+    for candidate in getattr(response, "candidates", []) or []:
+        content = getattr(candidate, "content", None)
+        for part in getattr(content, "parts", []) or []:
+            inline_data = getattr(part, "inline_data", None)
+            if inline_data is None:
+                continue
+            mime_type = getattr(inline_data, "mime_type", "") or ""
+            data = getattr(inline_data, "data", None)
+            if not mime_type.startswith("image/") or data is None:
+                continue
+            if isinstance(data, bytes):
+                return data
+            if isinstance(data, str):
+                return base64.b64decode(data)
+
+    raise ValueError("Nano Banana response did not contain an image")

@@ -20,13 +20,15 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useJobs } from "../context/JobContext";
 import { type ProgressJobStatus, getJobStepIndex } from "../lib/jobPresentation";
-import type { JobStatus, Region } from "../store/jobStore";
+import type { JobExecutionOptions, JobStatus, Region } from "../store/jobStore";
 import { copyToClipboard } from "../utils/clipboard";
 import { ResultsViewer } from "./ResultsViewer";
 import { RegionEditor } from "./RegionEditor";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Checkbox } from "./ui/checkbox";
+import { Label } from "./ui/label";
 import { Progress } from "./ui/progress";
 
 const statusSteps: Array<{ key: ProgressJobStatus; label: string }> = [
@@ -37,15 +39,35 @@ const statusSteps: Array<{ key: ProgressJobStatus; label: string }> = [
   { key: "exported", label: "내보내기" },
 ];
 
+const defaultExecutionOptions: JobExecutionOptions = {
+  doOcr: true,
+  doImageStylize: true,
+  doExplanation: true,
+};
+
 function isResultVisible(status: JobStatus): boolean {
   return status === "running" || status === "completed" || status === "failed" || status === "exported";
+}
+
+/** 이번 실행에서 새로 처리할 영역 수를 계산한다. */
+function calculateRequiredCredits(regions: Region[], openAiConnected: boolean): number {
+  if (openAiConnected) {
+    return 0;
+  }
+
+  return regions.filter((region) => !region.wasCharged).length;
+}
+
+/** 문제 또는 해설 텍스트가 있으면 내보내기 가능 영역으로 본다. */
+function isExportableRegion(region: Region): boolean {
+  return Boolean(region.ocrText?.trim() || region.explanation?.trim());
 }
 
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
-  const { consumeCredit, user } = useAuth();
-  const { getJob, saveRegions, runPipeline, saveEditedSvg, loadRegionSvg, hydrateJob, exportHwpx } = useJobs();
+  const { refreshProfile, user } = useAuth();
+  const { getJob, saveRegions, runPipeline, hydrateJob, exportHwpx } = useJobs();
   const [isRunning, setIsRunning] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -53,8 +75,16 @@ export function JobDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isHydratingJob, setIsHydratingJob] = useState(false);
   const [hasHydrationError, setHasHydrationError] = useState(false);
+  const [executionOptions, setExecutionOptions] = useState<JobExecutionOptions>(defaultExecutionOptions);
 
   const job = getJob(jobId || "");
+  const requiredCredits = calculateRequiredCredits(job?.regions ?? [], Boolean(user?.openAiConnected));
+  const hasSelectedAction =
+    executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
+  const exportableRegionCount = (job?.regions ?? []).filter(isExportableRegion).length;
+  const canExportHwpx =
+    exportableRegionCount > 0 &&
+    (job?.status === "completed" || job?.status === "failed" || job?.status === "exported");
 
   useEffect(() => {
     if (!jobId || job || isHydratingJob || hasHydrationError) {
@@ -108,6 +138,14 @@ export function JobDetailPage() {
     setProgress(0);
   }, [job]);
 
+  /** 실행 옵션 체크 상태를 변경한다. */
+  const updateExecutionOption = useCallback((key: keyof JobExecutionOptions, checked: boolean) => {
+    setExecutionOptions((prev) => ({
+      ...prev,
+      [key]: checked,
+    }));
+  }, []);
+
   const handleSaveRegions = useCallback(
     async (regions: Region[]) => {
       if (!jobId) {
@@ -129,49 +167,20 @@ export function JobDetailPage() {
     [jobId, saveRegions]
   );
 
-  const handleSaveEditedSvg = useCallback(
-    async (regionId: string, svg: string) => {
-      if (!jobId) {
-        return;
-      }
-
-      setActionError(null);
-
-      try {
-        await saveEditedSvg(jobId, regionId, svg);
-        toast.success("수정 SVG가 저장되었습니다.");
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "SVG 저장 중 오류가 발생했습니다.";
-        setActionError(message);
-        toast.error(message);
-        throw error;
-      }
-    },
-    [jobId, saveEditedSvg]
-  );
-
-  const handleLoadRegionSvg = useCallback(
-    async (regionId: string): Promise<string> => {
-      if (!jobId) {
-        throw new Error("jobId is missing");
-      }
-
-      return loadRegionSvg(jobId, regionId);
-    },
-    [jobId, loadRegionSvg]
-  );
-
   const handleRun = useCallback(async () => {
     if (!jobId) {
       return;
     }
 
-    const canProcess = Boolean(user?.openAiConnected || (user?.credits ?? 0) > 0);
-    if (!canProcess) {
-      toast.error("OpenAI 연결 또는 이미지 구매가 필요합니다", {
-        description: "먼저 OpenAI API key를 연결하거나 이미지를 충전해주세요.",
+    if (!hasSelectedAction) {
+      toast.error("실행할 작업을 하나 이상 선택하세요.");
+      return;
+    }
+
+    if ((user?.credits ?? 0) < requiredCredits) {
+      toast.error("선택한 작업을 실행하기 위한 크레딧이 부족합니다.", {
+        description: "서비스 API 모드에서는 이번 실행 대상 영역 수만큼 먼저 잔액을 확인합니다.",
       });
-      navigate("/connect-openai");
       return;
     }
 
@@ -179,21 +188,26 @@ export function JobDetailPage() {
     setActionError(null);
 
     try {
-      await runPipeline(jobId);
-      consumeCredit(jobId);
-      toast.success("OCR 처리가 완료되었습니다.", {
-        description: user?.openAiConnected
-          ? "사용자 OpenAI API key로 처리되었습니다."
-          : "성공한 작업 1건에 대해 이미지 1개가 차감되었습니다.",
-      });
+      const result = await runPipeline(jobId, executionOptions);
+      await refreshProfile();
+
+      if (result.status === "failed") {
+        toast.error("일부 영역 처리에 실패했습니다.", {
+          description: `성공 ${result.completed_count}개, 실패 ${result.failed_count}개, 차감 ${result.charged_count}크레딧`,
+        });
+      } else {
+        toast.success("선택한 파이프라인 실행이 완료되었습니다.", {
+          description: `이번 실행 차감: ${result.charged_count}크레딧`,
+        });
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "OCR 처리 중 오류가 발생했습니다.";
+      const message = error instanceof Error ? error.message : "파이프라인 실행 중 오류가 발생했습니다.";
       setActionError(message);
       toast.error(message);
     } finally {
       setIsRunning(false);
     }
-  }, [consumeCredit, jobId, navigate, runPipeline, user?.credits, user?.openAiConnected]);
+  }, [executionOptions, hasSelectedAction, jobId, refreshProfile, requiredCredits, runPipeline, user?.credits]);
 
   const handleExport = useCallback(async () => {
     if (!jobId) {
@@ -215,6 +229,7 @@ export function JobDetailPage() {
     }
   }, [exportHwpx, jobId]);
 
+  /** 내보낸 경로를 클립보드로 복사한다. */
   const copyPath = () => {
     if (!job?.hwpxPath) {
       return;
@@ -244,7 +259,7 @@ export function JobDetailPage() {
           <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <h2>작업을 찾을 수 없습니다</h2>
           <p className="text-muted-foreground text-[14px] mt-2">ID: {jobId}</p>
-          {actionError && <p className="text-[14px] text-destructive mt-2">{actionError}</p>}
+          {actionError ? <p className="text-[14px] text-destructive mt-2">{actionError}</p> : null}
           <Button variant="outline" onClick={() => navigate("/workspace")} className="mt-4 gap-2">
             <ArrowLeft className="w-4 h-4" />
             대시보드로 돌아가기
@@ -255,6 +270,8 @@ export function JobDetailPage() {
   }
 
   const currentStep = Math.max(getJobStepIndex(job.status, statusSteps), 0);
+  const runButtonDisabled = isRunning || !hasSelectedAction || (user?.credits ?? 0) < requiredCredits;
+  const selectionDisabled = job.status === "running";
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto">
@@ -290,8 +307,8 @@ export function JobDetailPage() {
                         isDone
                           ? "bg-emerald-500 text-white"
                           : isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground"
                       }`}
                     >
                       {isDone ? (
@@ -310,25 +327,25 @@ export function JobDetailPage() {
                       {step.label}
                     </span>
                   </div>
-                  {index < statusSteps.length - 1 && (
+                  {index < statusSteps.length - 1 ? (
                     <div
                       className={`h-px flex-1 mx-2 ${
                         index < currentStep ? "bg-emerald-500" : "bg-border"
                       }`}
                     />
-                  )}
+                  ) : null}
                 </div>
               );
             })}
           </div>
-          {job.status === "running" && (
+          {job.status === "running" ? (
             <div className="mt-3">
               <Progress value={progress} className="h-1.5" />
               <p className="text-[11px] text-muted-foreground mt-1">
                 {job.regions.filter((region) => region.status === "completed").length} / {job.regions.length} 영역 처리 완료
               </p>
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
@@ -342,7 +359,7 @@ export function JobDetailPage() {
               </CardTitle>
               <CardDescription>
                 이미지 위에 드래그하여 OCR 처리할 영역을 지정하세요.
-                각 영역은 텍스트/도형/혼합 타입을 선택할 수 있습니다.
+                저장된 여러 영역은 순서대로 하나의 HWPX 문서로 합쳐집니다.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -357,7 +374,7 @@ export function JobDetailPage() {
             </CardContent>
           </Card>
 
-          {isResultVisible(job.status) && (
+          {isResultVisible(job.status) ? (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -365,18 +382,14 @@ export function JobDetailPage() {
                   처리 결과
                 </CardTitle>
                 <CardDescription>
-                  각 영역별 OCR 텍스트, 벡터 SVG, 원본 데이터를 확인할 수 있습니다.
+                  각 영역별 OCR 텍스트, Nano Banana 변환 이미지, 원본 크롭을 확인할 수 있습니다.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResultsViewer
-                  regions={job.regions}
-                  onSaveEditedSvg={handleSaveEditedSvg}
-                  onLoadRegionSvg={handleLoadRegionSvg}
-                />
+                <ResultsViewer regions={job.regions} />
               </CardContent>
             </Card>
-          )}
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -386,21 +399,78 @@ export function JobDetailPage() {
                 <Sparkles className="w-4 h-4" />
                 파이프라인 실행
               </CardTitle>
+              <CardDescription>
+                원하는 작업만 선택해서 실행할 수 있습니다.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              {(job.status === "created" || job.status === "regions_pending") && (
-                <div className="text-center py-4">
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                {[
+                  {
+                    id: "do-ocr",
+                    key: "doOcr" as const,
+                    label: "문제 타이핑",
+                    description: "OCR과 수식 추출을 실행합니다.",
+                  },
+                  {
+                    id: "do-image-stylize",
+                    key: "doImageStylize" as const,
+                    label: "이미지 생성",
+                    description: "도형·그림을 Nano Banana 스타일 이미지로 생성합니다.",
+                  },
+                  {
+                    id: "do-explanation",
+                    key: "doExplanation" as const,
+                    label: "해설 작성",
+                    description: "영역별 풀이 해설을 생성합니다.",
+                  },
+                ].map((option) => (
+                  <div key={option.id} className="rounded-xl border p-3">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id={option.id}
+                        checked={executionOptions[option.key]}
+                        disabled={selectionDisabled}
+                        onCheckedChange={(checked) => updateExecutionOption(option.key, checked === true)}
+                        aria-label={option.label}
+                      />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label htmlFor={option.id}>{option.label}</Label>
+                        </div>
+                        <p className="text-[12px] text-muted-foreground">{option.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">이번 실행 차감 예정</span>
+                  <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
+                </div>
+                <p className="mt-1 text-muted-foreground">
+                  서비스 API 모드에서는 새로 처리할 영역 수만큼 잔액을 먼저 확인하고,
+                  실행 후 문제 또는 해설이 생성된 영역만 실제 차감합니다.
+                </p>
+              </div>
+
+              {(job.status === "created" || job.status === "regions_pending") ? (
+                <div className="text-center py-2">
                   <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-[13px] text-muted-foreground">먼저 영역을 지정하고 저장하세요.</p>
                 </div>
-              )}
-              {job.status === "queued" && (
-                <Button onClick={() => void handleRun()} className="w-full gap-2" disabled={isRunning}>
+              ) : null}
+
+              {job.status === "queued" ? (
+                <Button onClick={() => void handleRun()} className="w-full gap-2" disabled={runButtonDisabled}>
                   <Play className="w-4 h-4" />
                   파이프라인 실행
                 </Button>
-              )}
-              {job.status === "running" && (
+              ) : null}
+
+              {job.status === "running" ? (
                 <div className="text-center py-4">
                   <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
                   <p className="text-[13px]">처리 중...</p>
@@ -408,27 +478,33 @@ export function JobDetailPage() {
                     {job.regions.filter((region) => region.status === "completed").length}/{job.regions.length} 영역 완료
                   </p>
                 </div>
-              )}
-              {job.status === "failed" && (
+              ) : null}
+
+              {job.status === "failed" ? (
                 <div className="space-y-3 py-2">
                   <div className="text-center">
                     <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
-                    <p className="text-[13px] text-destructive">OCR 처리 중 오류가 발생했습니다.</p>
-                    <p className="text-[11px] text-muted-foreground mt-1">{job.lastError || "오류 내용을 확인하세요."}</p>
+                    <p className="text-[13px] text-destructive">일부 영역 처리 중 오류가 발생했습니다.</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {exportableRegionCount > 0
+                        ? `결과가 남은 ${exportableRegionCount}개 영역은 HWPX로 내보낼 수 있습니다.`
+                        : job.lastError || "오류 내용을 확인하세요."}
+                    </p>
                   </div>
-                  <Button onClick={() => void handleRun()} className="w-full gap-2" variant="outline" disabled={isRunning}>
+                  <Button onClick={() => void handleRun()} className="w-full gap-2" variant="outline" disabled={runButtonDisabled}>
                     <Play className="w-4 h-4" />
                     재시도
                   </Button>
                 </div>
-              )}
-              {(job.status === "completed" || job.status === "exported") && (
+              ) : null}
+
+              {(job.status === "completed" || job.status === "exported") ? (
                 <div className="text-center py-4">
                   <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
                   <p className="text-[13px] text-emerald-600">파이프라인 완료</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">모든 영역이 성공적으로 처리되었습니다.</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">선택한 작업이 성공적으로 처리되었습니다.</p>
                 </div>
-              )}
+              ) : null}
             </CardContent>
           </Card>
 
@@ -440,9 +516,13 @@ export function JobDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {job.status !== "completed" && job.status !== "exported" ? (
+              {!canExportHwpx ? (
                 <div className="text-center py-4">
-                  <p className="text-[13px] text-muted-foreground">파이프라인 완료 후 내보내기가 가능합니다.</p>
+                  <p className="text-[13px] text-muted-foreground">
+                    {job.status === "failed"
+                      ? "문제 또는 해설 텍스트가 있는 영역이 있어야 내보낼 수 있습니다."
+                      : "문제 또는 해설이 생성된 뒤 내보내기가 가능합니다."}
+                  </p>
                 </div>
               ) : job.status === "exported" ? (
                 <div className="space-y-3">
@@ -477,13 +557,13 @@ export function JobDetailPage() {
             </CardContent>
           </Card>
 
-          {actionError && (
+          {actionError ? (
             <Card>
               <CardContent className="py-3">
                 <p className="text-[12px] text-destructive">{actionError}</p>
               </CardContent>
             </Card>
-          )}
+          ) : null}
 
           <Card>
             <CardHeader>
@@ -508,7 +588,7 @@ export function JobDetailPage() {
                       {api.method}
                     </Badge>
                     <span className="font-mono truncate flex-1">{api.path}</span>
-                    {api.done && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
+                    {api.done ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : null}
                   </div>
                 ))}
               </div>

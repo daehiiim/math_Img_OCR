@@ -24,72 +24,57 @@ function makeRegion(overrides: Partial<Region> = {}): Region {
 
 async function openSvgTab(): Promise<void> {
   const user = userEvent.setup();
-  await user.click(screen.getByRole("tab", { name: /svg 벡터/i }));
+  await user.click(screen.getByRole("tab", { name: /이미지 미리보기/i }));
 }
 
 describe("ResultsViewer", () => {
-  it("완료된 영역에는 OCR 결과, SVG 벡터, 해설 탭만 노출한다", () => {
+  it("완료된 영역에는 OCR 결과, 이미지 미리보기, 해설 탭만 노출한다", () => {
     const region = makeRegion({
       explanation: "해설 텍스트",
       mathml: "<math>x+1</math>",
     });
 
-    render(
-      <ResultsViewer
-        regions={[region]}
-        onSaveEditedSvg={vi.fn(async () => undefined)}
-        onLoadRegionSvg={vi.fn(async () => "<svg />")}
-      />
-    );
+    render(<ResultsViewer regions={[region]} />);
 
     expect(screen.getByRole("tab", { name: /ocr 결과/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /svg 벡터/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /이미지 미리보기/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /해설/i })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /mathml/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /raw/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /svg 도형 편집/i })).not.toBeInTheDocument();
   });
 
-  it("원본 signed SVG 미리보기 URL을 그대로 유지한다", async () => {
+  it("생성된 이미지가 있으면 미리보기 탭에서 노출한다", async () => {
     const region = makeRegion({
-      svgUrl: "https://signed.example/q1.svg?token=abc",
+      imageCropUrl: "https://signed.example/q1.image_crop.png?token=orig",
+      styledImageUrl: "https://signed.example/q1.styled.png?token=styled",
     });
 
-    render(
-      <ResultsViewer
-        regions={[region]}
-        onSaveEditedSvg={vi.fn(async () => undefined)}
-        onLoadRegionSvg={vi.fn(async () => "<svg />")}
-      />
-    );
+    render(<ResultsViewer regions={[region]} />);
 
     await openSvgTab();
 
-    expect(screen.getByAltText("q1 svg")).toHaveAttribute(
+    expect(screen.getByAltText("q1 styled image")).toHaveAttribute(
       "src",
-      "https://signed.example/q1.svg?token=abc"
+      "https://signed.example/q1.styled.png?token=styled"
     );
   });
 
-  it("수정본 signed SVG 미리보기 URL에는 version 파라미터를 안전하게 붙인다", async () => {
+  it("원본 이미지와 생성 이미지를 함께 보여준다", async () => {
     const region = makeRegion({
-      svgUrl: "https://signed.example/q1.svg?token=orig",
-      editedSvgUrl: "https://signed.example/q1.edited.svg?token=edit",
-      editedSvgVersion: 3,
+      imageCropUrl: "https://signed.example/q1.image_crop.png?token=orig",
+      styledImageUrl: "https://signed.example/q1.styled.png?token=styled",
     });
 
-    render(
-      <ResultsViewer
-        regions={[region]}
-        onSaveEditedSvg={vi.fn(async () => undefined)}
-        onLoadRegionSvg={vi.fn(async () => "<svg />")}
-      />
-    );
+    render(<ResultsViewer regions={[region]} />);
 
     await openSvgTab();
 
-    expect(screen.getByAltText("q1 svg")).toHaveAttribute(
+    expect(screen.getByAltText("q1 original image")).toHaveAttribute(
       "src",
-      "https://signed.example/q1.edited.svg?token=edit&v=3"
+      "https://signed.example/q1.image_crop.png?token=orig"
+    );
+    expect(screen.getByAltText("q1 styled image")).toHaveAttribute(
+      "src",
+      "https://signed.example/q1.styled.png?token=styled"
     );
   });
 
@@ -98,13 +83,7 @@ describe("ResultsViewer", () => {
       ocrText: "정답은 <math>x+1</math> 입니다",
     });
 
-    render(
-      <ResultsViewer
-        regions={[region]}
-        onSaveEditedSvg={vi.fn(async () => undefined)}
-        onLoadRegionSvg={vi.fn(async () => "<svg />")}
-      />
-    );
+    render(<ResultsViewer regions={[region]} />);
 
     const panel = screen.getByRole("tabpanel", { name: /ocr 결과/i });
 
@@ -120,13 +99,7 @@ describe("ResultsViewer", () => {
       explanation: "해설은 <math>AB</math> 입니다",
     });
 
-    render(
-      <ResultsViewer
-        regions={[region]}
-        onSaveEditedSvg={vi.fn(async () => undefined)}
-        onLoadRegionSvg={vi.fn(async () => "<svg />")}
-      />
-    );
+    render(<ResultsViewer regions={[region]} />);
 
     await user.click(screen.getByRole("tab", { name: /해설/i }));
 
@@ -136,5 +109,20 @@ describe("ResultsViewer", () => {
     expect(within(panel).getByText("AB")).toBeInTheDocument();
     expect(within(panel).queryByText(/<math>/i)).not.toBeInTheDocument();
     expect(within(panel).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("실패 상태여도 텍스트가 남아 있으면 결과 탭을 유지한다", () => {
+    const region = makeRegion({
+      status: "failed",
+      ocrText: "남은 문제",
+      explanation: "남은 해설",
+      errorReason: "image failed",
+    });
+
+    render(<ResultsViewer regions={[region]} />);
+
+    expect(screen.getByText(/영역 처리 경고: image failed/i)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /ocr 결과/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /해설/i })).toBeInTheDocument();
   });
 });

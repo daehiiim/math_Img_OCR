@@ -1,13 +1,12 @@
 import React, { createContext, useContext } from "react";
-import { useJobStore, type Job, type Region } from "../store/jobStore";
+import { useJobStore, type Job, type JobExecutionOptions, type Region } from "../store/jobStore";
+import type { RunPipelineResult } from "../api/jobApi";
 
 interface JobContextType {
   jobs: Job[];
   createJob: (fileName: string, imageUrl: string, width: number, height: number, imageFile: File) => Promise<string>;
   saveRegions: (jobId: string, regions: Region[]) => Promise<void>;
-  runPipeline: (jobId: string) => Promise<void>;
-  saveEditedSvg: (jobId: string, regionId: string, svg: string) => Promise<void>;
-  loadRegionSvg: (jobId: string, regionId: string) => Promise<string>;
+  runPipeline: (jobId: string, options: JobExecutionOptions) => Promise<RunPipelineResult>;
   hydrateJob: (jobId: string) => Promise<Job>;
   exportHwpx: (jobId: string) => Promise<void>;
   deleteJob: (jobId: string) => void;

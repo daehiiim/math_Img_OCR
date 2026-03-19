@@ -231,6 +231,19 @@ def test_execute_hwpx_export_wraps_exporter_error(monkeypatch):
     job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes())
     prepared_job = copy.deepcopy(job)
     prepared_job.status = "completed"
+    prepared_job.regions = [
+        RegionPipelineContext(
+            context=RegionContext(
+                id="q1",
+                polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
+                type="mixed",
+                order=1,
+            ),
+            extractor=ExtractorContext(ocr_text="문제"),
+            status="completed",
+            success=True,
+        )
+    ]
     repository.save_job(user, prepared_job)
 
     exporter_module = importlib.import_module("app.pipeline.exporter")
@@ -265,19 +278,27 @@ def test_run_pipeline_uses_user_api_key_and_persists_processing_type(monkeypatch
 
     analyze_calls: list[str] = []
 
-    def fake_analyze_region_with_gpt(root_path: Path, crop_image_bytes: bytes, region_type: str, api_key: str | None = None):
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
         analyze_calls.append(api_key or "")
         return {
             "ocr_text": "문제",
             "mathml": "<math>x</math>",
-            "diagram_svg": "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'/>",
+            "has_stylizable_image": False,
+            "image_bbox": None,
             "model_used": "gpt-test",
             "openai_request_id": "req-test",
         }
 
     monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
     monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "설명")
-    monkeypatch.setattr(orchestrator, "render_svg_to_png", lambda svg_text, png_path: png_path.write_bytes(make_png_bytes(10, 10)))
 
     result = orchestrator.run_pipeline(
         user,
@@ -290,3 +311,248 @@ def test_run_pipeline_uses_user_api_key_and_persists_processing_type(monkeypatch
     assert result["status"] == "completed"
     assert analyze_calls == ["sk-user-1234567890"]
     assert saved_job.processing_type == "user_api_key"
+
+
+def test_run_pipeline_saves_styled_image_when_detector_finds_visual(monkeypatch):
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(40, 30))
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [20, 0], [20, 20], [0, 20]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "문제",
+            "mathml": "<math>x</math>",
+            "has_stylizable_image": True,
+            "image_bbox": [2, 2, 12, 12],
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    def fake_generate_styled_image(root_path: Path, image_bytes: bytes, *, model_name: str) -> bytes:
+        return make_png_bytes(12, 12)
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "설명")
+    monkeypatch.setattr(orchestrator, "generate_styled_image_with_nano_banana", fake_generate_styled_image)
+
+    result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=True,
+        do_image_stylize=True,
+        do_explanation=True,
+        nano_banana_model="gemini-3-pro-image-preview",
+    )
+    saved_job = orchestrator.read_job(user, job.job_id)
+    saved_region = saved_job.regions[0]
+
+    assert result["status"] == "completed"
+    assert result["executed_actions"] == ["ocr", "image_stylize", "explanation"]
+    assert saved_region.figure.crop_url in repository.assets
+    assert saved_region.figure.image_crop_url in repository.assets
+    assert saved_region.figure.styled_image_url in repository.assets
+    assert saved_region.figure.styled_image_model == "gemini-3-pro-image-preview"
+    assert saved_region.figure.svg_url is None
+    assert saved_region.figure.png_rendered_url is None
+
+
+def test_run_pipeline_skips_image_generation_when_detector_finds_no_visual(monkeypatch):
+    install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(40, 30))
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [20, 0], [20, 20], [0, 20]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "",
+            "mathml": "",
+            "has_stylizable_image": False,
+            "image_bbox": None,
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    styled_calls: list[str] = []
+
+    def fake_generate_styled_image(root_path: Path, image_bytes: bytes, *, model_name: str) -> bytes:
+        styled_calls.append(model_name)
+        return make_png_bytes(12, 12)
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_styled_image_with_nano_banana", fake_generate_styled_image)
+
+    result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-service-123",
+        processing_type="service_api",
+        do_ocr=False,
+        do_image_stylize=True,
+        do_explanation=False,
+        nano_banana_model="gemini-2.5-flash-image",
+    )
+    saved_job = orchestrator.read_job(user, job.job_id)
+
+    assert result["status"] == "failed"
+    assert result["completed_count"] == 0
+    assert result["failed_count"] == 1
+    assert result["exportable_count"] == 0
+    assert result["executed_actions"] == []
+    assert styled_calls == []
+    assert saved_job.regions[0].status == "failed"
+    assert saved_job.regions[0].figure.image_crop_url is None
+    assert saved_job.regions[0].figure.styled_image_url is None
+
+
+def test_run_pipeline_keeps_text_and_explanation_when_image_generation_fails(monkeypatch):
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(40, 30))
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [20, 0], [20, 20], [0, 20]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "문제 본문",
+            "mathml": "<math>x</math>",
+            "has_stylizable_image": True,
+            "image_bbox": [2, 2, 12, 12],
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "해설 본문")
+    monkeypatch.setattr(
+        orchestrator,
+        "generate_styled_image_with_nano_banana",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("style failed")),
+    )
+
+    result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-service-123",
+        processing_type="service_api",
+        do_ocr=True,
+        do_image_stylize=True,
+        do_explanation=True,
+        nano_banana_model="gemini-2.5-flash-image",
+    )
+    saved_job = orchestrator.read_job(user, job.job_id)
+    saved_region = saved_job.regions[0]
+
+    assert result["status"] == "completed"
+    assert result["completed_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["exportable_count"] == 1
+    assert saved_region.status == "completed"
+    assert saved_region.extractor.ocr_text == "문제 본문"
+    assert saved_region.extractor.explanation == "해설 본문"
+    assert saved_region.figure.styled_image_url is None
+    assert saved_region.error_reason == "style failed"
+
+
+def test_run_pipeline_returns_partial_failure_counts(monkeypatch):
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(40, 30))
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [20, 0], [20, 20], [0, 20]], "type": "mixed", "order": 1},
+            {"id": "q2", "polygon": [[20, 0], [40, 0], [40, 20], [20, 20]], "type": "mixed", "order": 2},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        if fake_analyze_region_with_gpt.calls == 0:
+            fake_analyze_region_with_gpt.calls += 1
+            return {
+                "ocr_text": "첫 번째 문제",
+                "mathml": "<math>a</math>",
+                "has_stylizable_image": False,
+                "image_bbox": None,
+                "model_used": "gpt-test",
+                "openai_request_id": "req-test-1",
+            }
+        fake_analyze_region_with_gpt.calls += 1
+        raise RuntimeError("ocr failed")
+
+    fake_analyze_region_with_gpt.calls = 0
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "해설")
+
+    result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-service-123",
+        processing_type="service_api",
+        do_ocr=True,
+        do_image_stylize=False,
+        do_explanation=True,
+    )
+    saved_job = orchestrator.read_job(user, job.job_id)
+
+    assert result["status"] == "failed"
+    assert result["completed_count"] == 1
+    assert result["failed_count"] == 1
+    assert result["exportable_count"] == 1
+    assert saved_job.regions[0].status == "completed"
+    assert saved_job.regions[1].status == "failed"
+    assert saved_job.regions[0].extractor.ocr_text == "첫 번째 문제"
+    assert saved_job.regions[1].extractor.ocr_text is None

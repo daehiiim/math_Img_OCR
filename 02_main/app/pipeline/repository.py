@@ -84,6 +84,72 @@ class SupabasePipelineRepository:
         """사용자 JWT가 포함된 Supabase 클라이언트를 만든다."""
         return SupabaseClient(self._config, user.access_token)
 
+    def _map_region_row(self, row: dict) -> RegionPipelineContext:
+        """영역 row를 파이프라인 컨텍스트로 변환한다."""
+        status = row.get("status") or "pending"
+        return RegionPipelineContext(
+            context=RegionContext(
+                id=str(row["region_key"]),
+                polygon=row.get("polygon") or [],
+                type=row.get("region_type") or "mixed",
+                order=int(row.get("region_order") or 1),
+            ),
+            extractor=ExtractorContext(
+                ocr_text=row.get("ocr_text"),
+                explanation=row.get("explanation"),
+                mathml=row.get("mathml"),
+                model_used=row.get("model_used"),
+                openai_request_id=row.get("openai_request_id"),
+            ),
+            figure=FigureContext(
+                svg_url=row.get("svg_path"),
+                crop_url=row.get("crop_path"),
+                image_crop_url=row.get("image_crop_path"),
+                styled_image_url=row.get("styled_image_path"),
+                styled_image_model=row.get("styled_image_model"),
+                edited_svg_url=row.get("edited_svg_path"),
+                edited_svg_version=int(row.get("edited_svg_version") or 0),
+                png_rendered_url=row.get("png_rendered_path"),
+            ),
+            status=status,
+            success=(status == "completed") if row.get("status") is not None else None,
+            error_reason=row.get("error_reason"),
+            processing_ms=row.get("processing_ms"),
+            was_charged=bool(row.get("was_charged") or False),
+            charged_at=row.get("charged_at"),
+        )
+
+    def _build_region_payload(self, job: JobPipelineContext) -> list[dict[str, object]]:
+        """영역 목록을 upsert payload로 변환한다."""
+        return [
+            {
+                "job_id": job.job_id,
+                "region_key": region.context.id,
+                "polygon": region.context.polygon,
+                "region_type": region.context.type,
+                "region_order": region.context.order,
+                "status": region.status,
+                "ocr_text": region.extractor.ocr_text,
+                "explanation": region.extractor.explanation,
+                "mathml": region.extractor.mathml,
+                "model_used": region.extractor.model_used,
+                "openai_request_id": region.extractor.openai_request_id,
+                "svg_path": region.figure.svg_url,
+                "edited_svg_path": region.figure.edited_svg_url,
+                "edited_svg_version": region.figure.edited_svg_version,
+                "crop_path": region.figure.crop_url,
+                "image_crop_path": region.figure.image_crop_url,
+                "styled_image_path": region.figure.styled_image_url,
+                "styled_image_model": region.figure.styled_image_model,
+                "png_rendered_path": region.figure.png_rendered_url,
+                "processing_ms": region.processing_ms,
+                "error_reason": region.error_reason,
+                "was_charged": region.was_charged,
+                "charged_at": region.charged_at,
+            }
+            for region in job.regions
+        ]
+
     def create_job(
         self,
         user: PipelineUserContext,
@@ -147,42 +213,14 @@ class SupabasePipelineRepository:
         region_rows = client.select(
             "ocr_job_regions",
             params={
-                "select": "region_key,polygon,region_type,region_order,status,ocr_text,explanation,mathml,model_used,openai_request_id,svg_path,edited_svg_path,edited_svg_version,crop_path,png_rendered_path,processing_ms,error_reason",
+                "select": "region_key,polygon,region_type,region_order,status,ocr_text,explanation,mathml,model_used,openai_request_id,svg_path,edited_svg_path,edited_svg_version,crop_path,image_crop_path,styled_image_path,styled_image_model,png_rendered_path,processing_ms,error_reason,was_charged,charged_at",
                 "job_id": f"eq.{job_id}",
                 "order": "region_order.asc",
             },
         )
 
         job_row = job_rows[0]
-        regions = [
-            RegionPipelineContext(
-                context=RegionContext(
-                    id=str(row["region_key"]),
-                    polygon=row.get("polygon") or [],
-                    type=row.get("region_type") or "mixed",
-                    order=int(row.get("region_order") or 1),
-                ),
-                extractor=ExtractorContext(
-                    ocr_text=row.get("ocr_text"),
-                    explanation=row.get("explanation"),
-                    mathml=row.get("mathml"),
-                    model_used=row.get("model_used"),
-                    openai_request_id=row.get("openai_request_id"),
-                ),
-                figure=FigureContext(
-                    svg_url=row.get("svg_path"),
-                    crop_url=row.get("crop_path"),
-                    edited_svg_url=row.get("edited_svg_path"),
-                    edited_svg_version=int(row.get("edited_svg_version") or 0),
-                    png_rendered_url=row.get("png_rendered_path"),
-                ),
-                status=row.get("status") or "pending",
-                success=(row.get("status") == "completed") if row.get("status") is not None else None,
-                error_reason=row.get("error_reason"),
-                processing_ms=row.get("processing_ms"),
-            )
-            for row in region_rows
-        ]
+        regions = [self._map_region_row(row) for row in region_rows]
 
         return JobPipelineContext(
             job_id=str(job_row["id"]),
@@ -235,30 +273,11 @@ class SupabasePipelineRepository:
         if not job.regions:
             return
 
-        payload = [
-            {
-                "job_id": job.job_id,
-                "region_key": region.context.id,
-                "polygon": region.context.polygon,
-                "region_type": region.context.type,
-                "region_order": region.context.order,
-                "status": region.status,
-                "ocr_text": region.extractor.ocr_text,
-                "explanation": region.extractor.explanation,
-                "mathml": region.extractor.mathml,
-                "model_used": region.extractor.model_used,
-                "openai_request_id": region.extractor.openai_request_id,
-                "svg_path": region.figure.svg_url,
-                "edited_svg_path": region.figure.edited_svg_url,
-                "edited_svg_version": region.figure.edited_svg_version,
-                "crop_path": region.figure.crop_url,
-                "png_rendered_path": region.figure.png_rendered_url,
-                "processing_ms": region.processing_ms,
-                "error_reason": region.error_reason,
-            }
-            for region in job.regions
-        ]
-        client.upsert("ocr_job_regions", payload=payload, on_conflict="job_id,region_key")
+        client.upsert(
+            "ocr_job_regions",
+            payload=self._build_region_payload(job),
+            on_conflict="job_id,region_key",
+        )
 
     def upload_bytes(
         self,

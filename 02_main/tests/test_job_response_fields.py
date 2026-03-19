@@ -69,6 +69,9 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
         figure=FigureContext(
             svg_url=f"{user.user_id}/{job.job_id}/outputs/q1.svg",
             crop_url=f"{user.user_id}/{job.job_id}/outputs/q1_crop.png",
+            image_crop_url=f"{user.user_id}/{job.job_id}/outputs/q1.image_crop.png",
+            styled_image_url=f"{user.user_id}/{job.job_id}/outputs/q1.styled.png",
+            styled_image_model="gemini-3-pro-image-preview",
             edited_svg_url=f"{user.user_id}/{job.job_id}/outputs/q1.edited.latest.svg",
             edited_svg_version=3,
         ),
@@ -95,6 +98,9 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
     assert payload["regions"][0]["polygon"] == [[1, 2], [21, 2], [21, 12], [1, 12]]
     assert payload["regions"][0]["svg_url"].startswith("https://signed.example/")
     assert payload["regions"][0]["crop_url"].startswith("https://signed.example/")
+    assert payload["regions"][0]["image_crop_url"].startswith("https://signed.example/")
+    assert payload["regions"][0]["styled_image_url"].startswith("https://signed.example/")
+    assert payload["regions"][0]["styled_image_model"] == "gemini-3-pro-image-preview"
     assert payload["regions"][0]["edited_svg_url"].startswith("https://signed.example/")
     assert payload["regions"][0]["edited_svg_version"] == 3
 

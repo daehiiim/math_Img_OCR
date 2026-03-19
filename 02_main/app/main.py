@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
@@ -68,6 +68,9 @@ class RegionResult(BaseModel):
     mathml: str | None = None
     svg_url: str | None = None
     crop_url: str | None = None
+    image_crop_url: str | None = None
+    styled_image_url: str | None = None
+    styled_image_model: str | None = None
     processing_ms: int | None = None
     success: bool | None = None
     error_reason: str | None = None
@@ -75,6 +78,8 @@ class RegionResult(BaseModel):
     openai_request_id: str | None = None
     edited_svg_url: str | None = None
     edited_svg_version: int | None = None
+    was_charged: bool = False
+    charged_at: str | None = None
 
 
 class JobResponse(BaseModel):
@@ -85,10 +90,28 @@ class JobResponse(BaseModel):
     image_width: int | None = None
     image_height: int | None = None
     regions: list[RegionResult] = Field(default_factory=list)
+    last_error: str | None = None
+    hwpx_export_path: str | None = None
+
+
+class RunJobResponse(BaseModel):
+    job_id: str
+    status: Literal["completed", "failed"]
+    executed_actions: list[Literal["ocr", "image_stylize", "explanation"]] = Field(default_factory=list)
+    charged_count: int = 0
+    completed_count: int = 0
+    failed_count: int = 0
+    exportable_count: int = 0
 
 
 class EditedSvgRequest(BaseModel):
     svg: str
+
+
+class RunJobRequest(BaseModel):
+    do_ocr: bool = True
+    do_image_stylize: bool = True
+    do_explanation: bool = True
 
 
 class CheckoutSessionRequest(BaseModel):
@@ -130,6 +153,8 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
         image_url=_signed_asset_url(current_user, job.image_url),
         image_width=job.image_width,
         image_height=job.image_height,
+        last_error=job.last_error,
+        hwpx_export_path=job.hwpx_export_path,
         regions=[
             RegionResult(
                 id=region.context.id,
@@ -142,6 +167,9 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
                 mathml=region.extractor.mathml,
                 svg_url=_signed_asset_url(current_user, region.figure.svg_url),
                 crop_url=_signed_asset_url(current_user, region.figure.crop_url),
+                image_crop_url=_signed_asset_url(current_user, region.figure.image_crop_url),
+                styled_image_url=_signed_asset_url(current_user, region.figure.styled_image_url),
+                styled_image_model=region.figure.styled_image_model,
                 processing_ms=region.processing_ms,
                 success=region.success,
                 error_reason=region.error_reason,
@@ -149,6 +177,8 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
                 openai_request_id=region.extractor.openai_request_id,
                 edited_svg_url=_signed_asset_url(current_user, region.figure.edited_svg_url),
                 edited_svg_version=region.figure.edited_svg_version,
+                was_charged=region.was_charged,
+                charged_at=region.charged_at,
             )
             for region in job.regions
         ],
@@ -191,23 +221,46 @@ def save_regions(
         raise HTTPException(status_code=400, detail=str(error))
 
 
-@app.post("/jobs/{job_id}/run")
+@app.post("/jobs/{job_id}/run", response_model=RunJobResponse)
 def run_pipeline(
     job_id: str,
+    payload: RunJobRequest | None = Body(default=None),
     current_user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> dict:
     """OCR 파이프라인을 실행한다."""
     try:
-        openai_key = _get_billing_service().resolve_openai_api_key(current_user)
+        run_request = payload or RunJobRequest()
+        if not (run_request.do_ocr or run_request.do_image_stylize or run_request.do_explanation):
+            raise ValueError("at least one action must be selected")
+
+        billing_service = _get_billing_service()
+        openai_key = billing_service.resolve_openai_api_key(current_user)
+        billing_service.ensure_job_region_credits_available(
+            current_user,
+            job_id,
+            processing_type=openai_key.processing_type,
+        )
         result = pipeline.run_pipeline(
             current_user,
             job_id,
             api_key=openai_key.api_key,
             processing_type=openai_key.processing_type,
+            do_ocr=run_request.do_ocr,
+            do_image_stylize=run_request.do_image_stylize,
+            do_explanation=run_request.do_explanation,
+            nano_banana_model=get_settings(ROOT).nano_banana_model,
         )
-        if result.get("status") == "completed":
-            _get_billing_service().consume_job_credit(current_user, job_id)
-        return result
+        charge_result = {"charged_count": 0}
+        if result.get("status") in ("completed", "failed", "exported"):
+            charge_result = billing_service.consume_job_region_credits(
+                current_user,
+                job_id,
+                processing_type=openai_key.processing_type,
+            )
+        return {
+            **result,
+            "charged_count": int(charge_result.get("charged_count") or 0),
+        }
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
     except ValueError as error:

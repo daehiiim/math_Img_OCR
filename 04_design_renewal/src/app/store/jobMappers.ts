@@ -30,14 +30,15 @@ function mapBackendRegion(region: BackendJob["regions"][number], fallback?: Regi
     ocrText: region.ocr_text ?? undefined,
     explanation: region.explanation ?? undefined,
     mathml: region.mathml ?? undefined,
-    svgUrl: resolveRuntimePath(region.svg_url),
     cropUrl: resolveRuntimePath(region.crop_url),
+    imageCropUrl: resolveRuntimePath(region.image_crop_url),
+    styledImageUrl: resolveRuntimePath(region.styled_image_url),
+    styledImageModel: region.styled_image_model ?? undefined,
     processingMs: region.processing_ms ?? undefined,
     success: region.success ?? undefined,
     errorReason: region.error_reason ?? undefined,
-    editedSvgUrl: resolveRuntimePath(region.edited_svg_url),
-    editedSvgVersion: region.edited_svg_version ?? undefined,
-    svgData: fallback?.svgData,
+    wasCharged: region.was_charged ?? fallback?.wasCharged ?? false,
+    chargedAt: region.charged_at ?? fallback?.chargedAt ?? undefined,
   };
 }
 
@@ -58,7 +59,7 @@ export function mapBackendJob(backend: BackendJob, local: Job | null): Job {
     status: normalizeJobStatus(backend.status),
     regions: backend.regions.map((region) => mapBackendRegion(region, previousRegions.get(region.id))),
     createdAt: local?.createdAt ?? new Date().toISOString(),
-    hwpxPath: local?.hwpxPath,
-    lastError: local?.lastError,
+    hwpxPath: resolveRuntimePath(backend.hwpx_export_path) ?? local?.hwpxPath,
+    lastError: backend.last_error ?? local?.lastError,
   };
 }

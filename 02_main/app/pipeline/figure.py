@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageColor, ImageDraw
@@ -29,6 +30,21 @@ def crop_region_image(image_path: Path, polygon: list[list[float]], output_path:
     with Image.open(image_path) as img:
         img = img.convert("RGB")
         left, top, right, bottom = polygon_bbox(polygon, img.width, img.height)
+        cropped = img.crop((left, top, right, bottom))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        cropped.save(output_path, format="PNG")
+    return output_path.read_bytes()
+
+
+def crop_image_bytes(image_bytes: bytes, bbox: list[int], output_path: Path) -> bytes:
+    """메모리 이미지 바이트에서 bbox 영역만 잘라 PNG로 저장한다."""
+    with Image.open(BytesIO(image_bytes)) as img:
+        img = img.convert("RGB")
+        left, top, right, bottom = [int(value) for value in bbox]
+        left = max(0, min(left, img.width - 1))
+        top = max(0, min(top, img.height - 1))
+        right = max(left + 1, min(right, img.width))
+        bottom = max(top + 1, min(bottom, img.height))
         cropped = img.crop((left, top, right, bottom))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         cropped.save(output_path, format="PNG")
