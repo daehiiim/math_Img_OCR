@@ -82,6 +82,7 @@ docker compose up --build
 - 각 상품 metadata 키는 정확히 `plan_id`, `credits`를 사용해야 한다.
 - `plan_id` 값은 각각 `single`, `starter`, `pro`와 일치해야 한다.
 - Cloud Run 환경변수 `POLAR_PRODUCT_*`는 Polar Dashboard의 실제 Product ID와 동일해야 한다.
+- Cloud Run 배포 절차와 same-origin rewrite 계약은 `docs/cloud_run_supabase_free_runbook_ko.md`를 기준으로 관리한다.
 
 ## Polar production 사전 점검
 
@@ -132,4 +133,5 @@ pytest -q tests/test_auth.py tests/test_billing.py tests/test_job_response_field
 ```
 
 운영 연동 체크리스트는 `docs/polar_production_runbook_ko.md`를 참고한다.
+Cloud Run 운영 런북은 `docs/cloud_run_supabase_free_runbook_ko.md`를 참고한다.
 로컬 sandbox 리허설은 `docs/polar_sandbox_runbook_ko.md`를 참고한다.

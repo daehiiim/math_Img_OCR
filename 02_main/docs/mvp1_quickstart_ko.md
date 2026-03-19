@@ -64,4 +64,5 @@ pytest -q tests/test_job_response_fields.py
 ```
 
 운영 연동은 `polar_production_runbook_ko.md`를 기준으로 진행한다.
+Cloud Run 운영 전환은 `cloud_run_supabase_free_runbook_ko.md`를 기준으로 진행한다.
 로컬 sandbox 리허설은 `polar_sandbox_runbook_ko.md`를 참고한다.

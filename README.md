@@ -64,11 +64,13 @@ docker compose up --build
 - Cloud Run 운영 환경에는 `POLAR_SERVER=production`, live `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_*` 3개를 반드시 같이 설정합니다.
 - Polar production 상품 3개는 모두 `one-time`, `KRW` 고정 가격이어야 하며 metadata 키 `plan_id`, `credits`를 유지해야 합니다.
 - 비밀값 회전 순서는 `새 비밀값 등록 -> Cloud Run 재배포 -> 운영 검증 -> 구 비밀값 폐기` 순서를 유지합니다.
+- 세부 운영 순서와 검증 체크리스트는 `02_main/docs/cloud_run_supabase_free_runbook_ko.md`를 기준으로 관리합니다.
 
 ## 주요 문서
 
 - 백엔드 가이드: `02_main/README.md`
 - 백엔드 빠른 시작: `02_main/docs/mvp1_quickstart_ko.md`
+- Cloud Run 운영 런북: `02_main/docs/cloud_run_supabase_free_runbook_ko.md`
 - Polar production 런북: `02_main/docs/polar_production_runbook_ko.md`
 - Polar sandbox 런북: `02_main/docs/polar_sandbox_runbook_ko.md`
 - 구현 계획 문서: `docs/plans/*`
