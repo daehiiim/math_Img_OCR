@@ -29,6 +29,9 @@ export interface BackendRegion {
   success?: boolean | null;
   error_reason?: string | null;
   was_charged?: boolean | null;
+  ocr_charged?: boolean | null;
+  image_charged?: boolean | null;
+  explanation_charged?: boolean | null;
   charged_at?: string | null;
 }
 

@@ -116,6 +116,9 @@ class SupabasePipelineRepository:
             error_reason=row.get("error_reason"),
             processing_ms=row.get("processing_ms"),
             was_charged=bool(row.get("was_charged") or False),
+            ocr_charged=bool(row.get("ocr_charged") or False),
+            image_charged=bool(row.get("image_charged") or False),
+            explanation_charged=bool(row.get("explanation_charged") or False),
             charged_at=row.get("charged_at"),
         )
 
@@ -145,6 +148,9 @@ class SupabasePipelineRepository:
                 "processing_ms": region.processing_ms,
                 "error_reason": region.error_reason,
                 "was_charged": region.was_charged,
+                "ocr_charged": region.ocr_charged,
+                "image_charged": region.image_charged,
+                "explanation_charged": region.explanation_charged,
                 "charged_at": region.charged_at,
             }
             for region in job.regions
@@ -213,7 +219,7 @@ class SupabasePipelineRepository:
         region_rows = client.select(
             "ocr_job_regions",
             params={
-                "select": "region_key,polygon,region_type,region_order,status,ocr_text,explanation,mathml,model_used,openai_request_id,svg_path,edited_svg_path,edited_svg_version,crop_path,image_crop_path,styled_image_path,styled_image_model,png_rendered_path,processing_ms,error_reason,was_charged,charged_at",
+                "select": "region_key,polygon,region_type,region_order,status,ocr_text,explanation,mathml,model_used,openai_request_id,svg_path,edited_svg_path,edited_svg_version,crop_path,image_crop_path,styled_image_path,styled_image_model,png_rendered_path,processing_ms,error_reason,was_charged,ocr_charged,image_charged,explanation_charged,charged_at",
                 "job_id": f"eq.{job_id}",
                 "order": "region_order.asc",
             },

@@ -33,6 +33,9 @@ export interface Region {
   success?: boolean;
   errorReason?: string;
   wasCharged?: boolean;
+  ocrCharged?: boolean;
+  imageCharged?: boolean;
+  explanationCharged?: boolean;
   chargedAt?: string;
 }
 

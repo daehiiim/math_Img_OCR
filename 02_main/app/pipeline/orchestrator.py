@@ -117,14 +117,30 @@ def _is_region_exportable(region: RegionPipelineContext) -> bool:
 
 
 def _should_skip_region(region: RegionPipelineContext) -> bool:
-    """이미 완료되고 과금까지 끝난 영역은 재실행에서 제외한다."""
-    return region.status == "completed" and region.was_charged
+    """액션 재실행 정책상 모든 영역을 다시 처리 대상으로 유지한다."""
+    return False
 
 
-def _reset_region_outputs(region: RegionPipelineContext) -> None:
-    """재실행 대상 영역의 이전 산출물을 초기화한다."""
-    region.extractor = RegionPipelineContext(context=region.context).extractor
-    region.figure = RegionPipelineContext(context=region.context).figure
+def _reset_region_outputs(
+    region: RegionPipelineContext,
+    *,
+    do_ocr: bool,
+    do_image_stylize: bool,
+    do_explanation: bool,
+) -> None:
+    """선택한 액션에 해당하는 산출물만 초기화한다."""
+    if do_ocr:
+        region.extractor.ocr_text = None
+        region.extractor.mathml = None
+    if do_explanation:
+        region.extractor.explanation = None
+    region.extractor.model_used = None
+    region.extractor.openai_request_id = None
+    region.figure.crop_url = None
+    if do_image_stylize:
+        region.figure.image_crop_url = None
+        region.figure.styled_image_url = None
+        region.figure.styled_image_model = None
     region.status = "running"
     region.success = None
     region.error_reason = None
@@ -325,7 +341,12 @@ def run_pipeline(
     for region in job.regions:
         if _should_skip_region(region):
             continue
-        _reset_region_outputs(region)
+        _reset_region_outputs(
+            region,
+            do_ocr=do_ocr,
+            do_image_stylize=do_image_stylize,
+            do_explanation=do_explanation,
+        )
     save_job(user, job)
 
     executed_action_flags = {

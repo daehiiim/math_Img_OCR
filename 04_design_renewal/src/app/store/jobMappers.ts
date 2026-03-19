@@ -38,6 +38,9 @@ function mapBackendRegion(region: BackendJob["regions"][number], fallback?: Regi
     success: region.success ?? undefined,
     errorReason: region.error_reason ?? undefined,
     wasCharged: region.was_charged ?? fallback?.wasCharged ?? false,
+    ocrCharged: region.ocr_charged ?? fallback?.ocrCharged ?? false,
+    imageCharged: region.image_charged ?? fallback?.imageCharged ?? false,
+    explanationCharged: region.explanation_charged ?? fallback?.explanationCharged ?? false,
     chargedAt: region.charged_at ?? fallback?.chargedAt ?? undefined,
   };
 }
