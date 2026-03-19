@@ -16,6 +16,7 @@ from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway, StoredOpenAiKey, build_billing_service
 from app.config import AppSettings, AuthSettings, BillingSettings
 from app.main import app
+from app.supabase import SupabaseApiError
 from tests.auth_test_utils import StubJwksResponse, build_es256_key_pair, build_es256_token
 
 
@@ -241,17 +242,22 @@ class FakeBillingStore:
         processing_type: str,
     ) -> dict:
         profile = self.get_or_create_profile(user)
-        required = len(
-            [
-                action
-                for action in actions
-                if not (
-                    processing_type == "user_api_key"
-                    and action in {"ocr", "explanation"}
-                )
-                and (job_id, action) not in self.charged_actions
-            ]
-        )
+        action_flag_map = {
+            "ocr": "ocr_charged",
+            "image_stylize": "image_charged",
+            "explanation": "explanation_charged",
+        }
+        required = 0
+        for region in self.job_regions.get(job_id, []):
+            for action in actions:
+                charge_flag = action_flag_map.get(action)
+                if charge_flag is None:
+                    continue
+                if processing_type == "user_api_key" and action in {"ocr", "explanation"}:
+                    continue
+                if bool(region.get(charge_flag)):
+                    continue
+                required += 1
         if profile.credits_balance < required:
             raise ValueError("insufficient credits")
         return {"required_credits": required, "credits_balance": profile.credits_balance}
@@ -268,27 +274,44 @@ class FakeBillingStore:
         charged_actions: list[str] = []
         new_balance = profile.credits_balance
         new_used_credits = profile.used_credits
+        action_flag_map = {
+            "ocr": "ocr_charged",
+            "image_stylize": "image_charged",
+            "explanation": "explanation_charged",
+        }
 
-        for action in actions:
-            if processing_type == "user_api_key" and action in {"ocr", "explanation"}:
-                continue
-            if (job_id, action) in self.charged_actions:
-                continue
-            if new_balance <= 0:
-                raise ValueError("insufficient credits")
-            new_balance -= 1
-            new_used_credits += 1
-            self.charged_actions.add((job_id, action))
-            charged_actions.append(action)
-            self.ledger_entries.append(
-                {
-                    "user_id": user.user_id,
-                    "job_id": job_id,
-                    "delta": -1,
-                    "balance_after": new_balance,
-                    "reason": f"{action}_charge",
-                }
-            )
+        for region in self.job_regions.get(job_id, []):
+            for action in actions:
+                charge_flag = action_flag_map.get(action)
+                if charge_flag is None or bool(region.get(charge_flag)):
+                    continue
+                if action == "ocr":
+                    has_output = bool(region.get("ocr_text") or region.get("mathml"))
+                elif action == "image_stylize":
+                    has_output = bool(region.get("styled_image_path"))
+                else:
+                    has_output = bool(region.get("explanation"))
+                if not has_output:
+                    continue
+
+                region[charge_flag] = True
+                region["was_charged"] = True
+                if processing_type == "user_api_key" and action in {"ocr", "explanation"}:
+                    continue
+                if new_balance <= 0:
+                    raise ValueError("insufficient credits")
+                new_balance -= 1
+                new_used_credits += 1
+                charged_actions.append(action)
+                self.ledger_entries.append(
+                    {
+                        "user_id": user.user_id,
+                        "job_id": job_id,
+                        "delta": -1,
+                        "balance_after": new_balance,
+                        "reason": f"{action}_charge",
+                    }
+                )
 
         self.profiles[user.user_id] = BillingProfile(
             user_id=profile.user_id,
@@ -299,6 +322,7 @@ class FakeBillingStore:
         )
         return {
             "charged_actions": charged_actions,
+            "charged_count": len(charged_actions),
             "credits_balance": new_balance,
         }
 
@@ -589,11 +613,31 @@ def test_consume_job_action_credits_charges_only_selected_actions():
     service, store, _ = make_service()
     store.profiles["user-123"] = BillingProfile(
         user_id="user-123",
-        credits_balance=5,
+        credits_balance=8,
         used_credits=0,
         openai_connected=False,
         openai_key_masked=None,
     )
+    store.job_regions["job-123"] = [
+        {
+            "region_id": "q1",
+            "ocr_charged": False,
+            "image_charged": False,
+            "explanation_charged": False,
+            "ocr_text": "문제 1",
+            "explanation": "해설 1",
+            "styled_image_path": "styled-1.png",
+        },
+        {
+            "region_id": "q2",
+            "ocr_charged": False,
+            "image_charged": False,
+            "explanation_charged": False,
+            "ocr_text": "문제 2",
+            "explanation": "해설 2",
+            "styled_image_path": "styled-2.png",
+        },
+    ]
 
     preview = service.ensure_job_action_credits_available(
         make_user(),
@@ -608,10 +652,20 @@ def test_consume_job_action_credits_charges_only_selected_actions():
         processing_type="service_api",
     )
 
-    assert preview["required_credits"] == 3
-    assert charged["charged_actions"] == ["ocr", "image_stylize", "explanation"]
+    assert preview["required_credits"] == 6
+    assert charged["charged_actions"] == [
+        "ocr",
+        "image_stylize",
+        "explanation",
+        "ocr",
+        "image_stylize",
+        "explanation",
+    ]
     assert charged["credits_balance"] == 2
-    assert [entry["reason"] for entry in store.ledger_entries[-3:]] == [
+    assert [entry["reason"] for entry in store.ledger_entries[-6:]] == [
+        "ocr_charge",
+        "image_stylize_charge",
+        "explanation_charge",
         "ocr_charge",
         "image_stylize_charge",
         "explanation_charge",
@@ -622,11 +676,31 @@ def test_consume_job_action_credits_skips_ocr_and_explanation_for_user_key():
     service, store, _ = make_service()
     store.profiles["user-123"] = BillingProfile(
         user_id="user-123",
-        credits_balance=2,
+        credits_balance=3,
         used_credits=0,
         openai_connected=True,
         openai_key_masked="sk-us••••7890",
     )
+    store.job_regions["job-123"] = [
+        {
+            "region_id": "q1",
+            "ocr_charged": False,
+            "image_charged": False,
+            "explanation_charged": False,
+            "ocr_text": "문제 1",
+            "explanation": "해설 1",
+            "styled_image_path": "styled-1.png",
+        },
+        {
+            "region_id": "q2",
+            "ocr_charged": False,
+            "image_charged": False,
+            "explanation_charged": False,
+            "ocr_text": "문제 2",
+            "explanation": "해설 2",
+            "styled_image_path": "styled-2.png",
+        },
+    ]
 
     preview = service.ensure_job_action_credits_available(
         make_user(),
@@ -641,8 +715,8 @@ def test_consume_job_action_credits_skips_ocr_and_explanation_for_user_key():
         processing_type="user_api_key",
     )
 
-    assert preview["required_credits"] == 1
-    assert charged["charged_actions"] == ["image_stylize"]
+    assert preview["required_credits"] == 2
+    assert charged["charged_actions"] == ["image_stylize", "image_stylize"]
     assert charged["credits_balance"] == 1
 
 
@@ -835,7 +909,7 @@ def test_billing_profile_accepts_es256_authenticated_user(monkeypatch):
         )(),
     )
 
-    client = TestClient(app)
+    client = TestClient(app, raise_server_exceptions=False)
     response = client.get("/billing/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
@@ -875,7 +949,7 @@ def test_billing_put_openai_key_accepts_es256_authenticated_user(monkeypatch):
         )(),
     )
 
-    client = TestClient(app)
+    client = TestClient(app, raise_server_exceptions=False)
     response = client.put(
         "/billing/openai-key",
         headers={"Authorization": f"Bearer {token}"},
@@ -920,7 +994,7 @@ def test_billing_delete_openai_key_accepts_es256_authenticated_user(monkeypatch)
         )(),
     )
 
-    client = TestClient(app)
+    client = TestClient(app, raise_server_exceptions=False)
     response = client.delete(
         "/billing/openai-key",
         headers={"Authorization": f"Bearer {token}"},
@@ -960,7 +1034,7 @@ def test_billing_checkout_accepts_es256_authenticated_user(monkeypatch):
         )(),
     )
 
-    client = TestClient(app)
+    client = TestClient(app, raise_server_exceptions=False)
     response = client.post(
         "/billing/checkout-session",
         headers={"Authorization": f"Bearer {token}"},
@@ -1046,7 +1120,7 @@ def test_run_pipeline_uses_action_credit_methods(monkeypatch):
     monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
     monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
 
-    client = TestClient(app)
+    client = TestClient(app, raise_server_exceptions=False)
     response = client.post(
         "/jobs/job-123/run",
         json={
@@ -1072,6 +1146,206 @@ def test_run_pipeline_uses_action_credit_methods(monkeypatch):
         "processing_type": "service_api",
     }
     assert response.json()["charged_count"] == 2
+
+
+def test_run_pipeline_returns_schema_mismatch_detail_for_supabase_error(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    class StubBillingService:
+        """액션 과금 선검증에서 스키마 드리프트 오류를 재현한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            """서비스 API 모드의 OpenAI key를 반환한다."""
+            assert current_user.user_id == user.user_id
+            return type(
+                "ResolvedKey",
+                (),
+                {
+                    "api_key": "sk-service-1234567890",
+                    "processing_type": "service_api",
+                },
+            )()
+
+        def ensure_job_action_credits_available(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """배포 DB 스키마 누락 상황을 그대로 던진다."""
+            raise SupabaseApiError('column ocr_charged does not exist in relation "ocr_job_regions"')
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post(
+        "/jobs/job-123/run",
+        json={
+            "do_ocr": True,
+            "do_image_stylize": True,
+            "do_explanation": False,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "배포 DB 스키마가 최신이 아닙니다."
+
+
+def test_run_pipeline_returns_storage_failure_detail_for_supabase_error(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    class StubBillingService:
+        """후차감 단계의 Supabase 연결 실패를 재현한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            """서비스 API 모드의 OpenAI key를 반환한다."""
+            assert current_user.user_id == user.user_id
+            return type(
+                "ResolvedKey",
+                (),
+                {
+                    "api_key": "sk-service-1234567890",
+                    "processing_type": "service_api",
+                },
+            )()
+
+        def ensure_job_action_credits_available(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """선차감 검증은 정상 응답으로 둔다."""
+            return {"required_credits": 2, "credits_balance": 5}
+
+        def consume_job_action_credits(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """후차감 시 저장소 장애를 재현한다."""
+            raise SupabaseApiError("temporary storage timeout")
+
+    def fake_run_pipeline(*args, **kwargs):
+        """파이프라인 실행 자체는 성공으로 둔다."""
+        return {
+            "job_id": args[1],
+            "status": "completed",
+            "executed_actions": ["ocr", "image_stylize"],
+            "completed_count": 1,
+            "failed_count": 0,
+            "exportable_count": 1,
+        }
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post(
+        "/jobs/job-123/run",
+        json={
+            "do_ocr": True,
+            "do_image_stylize": True,
+            "do_explanation": False,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."
+
+
+def test_run_pipeline_returns_user_openai_key_detail_for_missing_secret(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    class StubBillingService:
+        """사용자 OpenAI key 복호화 설정 누락을 재현한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            """암호화 secret 누락 오류를 던진다."""
+            raise ValueError("OPENAI_KEY_ENCRYPTION_SECRET is not configured")
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+
+    client = TestClient(app)
+    response = client.post(
+        "/jobs/job-123/run",
+        json={
+            "do_ocr": True,
+            "do_image_stylize": False,
+            "do_explanation": False,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "사용자 OpenAI 키 설정이 완료되지 않았습니다."
+
+
+def test_run_pipeline_returns_image_config_detail_for_missing_nano_banana_setting(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    class StubBillingService:
+        """이미지 생성 단계 진입 전 검증을 정상 처리한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            """서비스 API 모드의 OpenAI key를 반환한다."""
+            return type(
+                "ResolvedKey",
+                (),
+                {
+                    "api_key": "sk-service-1234567890",
+                    "processing_type": "service_api",
+                },
+            )()
+
+        def ensure_job_action_credits_available(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """선차감 검증은 정상 응답으로 둔다."""
+            return {"required_credits": 1, "credits_balance": 5}
+
+    def fake_run_pipeline(*args, **kwargs):
+        """Nano Banana 설정 누락 예외를 직접 재현한다."""
+        raise ValueError("NANO_BANANA_MODEL is not configured")
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+
+    client = TestClient(app)
+    response = client.post(
+        "/jobs/job-123/run",
+        json={
+            "do_ocr": False,
+            "do_image_stylize": True,
+            "do_explanation": False,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "이미지 생성 서버 설정이 완료되지 않았습니다."
 
 
 def test_polar_gateway_verify_event_accepts_polar_secret_prefix():

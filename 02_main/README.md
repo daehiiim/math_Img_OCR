@@ -45,6 +45,14 @@ docker compose up --build
 - `CORS_ALLOW_ORIGINS` (`https://a.example.com,https://b.example.com` 형식)
 - `HWPX_SKILL_DIR` (기본값 비움. 특수한 로컬 skill 경로를 강제로 우선 사용해야 할 때만 설정)
 
+## 배포 전 스키마 점검
+
+- 액션별 과금과 region 플래그를 쓰는 현재 백엔드는 Supabase에 아래 SQL 두 개가 모두 반영돼 있어야 한다.
+- `02_main/schemas/2026-03-19_nano_banana_action_billing_upgrade.sql`
+- `02_main/schemas/2026-03-19_region_action_credit_flags.sql`
+- 둘 중 하나라도 누락되면 `POST /jobs/{id}/run` 또는 `GET /jobs/{id}`에서 스키마 불일치 오류가 날 수 있다.
+- 적용 뒤에는 backend 환경변수를 다시 확인하고 재배포해야 한다.
+
 ## HWPX export runtime
 
 - 기본값은 `02_main/vendor/hwpxskill-math` 이다.

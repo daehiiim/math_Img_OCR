@@ -48,6 +48,9 @@ class RegionPipelineContext(BaseModel):
     error_reason: Optional[str] = None
     processing_ms: Optional[int] = None
     was_charged: bool = False
+    ocr_charged: bool = False
+    image_charged: bool = False
+    explanation_charged: bool = False
     charged_at: Optional[str] = None
 
 

@@ -109,7 +109,7 @@ describe("JobDetailPage", () => {
     });
   });
 
-  it("서비스 API 모드에서는 선택한 작업 수만큼 차감 예정 크레딧을 표시한다", async () => {
+  it("서비스 API 모드에서는 문항 수와 선택한 작업 수를 곱한 크레딧을 표시한다", async () => {
     const user = userEvent.setup();
     mockAuthUser = {
       ...mockAuthUser,
@@ -117,29 +117,38 @@ describe("JobDetailPage", () => {
       openAiConnected: false,
       openAiMaskedKey: null,
     };
-
-    render(
-      <MemoryRouter initialEntries={["/jobs/job-1"]}>
-        <Routes>
-          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
-        </Routes>
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText("3 크레딧")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("checkbox", { name: /해설 작성/i }));
-
-    expect(screen.getByText("2 크레딧")).toBeInTheDocument();
-  });
-
-  it("OpenAI 연결 계정은 이미지 생성만 차감 예정으로 계산한다", async () => {
-    const user = userEvent.setup();
-    mockAuthUser = {
-      ...mockAuthUser,
-      credits: 10,
-      openAiConnected: true,
-      openAiMaskedKey: "sk-us••••7890",
+    mockJob = {
+      ...mockJob,
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "completed",
+          ocrText: "문제 1",
+          explanation: "해설 1",
+        },
+        {
+          id: "q2",
+          polygon: [
+            [20, 20],
+            [30, 20],
+            [30, 30],
+            [20, 30],
+          ],
+          type: "mixed",
+          order: 2,
+          status: "completed",
+          ocrText: "문제 2",
+          explanation: "해설 2",
+        },
+      ],
     };
 
     render(
@@ -150,7 +159,60 @@ describe("JobDetailPage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("1 크레딧")).toBeInTheDocument();
+    expect(screen.getByText("6 크레딧")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: /해설 작성/i }));
+
+    expect(screen.getByText("4 크레딧")).toBeInTheDocument();
+  });
+
+  it("OpenAI 연결 계정은 이미지 생성만 문항 수 기준으로 차감 예정에 포함한다", async () => {
+    const user = userEvent.setup();
+    mockAuthUser = {
+      ...mockAuthUser,
+      credits: 10,
+      openAiConnected: true,
+      openAiMaskedKey: "sk-us••••7890",
+    };
+    mockJob = {
+      ...mockJob,
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "completed",
+        },
+        {
+          id: "q2",
+          polygon: [
+            [20, 20],
+            [30, 20],
+            [30, 30],
+            [20, 30],
+          ],
+          type: "mixed",
+          order: 2,
+          status: "completed",
+        },
+      ],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("2 크레딧")).toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox", { name: /이미지 생성/i }));
 

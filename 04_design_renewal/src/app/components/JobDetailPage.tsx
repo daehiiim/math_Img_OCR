@@ -49,18 +49,24 @@ function isResultVisible(status: JobStatus): boolean {
   return status === "running" || status === "completed" || status === "failed" || status === "exported";
 }
 
-/** 선택한 작업과 API key 연결 여부를 기준으로 차감 예정 크레딧을 계산한다. */
-function calculateRequiredCredits(options: JobExecutionOptions, openAiConnected: boolean): number {
+/** 선택한 작업과 영역별 과금 상태를 기준으로 이번 실행의 최대 차감 크레딧을 계산한다. */
+function calculateRequiredCredits(
+  options: JobExecutionOptions,
+  openAiConnected: boolean,
+  regions: Region[]
+): number {
   let requiredCredits = 0;
 
-  if (options.doImageStylize) {
-    requiredCredits += 1;
-  }
-  if (options.doOcr && !openAiConnected) {
-    requiredCredits += 1;
-  }
-  if (options.doExplanation && !openAiConnected) {
-    requiredCredits += 1;
+  for (const region of regions) {
+    if (options.doImageStylize && !region.imageCharged) {
+      requiredCredits += 1;
+    }
+    if (options.doOcr && !openAiConnected && !region.ocrCharged) {
+      requiredCredits += 1;
+    }
+    if (options.doExplanation && !openAiConnected && !region.explanationCharged) {
+      requiredCredits += 1;
+    }
   }
 
   return requiredCredits;
@@ -86,7 +92,11 @@ export function JobDetailPage() {
   const [executionOptions, setExecutionOptions] = useState<JobExecutionOptions>(defaultExecutionOptions);
 
   const job = getJob(jobId || "");
-  const requiredCredits = calculateRequiredCredits(executionOptions, Boolean(user?.openAiConnected));
+  const requiredCredits = calculateRequiredCredits(
+    executionOptions,
+    Boolean(user?.openAiConnected),
+    job?.regions ?? []
+  );
   const hasSelectedAction =
     executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
   const exportableRegionCount = (job?.regions ?? []).filter(isExportableRegion).length;
@@ -455,11 +465,11 @@ export function JobDetailPage() {
 
                 <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">이번 실행 차감 예정</span>
+                    <span className="text-muted-foreground">이번 실행 최대 차감 예정</span>
                     <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
                   </div>
                   <p className="mt-1 text-muted-foreground">
-                    선택한 작업 조합 기준으로 잔액을 먼저 확인하고, 실행 후 실제 수행된 작업만 차감합니다.
+                    선택한 문제 수 기준으로 잔액을 먼저 확인하고, 실행 후 실제 성공한 작업만 차감합니다.
                   </p>
                 </div>
 

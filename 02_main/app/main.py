@@ -12,9 +12,14 @@ from app import pipeline
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingProfile, build_billing_service
 from app.config import get_settings
+from app.supabase import SupabaseApiError
 
 app = FastAPI(title="Math Region OCR MVP API", version="0.1.0")
 ROOT = Path(__file__).resolve().parents[1]
+SCHEMA_MISMATCH_DETAIL = "배포 DB 스키마가 최신이 아닙니다."
+STORAGE_FAILURE_DETAIL = "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."
+USER_OPENAI_KEY_CONFIG_DETAIL = "사용자 OpenAI 키 설정이 완료되지 않았습니다."
+IMAGE_PIPELINE_CONFIG_DETAIL = "이미지 생성 서버 설정이 완료되지 않았습니다."
 
 
 def _get_allowed_origins() -> list[str]:
@@ -79,6 +84,9 @@ class RegionResult(BaseModel):
     edited_svg_url: str | None = None
     edited_svg_version: int | None = None
     was_charged: bool = False
+    ocr_charged: bool = False
+    image_charged: bool = False
+    explanation_charged: bool = False
     charged_at: str | None = None
 
 
@@ -156,6 +164,50 @@ def _get_billing_service(require_polar: bool = False):
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+def _is_schema_mismatch_message(message: str) -> bool:
+    """Supabase 에러 문자열이 스키마 드리프트인지 판별한다."""
+    normalized = message.lower()
+    schema_tokens = (
+        "schema cache",
+        "does not exist",
+        "violates check constraint",
+        "check constraint",
+        "credit_ledger_reason_check",
+        "ocr_charged",
+        "image_charged",
+        "explanation_charged",
+        "image_crop_path",
+        "styled_image_path",
+        "styled_image_model",
+    )
+    return any(token in normalized for token in schema_tokens)
+
+
+def _map_runtime_value_error(error: ValueError) -> HTTPException | None:
+    """설정 누락 성격의 ValueError를 안정적인 HTTP 에러로 변환한다."""
+    normalized = str(error).lower()
+    if "openai_key_encryption_secret" in normalized:
+        return HTTPException(status_code=500, detail=USER_OPENAI_KEY_CONFIG_DETAIL)
+    if "nano_banana_" in normalized or "google-genai package is required" in normalized:
+        return HTTPException(status_code=500, detail=IMAGE_PIPELINE_CONFIG_DETAIL)
+    if "supabase" in normalized and "not configured" in normalized:
+        return HTTPException(status_code=503, detail=STORAGE_FAILURE_DETAIL)
+    return None
+
+
+def _raise_runtime_http_error(error: Exception) -> None:
+    """런타임 인프라 예외를 사용자용 HTTP 오류로 정규화한다."""
+    if isinstance(error, SupabaseApiError):
+        if _is_schema_mismatch_message(str(error)):
+            raise HTTPException(status_code=500, detail=SCHEMA_MISMATCH_DETAIL) from error
+        raise HTTPException(status_code=503, detail=STORAGE_FAILURE_DETAIL) from error
+
+    if isinstance(error, ValueError):
+        mapped_error = _map_runtime_value_error(error)
+        if mapped_error is not None:
+            raise mapped_error from error
+
+
 def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
     """파이프라인 컨텍스트를 프런트 응답 모델로 바꾼다."""
     return JobResponse(
@@ -190,6 +242,9 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
                 edited_svg_url=_signed_asset_url(current_user, region.figure.edited_svg_url),
                 edited_svg_version=region.figure.edited_svg_version,
                 was_charged=region.was_charged,
+                ocr_charged=region.ocr_charged,
+                image_charged=region.image_charged,
+                explanation_charged=region.explanation_charged,
                 charged_at=region.charged_at,
             )
             for region in job.regions
@@ -279,7 +334,10 @@ def run_pipeline(
         }
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
+    except SupabaseApiError as error:
+        _raise_runtime_http_error(error)
     except ValueError as error:
+        _raise_runtime_http_error(error)
         raise HTTPException(status_code=400, detail=str(error))
 
 
@@ -291,9 +349,14 @@ def get_job(
     """DB와 Storage 상태를 합쳐 job 상세 응답을 반환한다."""
     try:
         job = pipeline.read_job(current_user, job_id)
+        return _map_job_response(current_user, job)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
-    return _map_job_response(current_user, job)
+    except SupabaseApiError as error:
+        _raise_runtime_http_error(error)
+    except ValueError as error:
+        _raise_runtime_http_error(error)
+        raise HTTPException(status_code=400, detail=str(error))
 
 
 @app.get("/jobs/{job_id}/regions/{region_id}/svg")

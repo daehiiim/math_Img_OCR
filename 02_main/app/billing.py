@@ -901,7 +901,7 @@ class SupabaseBillingStore:
         rows = client.select(
             "ocr_jobs",
             params={
-                "select": "id,status,processing_type,ocr_charged,image_charged,explanation_charged",
+                "select": "id,status,processing_type",
                 "id": f"eq.{job_id}",
             },
         )
@@ -909,25 +909,54 @@ class SupabaseBillingStore:
             raise FileNotFoundError(f"job not found: {job_id}")
         return rows[0]
 
-    def _build_billable_actions(
+    def _read_job_action_charge_rows(
         self,
-        job_row: dict,
+        client: SupabaseClient,
+        job_id: str,
+    ) -> list[dict[str, Any]]:
+        """job 하위 region들의 액션별 과금 상태와 산출물 존재 여부를 읽는다."""
+        return client.select(
+            "ocr_job_regions",
+            params={
+                "select": "region_key,ocr_text,mathml,explanation,styled_image_path,ocr_charged,image_charged,explanation_charged",
+                "job_id": f"eq.{job_id}",
+                "order": "region_order.asc",
+            },
+        )
+
+    def _has_region_action_output(self, region_row: dict[str, Any], action: str) -> bool:
+        """region row에서 액션별 성공 산출물 존재 여부를 판단한다."""
+        if action == "ocr":
+            return bool(str(region_row.get("ocr_text") or "").strip() or str(region_row.get("mathml") or "").strip())
+        if action == "image_stylize":
+            return bool(str(region_row.get("styled_image_path") or "").strip())
+        if action == "explanation":
+            return bool(str(region_row.get("explanation") or "").strip())
+        return False
+
+    def _build_pending_region_actions(
+        self,
+        region_rows: list[dict[str, Any]],
         actions: list[str],
         *,
-        processing_type: str,
-    ) -> list[str]:
-        """실제로 차감해야 하는 항목만 순서대로 계산한다."""
-        billable_actions: list[str] = []
-        for action in actions:
-            if action not in JOB_ACTION_FLAG_MAP:
+        require_output: bool,
+    ) -> list[tuple[str, str]]:
+        """region별로 아직 처리되지 않은 액션 목록을 순서대로 계산한다."""
+        pending_region_actions: list[tuple[str, str]] = []
+        for region_row in region_rows:
+            region_key = str(region_row.get("region_key") or "")
+            if not region_key:
                 continue
-            if processing_type == "user_api_key" and action in FREE_USER_KEY_ACTIONS:
-                continue
-            charge_flag = JOB_ACTION_FLAG_MAP[action]
-            if bool(job_row.get(charge_flag)):
-                continue
-            billable_actions.append(action)
-        return billable_actions
+            for action in actions:
+                charge_flag = JOB_ACTION_FLAG_MAP.get(action)
+                if not charge_flag:
+                    continue
+                if bool(region_row.get(charge_flag)):
+                    continue
+                if require_output and not self._has_region_action_output(region_row, action):
+                    continue
+                pending_region_actions.append((region_key, action))
+        return pending_region_actions
 
     def ensure_job_action_credits_available(
         self,
@@ -939,14 +968,19 @@ class SupabaseBillingStore:
     ) -> dict:
         """선택된 작업을 실행하기에 크레딧이 충분한지 사전 점검한다."""
         client = self._user_client(user)
-        job_row = self._read_job_charge_state(client, job_id)
+        self._read_job_charge_state(client, job_id)
+        region_rows = self._read_job_action_charge_rows(client, job_id)
         profile = self.get_or_create_profile(user)
-        billable_actions = self._build_billable_actions(
-            job_row,
+        pending_region_actions = self._build_pending_region_actions(
+            region_rows,
             actions,
-            processing_type=processing_type,
+            require_output=False,
         )
-        required_credits = len(billable_actions)
+        required_credits = sum(
+            1
+            for _, action in pending_region_actions
+            if not (processing_type == "user_api_key" and action in FREE_USER_KEY_ACTIONS)
+        )
         if profile.credits_balance < required_credits:
             raise ValueError("insufficient credits")
         return {
@@ -962,31 +996,44 @@ class SupabaseBillingStore:
         *,
         processing_type: str,
     ) -> dict:
-        """실제로 수행된 항목만큼 job 단위 크레딧을 차감한다."""
+        """실제로 성공한 region 액션별 항목만큼 크레딧을 차감한다."""
         client = self._user_client(user)
         job_row = self._read_job_charge_state(client, job_id)
-        if job_row.get("status") not in ("completed", "exported"):
+        if job_row.get("status") not in ("completed", "failed", "exported"):
             raise ValueError("job is not eligible for charging")
 
         profile = self.get_or_create_profile(user)
-        billable_actions = self._build_billable_actions(
-            job_row,
+        region_rows = self._read_job_action_charge_rows(client, job_id)
+        completed_region_actions = self._build_pending_region_actions(
+            region_rows,
             actions,
-            processing_type=processing_type,
+            require_output=True,
         )
-        if not billable_actions:
+        if not completed_region_actions:
             return {
                 "charged_actions": [],
+                "charged_count": 0,
                 "credits_balance": profile.credits_balance,
             }
-        if profile.credits_balance < len(billable_actions):
+
+        paid_region_actions = [
+            (region_key, action)
+            for region_key, action in completed_region_actions
+            if not (processing_type == "user_api_key" and action in FREE_USER_KEY_ACTIONS)
+        ]
+        if profile.credits_balance < len(paid_region_actions):
             raise ValueError("insufficient credits")
 
         new_balance = profile.credits_balance
         new_used_credits = profile.used_credits
-        for action in billable_actions:
+        charged_actions: list[str] = []
+        charged_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+        handled_actions = sorted({action for _, action in completed_region_actions})
+
+        for _, action in paid_region_actions:
             new_balance -= 1
             new_used_credits += 1
+            charged_actions.append(action)
             client.insert(
                 "credit_ledger",
                 {
@@ -998,26 +1045,42 @@ class SupabaseBillingStore:
                 },
             )
 
-        client.update(
-            "profiles",
-            filters={"user_id": f"eq.{user.user_id}"},
-            payload={
-                "credits_balance": new_balance,
-                "used_credits": new_used_credits,
-            },
-        )
+        if paid_region_actions:
+            client.update(
+                "profiles",
+                filters={"user_id": f"eq.{user.user_id}"},
+                payload={
+                    "credits_balance": new_balance,
+                    "used_credits": new_used_credits,
+                },
+            )
+
+        for region_key, action in completed_region_actions:
+            client.update(
+                "ocr_job_regions",
+                filters={
+                    "job_id": f"eq.{job_id}",
+                    "region_key": f"eq.{region_key}",
+                },
+                payload={
+                    JOB_ACTION_FLAG_MAP[action]: True,
+                    "was_charged": True,
+                    "charged_at": charged_at,
+                },
+            )
 
         client.update(
             "ocr_jobs",
             filters={"id": f"eq.{job_id}"},
             payload={
-                **{JOB_ACTION_FLAG_MAP[action]: True for action in billable_actions},
+                **{JOB_ACTION_FLAG_MAP[action]: True for action in handled_actions},
                 "was_charged": True,
-                "charged_at": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime()),
+                "charged_at": charged_at,
             },
         )
         return {
-            "charged_actions": billable_actions,
+            "charged_actions": charged_actions,
+            "charged_count": len(paid_region_actions),
             "credits_balance": new_balance,
         }
 
