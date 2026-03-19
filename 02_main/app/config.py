@@ -31,6 +31,7 @@ class AppSettings:
     database_url: str | None
     auth: AuthSettings
     billing: BillingSettings
+    openai_base_url: str | None = None
     nano_banana_model: str | None = None
     nano_banana_project_id: str | None = None
     nano_banana_location: str | None = None
@@ -38,6 +39,8 @@ class AppSettings:
     hwpx_skill_dir: str | None = None
     app_url: str | None = None
     cors_allow_origins: tuple[str, ...] = ()
+
+SUPPORTED_NANO_BANANA_PROMPT_VERSIONS = ("csat_v1",)
 
 
 def _load_env_file(root_path: Path) -> dict[str, str]:
@@ -89,17 +92,26 @@ def _get_multi_setting(env_values: dict[str, str], key: str) -> tuple[str, ...]:
     return tuple(values)
 
 
+def _get_nano_banana_prompt_version(env_values: dict[str, str]) -> str:
+    """지원하는 Nano Banana 프롬프트 버전만 허용한다."""
+    version = _get_setting(env_values, "NANO_BANANA_PROMPT_VERSION") or "csat_v1"
+    if version in SUPPORTED_NANO_BANANA_PROMPT_VERSIONS:
+        return version
+    raise ValueError(f"Unsupported NANO_BANANA_PROMPT_VERSION: {version}")
+
+
 def get_settings(root_path: Path) -> AppSettings:
     """OCR API가 필요로 하는 인증/과금 설정 묶음을 반환한다."""
     env_values = _load_env_file(root_path)
 
     return AppSettings(
         openai_api_key=_get_setting(env_values, "OPENAI_API_KEY"),
+        openai_base_url=_normalize_url(_get_setting(env_values, "OPENAI_BASE_URL")),
         openai_key_encryption_secret=_get_setting(env_values, "OPENAI_KEY_ENCRYPTION_SECRET"),
         nano_banana_model=_get_setting(env_values, "NANO_BANANA_MODEL"),
         nano_banana_project_id=_get_setting(env_values, "NANO_BANANA_PROJECT_ID"),
         nano_banana_location=_get_setting(env_values, "NANO_BANANA_LOCATION"),
-        nano_banana_prompt_version=_get_setting(env_values, "NANO_BANANA_PROMPT_VERSION") or "csat_v1",
+        nano_banana_prompt_version=_get_nano_banana_prompt_version(env_values),
         database_url=_get_setting(env_values, "DATABASE_URL"),
         hwpx_skill_dir=_get_setting(env_values, "HWPX_SKILL_DIR"),
         app_url=_normalize_url(_get_setting(env_values, "APP_URL")),

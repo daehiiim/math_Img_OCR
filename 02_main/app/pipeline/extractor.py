@@ -9,13 +9,12 @@ from typing import Optional
 
 import requests
 
-from app.config import get_settings
+from app.config import SUPPORTED_NANO_BANANA_PROMPT_VERSIONS, get_settings
 from app.pipeline.schema import ExtractorContext
 
 logger = logging.getLogger(__name__)
-
-SUPPORTED_NANO_BANANA_PROMPT_VERSIONS = {"csat_v1"}
 SUPPORTED_STYLIZABLE_IMAGE_KINDS = {"geometry", "illustration", "generic"}
+DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 NANO_BANANA_BASE_PROMPTS = {
     "csat_v1": (
@@ -51,49 +50,31 @@ NANO_BANANA_NEGATIVE_RULES = {
 }
 
 
-def _load_api_env_file(root_path) -> dict[str, str]:
-    path = root_path / "apiKey.env"
-    if not path.exists():
-        return {}
-
-    values: dict[str, str] = {}
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[len("export ") :].strip()
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip('"').strip("'")
-    return values
-
-
-def _get_api_setting(root_path, name: str, fallback: Optional[str] = None) -> Optional[str]:
-    env_file = _load_api_env_file(root_path)
-    if name in os.environ and os.environ[name].strip():
-        return os.environ[name].strip()
-    if name in env_file and env_file[name].strip():
-        return env_file[name].strip()
-    return fallback
+def _get_openai_base_url(root_path) -> str:
+    """백엔드 런타임 설정에서 OpenAI base URL을 읽는다."""
+    settings = get_settings(root_path)
+    return settings.openai_base_url or DEFAULT_OPENAI_BASE_URL
 
 
 def _get_openai_api_key(root_path) -> str:
-    for key_name in ("OPENAI_API_KEY", "GPT52_API_KEY", "API_KEY"):
-        value = _get_api_setting(root_path, key_name)
+    settings = get_settings(root_path)
+    for value in (
+        settings.openai_api_key,
+        os.getenv("GPT52_API_KEY"),
+        os.getenv("API_KEY"),
+    ):
         if value:
-            return value
-    raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY in apiKey.env")
+            return value.strip()
+    raise ValueError("OPENAI_API_KEY is not configured in 02_main/.env or environment variables")
 
 
 def _get_nano_banana_settings(root_path) -> tuple[str, str, str, str]:
     """Nano Banana 호출에 필요한 모델/프로젝트/리전을 읽는다."""
     settings = get_settings(root_path)
-    model = settings.nano_banana_model or _get_api_setting(root_path, "NANO_BANANA_MODEL")
-    project_id = settings.nano_banana_project_id or _get_api_setting(root_path, "NANO_BANANA_PROJECT_ID")
-    location = settings.nano_banana_location or _get_api_setting(root_path, "NANO_BANANA_LOCATION", "global")
-    prompt_version = settings.nano_banana_prompt_version or _get_api_setting(root_path, "NANO_BANANA_PROMPT_VERSION", "csat_v1")
+    model = settings.nano_banana_model
+    project_id = settings.nano_banana_project_id
+    location = settings.nano_banana_location or "global"
+    prompt_version = settings.nano_banana_prompt_version
     if not model:
         raise ValueError("NANO_BANANA_MODEL is not configured")
     if not project_id:
@@ -291,7 +272,7 @@ def analyze_region_with_gpt(
 ) -> dict:
     resolved_api_key = api_key or _get_openai_api_key(root_path)
     model = "gpt-5.2"
-    base_url = _get_api_setting(root_path, "OPENAI_BASE_URL", "https://api.openai.com/v1")
+    base_url = _get_openai_base_url(root_path)
 
     image_b64 = base64.b64encode(crop_image_bytes).decode("ascii")
     image_url = f"data:image/png;base64,{image_b64}"
@@ -432,7 +413,7 @@ def generate_explanation_with_gpt(
 ) -> str:
     resolved_api_key = api_key or _get_openai_api_key(root_path)
     model = "gpt-5.2"
-    base_url = _get_api_setting(root_path, "OPENAI_BASE_URL", "https://api.openai.com/v1")
+    base_url = _get_openai_base_url(root_path)
 
     image_b64 = base64.b64encode(crop_image_bytes).decode("ascii")
     image_url = f"data:image/png;base64,{image_b64}"

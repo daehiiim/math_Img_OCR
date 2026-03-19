@@ -3,7 +3,7 @@
 이 문서는 바로 개발에 들어가기 위한 최소 산출물 묶음입니다.
 
 ## 포함 파일
-- API 명세: `specs/mvp1_openapi.yaml`
+- API 명세: `02_main/specs/mvp1_openapi.yaml`
 - 영역 요청 예시: `schemas/region_set.example.json`
 - HWPX 블록 템플릿(초안): `templates/hwpx/problem_block_template.xml`
 

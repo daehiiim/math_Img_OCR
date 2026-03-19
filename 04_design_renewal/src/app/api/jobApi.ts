@@ -28,8 +28,6 @@ export interface BackendRegion {
   processing_ms?: number | null;
   success?: boolean | null;
   error_reason?: string | null;
-  edited_svg_url?: string | null;
-  edited_svg_version?: number | null;
   was_charged?: boolean | null;
   charged_at?: string | null;
 }

@@ -12,6 +12,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 - 백엔드 런타임 설정의 단일 소스는 `02_main/.env` 이다. 저장소 루트 `.env` 는 백엔드 설정 파일로 사용하지 않는다.
+- 레거시 `apiKey.env` fallback은 더 이상 사용하지 않는다. 런타임 설정은 `02_main/.env` 또는 OS 환경변수에서만 읽는다.
 - 브라우저 인증이나 결제 복귀 흐름까지 확인하려면 `.env`에 `APP_URL=https://mathtohwp.vercel.app` 또는 허용할 프런트 도메인을 함께 설정해야 한다.
 - HWPX export는 기본적으로 `02_main/vendor/hwpxskill-math` 번들을 사용한다. 다른 로컬 경로를 써야 하면 `HWPX_SKILL_DIR`로 override 한다.
 
@@ -39,6 +40,8 @@ docker compose up --build
 
 ## 선택 환경변수
 
+- `OPENAI_BASE_URL` (기본값 `https://api.openai.com/v1`)
+- `NANO_BANANA_PROMPT_VERSION` (기본값 `csat_v1`, 현재 지원값도 `csat_v1` 하나다)
 - `CORS_ALLOW_ORIGINS` (`https://a.example.com,https://b.example.com` 형식)
 - `HWPX_SKILL_DIR` (기본값 비움. 특수한 로컬 skill 경로를 강제로 우선 사용해야 할 때만 설정)
 

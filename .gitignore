@@ -8,3 +8,7 @@ build/
 *.env
 apiKey.env
 02_main/apiKey.env
+.codex_tmp_vercel_*/
+00_private/logs/
+00_private/chat_*.txt
+00_private/polar_e2e_state.json
