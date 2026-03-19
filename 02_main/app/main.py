@@ -249,6 +249,7 @@ def run_pipeline(
             do_image_stylize=run_request.do_image_stylize,
             do_explanation=run_request.do_explanation,
             nano_banana_model=get_settings(ROOT).nano_banana_model,
+            nano_banana_prompt_version=get_settings(ROOT).nano_banana_prompt_version,
         )
         charge_result = {"charged_count": 0}
         if result.get("status") in ("completed", "failed", "exported"):

@@ -186,6 +186,7 @@ def _process_region(
     do_image_stylize: bool,
     do_explanation: bool,
     nano_banana_model: str | None,
+    nano_banana_prompt_version: str,
     executed_action_flags: dict[str, bool],
 ) -> None:
     """단일 영역의 OCR, 해설, 이미지 생성을 순차 처리한다."""
@@ -244,6 +245,7 @@ def _process_region(
                 repository=repository,
                 analyzed=analyzed,
                 nano_banana_model=nano_banana_model,
+                nano_banana_prompt_version=nano_banana_prompt_version,
                 executed_action_flags=executed_action_flags,
             )
     except Exception as error:
@@ -265,6 +267,7 @@ def _process_region_image(
     repository: PipelineRepository,
     analyzed: dict[str, Any],
     nano_banana_model: str | None,
+    nano_banana_prompt_version: str,
     executed_action_flags: dict[str, bool],
 ) -> None:
     """영역 안의 시각 요소를 크롭하고 스타일 이미지를 생성한다."""
@@ -284,6 +287,8 @@ def _process_region_image(
             ROOT,
             image_crop_bytes,
             model_name=nano_banana_model,
+            prompt_kind=analyzed.get("image_kind") or "generic",
+            prompt_version=nano_banana_prompt_version,
         )
         styled_image_path.write_bytes(styled_image_bytes)
         styled_image_storage_path = f"{user.user_id}/{job.job_id}/outputs/{region_id}_styled.png"
@@ -306,6 +311,7 @@ def run_pipeline(
     do_image_stylize: bool = True,
     do_explanation: bool = True,
     nano_banana_model: str | None = None,
+    nano_banana_prompt_version: str = "csat_v1",
 ) -> dict:
     """선택된 OCR/이미지 생성/해설 작업을 수행하고 결과를 저장한다."""
     repository = _get_repository()
@@ -349,6 +355,7 @@ def run_pipeline(
                 do_image_stylize=do_image_stylize,
                 do_explanation=do_explanation,
                 nano_banana_model=nano_banana_model,
+                nano_banana_prompt_version=nano_banana_prompt_version,
                 executed_action_flags=executed_action_flags,
             )
 

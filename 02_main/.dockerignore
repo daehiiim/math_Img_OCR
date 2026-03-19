@@ -3,3 +3,17 @@ __pycache__/
 *.pyc
 runtime/
 .pytest_cache/
+.env
+.env.example
+tests/
+docs/
+schemas/
+scripts/
+specs/
+assets/
+templates/
+debug_extract/
+runtime/
+*.md
+debug_*.py
+patch_*.py

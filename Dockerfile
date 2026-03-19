@@ -8,7 +8,8 @@ WORKDIR /app
 COPY 02_main/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY 02_main /app
+COPY 02_main/app ./app
+COPY 02_main/vendor ./vendor
 
 EXPOSE 8000
 

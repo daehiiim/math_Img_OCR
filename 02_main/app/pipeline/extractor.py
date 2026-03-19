@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import re
 from typing import Optional
@@ -10,6 +11,44 @@ import requests
 
 from app.config import get_settings
 from app.pipeline.schema import ExtractorContext
+
+logger = logging.getLogger(__name__)
+
+SUPPORTED_NANO_BANANA_PROMPT_VERSIONS = {"csat_v1"}
+SUPPORTED_STYLIZABLE_IMAGE_KINDS = {"geometry", "illustration", "generic"}
+
+NANO_BANANA_BASE_PROMPTS = {
+    "csat_v1": (
+        "Convert this cropped visual into a clean Korean CSAT exam style image. "
+        "Do not change the original structure, labels, numbers, relative positions, line counts, or geometric relationships. "
+        "Use a plain white background and neat black or very dark gray linework only. "
+        "Do not add new objects, rewrite text, change the composition, crop further, zoom, rotate, decorate, texture, gradient, or add shadows."
+    )
+}
+
+NANO_BANANA_PROMPT_SUFFIX_BY_KIND = {
+    "csat_v1": {
+        "geometry": (
+            "Preserve point labels, angle markers, parallel line markers, tick marks, coordinate axes, axis ticks, graph curves, and dashed guide lines. "
+            "Minimize fills and render the figure as crisp 2D line art."
+        ),
+        "illustration": (
+            "Render it as a textbook-style monochrome illustration instead of a photo. "
+            "Keep the count and direction of people or objects, the major contours, and the internal boundaries needed to solve the problem."
+        ),
+        "generic": (
+            "Keep only the visual information needed to solve the math problem and remove decorative noise."
+        ),
+    }
+}
+
+NANO_BANANA_NEGATIVE_RULES = {
+    "csat_v1": (
+        "Do not add answer choice numbers, choice text, tables, long paragraphs, or page backgrounds. "
+        "Do not omit, misspell, or substitute labels. "
+        "Do not add watermarks, color emphasis, or background patterns."
+    )
+}
 
 
 def _load_api_env_file(root_path) -> dict[str, str]:
@@ -48,19 +87,65 @@ def _get_openai_api_key(root_path) -> str:
     raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY in apiKey.env")
 
 
-def _get_nano_banana_settings(root_path) -> tuple[str, str, str]:
+def _get_nano_banana_settings(root_path) -> tuple[str, str, str, str]:
     """Nano Banana 호출에 필요한 모델/프로젝트/리전을 읽는다."""
     settings = get_settings(root_path)
     model = settings.nano_banana_model or _get_api_setting(root_path, "NANO_BANANA_MODEL")
     project_id = settings.nano_banana_project_id or _get_api_setting(root_path, "NANO_BANANA_PROJECT_ID")
     location = settings.nano_banana_location or _get_api_setting(root_path, "NANO_BANANA_LOCATION", "global")
+    prompt_version = settings.nano_banana_prompt_version or _get_api_setting(root_path, "NANO_BANANA_PROMPT_VERSION", "csat_v1")
     if not model:
         raise ValueError("NANO_BANANA_MODEL is not configured")
     if not project_id:
         raise ValueError("NANO_BANANA_PROJECT_ID is not configured")
     if not location:
         raise ValueError("NANO_BANANA_LOCATION is not configured")
-    return model, project_id, location
+    if not prompt_version:
+        raise ValueError("NANO_BANANA_PROMPT_VERSION is not configured")
+    return model, project_id, location, prompt_version
+
+
+def _normalize_stylizable_image_kind(kind: str | None) -> str:
+    """Nano Banana 프롬프트용 이미지 kind 값을 정규화한다."""
+    normalized = (kind or "").strip().lower()
+    if normalized in SUPPORTED_STYLIZABLE_IMAGE_KINDS:
+        return normalized
+    return "generic"
+
+
+def build_nano_banana_prompt(kind: str | None, version: str) -> str:
+    """버전과 kind 조합에 맞는 Nano Banana 프롬프트를 생성한다."""
+    if version not in SUPPORTED_NANO_BANANA_PROMPT_VERSIONS:
+        raise ValueError(f"Unsupported Nano Banana prompt version: {version}")
+
+    resolved_kind = _normalize_stylizable_image_kind(kind)
+    return " ".join(
+        [
+            NANO_BANANA_BASE_PROMPTS[version],
+            NANO_BANANA_PROMPT_SUFFIX_BY_KIND[version][resolved_kind],
+            NANO_BANANA_NEGATIVE_RULES[version],
+        ]
+    )
+
+
+def _extract_stylizable_image(parsed: dict) -> tuple[bool, list[int] | None, str | None]:
+    """응답 JSON에서 첫 번째 변환 대상 이미지 bbox와 kind를 읽는다."""
+    stylizable_images = parsed.get("stylizable_images") or []
+    if not stylizable_images:
+        return False, None, None
+
+    first_image = stylizable_images[0] or {}
+    bbox = first_image.get("bbox") if isinstance(first_image, dict) else None
+    if not isinstance(bbox, list) or len(bbox) != 4:
+        return False, None, None
+
+    try:
+        image_bbox = [int(value) for value in bbox]
+    except (TypeError, ValueError):
+        return False, None, None
+
+    kind = first_image.get("kind") if isinstance(first_image, dict) else None
+    return True, image_bbox, _normalize_stylizable_image_kind(kind if isinstance(kind, str) else None)
 
 
 def _extract_json_object(text: str) -> dict:
@@ -257,6 +342,7 @@ C) Mathematical Diagrams
 - Detect only visual elements that should become a clean exam-style image.
 - Include geometry figures, illustrative drawings, and embedded problem images.
 - Exclude answer choices, plain text paragraphs, tables, and chart-only layouts.
+- The `kind` field must be one of `geometry`, `illustration`, or `generic`.
 - Return bbox coordinates relative to the provided crop image as [left, top, right, bottom].
 
 4. Final Output Format
@@ -316,21 +402,9 @@ Now process the image."""
 
     text_blocks = parsed.get("text_blocks") or []
     formulas = parsed.get("formulas") or []
-    stylizable_images = parsed.get("stylizable_images") or []
-
     ocr_text = chr(10).join([str(v).strip() for v in text_blocks if str(v).strip()])
     mathml = chr(10).join([str(v).strip() for v in formulas if str(v).strip()])
-    image_bbox = None
-    has_stylizable_image = False
-    if stylizable_images:
-        first_image = stylizable_images[0] or {}
-        bbox = first_image.get("bbox") if isinstance(first_image, dict) else None
-        if isinstance(bbox, list) and len(bbox) == 4:
-            try:
-                image_bbox = [int(value) for value in bbox]
-                has_stylizable_image = True
-            except (TypeError, ValueError):
-                image_bbox = None
+    has_stylizable_image, image_bbox, image_kind = _extract_stylizable_image(parsed)
 
     openai_request_id = (
         response.headers.get("x-request-id")
@@ -343,6 +417,7 @@ Now process the image."""
         "mathml": mathml if include_ocr else "",
         "has_stylizable_image": has_stylizable_image if include_image_detection else False,
         "image_bbox": image_bbox if include_image_detection else None,
+        "image_kind": image_kind if include_image_detection and has_stylizable_image else None,
         "model_used": model,
         "openai_request_id": openai_request_id,
     }
@@ -399,10 +474,20 @@ def generate_explanation_with_gpt(
     return _read_chat_content(response.json()).strip()
 
 
-def generate_styled_image_with_nano_banana(root_path, image_bytes: bytes, *, model_name: str | None = None) -> bytes:
+def generate_styled_image_with_nano_banana(
+    root_path,
+    image_bytes: bytes,
+    *,
+    model_name: str | None = None,
+    prompt_kind: str | None = None,
+    prompt_version: str | None = None,
+) -> bytes:
     """Nano Banana 모델로 수능 스타일 이미지를 생성해 PNG 바이트를 반환한다."""
-    resolved_model, project_id, location = _get_nano_banana_settings(root_path)
+    resolved_model, project_id, location, resolved_prompt_version = _get_nano_banana_settings(root_path)
     target_model = model_name or resolved_model
+    target_prompt_version = prompt_version or resolved_prompt_version
+    target_prompt_kind = _normalize_stylizable_image_kind(prompt_kind)
+    prompt = build_nano_banana_prompt(target_prompt_kind, target_prompt_version)
 
     try:
         from google import genai
@@ -410,11 +495,11 @@ def generate_styled_image_with_nano_banana(root_path, image_bytes: bytes, *, mod
     except ImportError as error:  # pragma: no cover
         raise ValueError("google-genai package is required for Nano Banana integration") from error
 
-    prompt = (
-        "Convert this math illustration into a clean Korean CSAT exam style image. "
-        "Keep the original structure, labels, numbers, and layout. "
-        "Use a plain white background and neat black linework. "
-        "Do not add decorative elements."
+    logger.info(
+        "Nano Banana request model=%s prompt_version=%s prompt_kind=%s",
+        target_model,
+        target_prompt_version,
+        target_prompt_kind,
     )
 
     client = genai.Client(vertexai=True, project=project_id, location=location)

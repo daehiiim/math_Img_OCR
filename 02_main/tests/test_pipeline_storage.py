@@ -339,11 +339,22 @@ def test_run_pipeline_saves_styled_image_when_detector_finds_visual(monkeypatch)
             "mathml": "<math>x</math>",
             "has_stylizable_image": True,
             "image_bbox": [2, 2, 12, 12],
+            "image_kind": "geometry",
             "model_used": "gpt-test",
             "openai_request_id": "req-test",
         }
 
-    def fake_generate_styled_image(root_path: Path, image_bytes: bytes, *, model_name: str) -> bytes:
+    styled_calls: list[tuple[str, str, str]] = []
+
+    def fake_generate_styled_image(
+        root_path: Path,
+        image_bytes: bytes,
+        *,
+        model_name: str,
+        prompt_kind: str | None,
+        prompt_version: str | None,
+    ) -> bytes:
+        styled_calls.append((model_name, prompt_kind or "", prompt_version or ""))
         return make_png_bytes(12, 12)
 
     monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
@@ -371,6 +382,7 @@ def test_run_pipeline_saves_styled_image_when_detector_finds_visual(monkeypatch)
     assert saved_region.figure.styled_image_model == "gemini-3-pro-image-preview"
     assert saved_region.figure.svg_url is None
     assert saved_region.figure.png_rendered_url is None
+    assert styled_calls == [("gemini-3-pro-image-preview", "geometry", "csat_v1")]
 
 
 def test_run_pipeline_skips_image_generation_when_detector_finds_no_visual(monkeypatch):
@@ -399,13 +411,21 @@ def test_run_pipeline_skips_image_generation_when_detector_finds_no_visual(monke
             "mathml": "",
             "has_stylizable_image": False,
             "image_bbox": None,
+            "image_kind": None,
             "model_used": "gpt-test",
             "openai_request_id": "req-test",
         }
 
     styled_calls: list[str] = []
 
-    def fake_generate_styled_image(root_path: Path, image_bytes: bytes, *, model_name: str) -> bytes:
+    def fake_generate_styled_image(
+        root_path: Path,
+        image_bytes: bytes,
+        *,
+        model_name: str,
+        prompt_kind: str | None,
+        prompt_version: str | None,
+    ) -> bytes:
         styled_calls.append(model_name)
         return make_png_bytes(12, 12)
 
@@ -461,6 +481,7 @@ def test_run_pipeline_keeps_text_and_explanation_when_image_generation_fails(mon
             "mathml": "<math>x</math>",
             "has_stylizable_image": True,
             "image_bbox": [2, 2, 12, 12],
+            "image_kind": None,
             "model_used": "gpt-test",
             "openai_request_id": "req-test",
         }
@@ -495,6 +516,68 @@ def test_run_pipeline_keeps_text_and_explanation_when_image_generation_fails(mon
     assert saved_region.extractor.explanation == "해설 본문"
     assert saved_region.figure.styled_image_url is None
     assert saved_region.error_reason == "style failed"
+
+
+def test_run_pipeline_uses_generic_prompt_when_detector_kind_is_missing(monkeypatch):
+    install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(40, 30))
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [20, 0], [20, 20], [0, 20]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "문제",
+            "mathml": "<math>x</math>",
+            "has_stylizable_image": True,
+            "image_bbox": [2, 2, 12, 12],
+            "image_kind": None,
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    styled_calls: list[tuple[str, str, str]] = []
+
+    def fake_generate_styled_image(
+        root_path: Path,
+        image_bytes: bytes,
+        *,
+        model_name: str,
+        prompt_kind: str | None,
+        prompt_version: str | None,
+    ) -> bytes:
+        styled_calls.append((model_name, prompt_kind or "", prompt_version or ""))
+        return make_png_bytes(12, 12)
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "설명")
+    monkeypatch.setattr(orchestrator, "generate_styled_image_with_nano_banana", fake_generate_styled_image)
+
+    orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=True,
+        do_image_stylize=True,
+        do_explanation=True,
+        nano_banana_model="gemini-2.5-flash-image",
+    )
+
+    assert styled_calls == [("gemini-2.5-flash-image", "generic", "csat_v1")]
 
 
 def test_run_pipeline_returns_partial_failure_counts(monkeypatch):

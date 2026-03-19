@@ -34,6 +34,7 @@ class AppSettings:
     nano_banana_model: str | None = None
     nano_banana_project_id: str | None = None
     nano_banana_location: str | None = None
+    nano_banana_prompt_version: str = "csat_v1"
     hwpx_skill_dir: str | None = None
     app_url: str | None = None
     cors_allow_origins: tuple[str, ...] = ()
@@ -98,6 +99,7 @@ def get_settings(root_path: Path) -> AppSettings:
         nano_banana_model=_get_setting(env_values, "NANO_BANANA_MODEL"),
         nano_banana_project_id=_get_setting(env_values, "NANO_BANANA_PROJECT_ID"),
         nano_banana_location=_get_setting(env_values, "NANO_BANANA_LOCATION"),
+        nano_banana_prompt_version=_get_setting(env_values, "NANO_BANANA_PROMPT_VERSION") or "csat_v1",
         database_url=_get_setting(env_values, "DATABASE_URL"),
         hwpx_skill_dir=_get_setting(env_values, "HWPX_SKILL_DIR"),
         app_url=_normalize_url(_get_setting(env_values, "APP_URL")),

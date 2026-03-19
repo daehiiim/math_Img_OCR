@@ -5,6 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: mathocr-api
+    env_file:
+      - ./02_main/.env
     ports:
       - "8000:8000"
     volumes:

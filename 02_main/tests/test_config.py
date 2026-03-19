@@ -13,6 +13,10 @@ def test_get_settings_reads_env_file(tmp_path):
             [
                 "OPENAI_API_KEY=file-openai-key",
                 "OPENAI_KEY_ENCRYPTION_SECRET=file-encryption-secret",
+                "NANO_BANANA_MODEL=gemini-3-pro-image-preview",
+                "NANO_BANANA_PROJECT_ID=test-project",
+                "NANO_BANANA_LOCATION=us-central1",
+                "NANO_BANANA_PROMPT_VERSION=csat_v2",
                 "HWPX_SKILL_DIR=D:/runtime/hwpxskill-math",
                 "APP_URL=https://mathtohwp.vercel.app/",
                 "CORS_ALLOW_ORIGINS=https://mathtohwp.vercel.app,https://preview.mathtohwp.vercel.app/",
@@ -36,6 +40,10 @@ def test_get_settings_reads_env_file(tmp_path):
 
     assert settings.openai_api_key == "file-openai-key"
     assert settings.openai_key_encryption_secret == "file-encryption-secret"
+    assert settings.nano_banana_model == "gemini-3-pro-image-preview"
+    assert settings.nano_banana_project_id == "test-project"
+    assert settings.nano_banana_location == "us-central1"
+    assert settings.nano_banana_prompt_version == "csat_v2"
     assert settings.hwpx_skill_dir == "D:/runtime/hwpxskill-math"
     assert settings.app_url == "https://mathtohwp.vercel.app"
     assert settings.cors_allow_origins == (
@@ -62,6 +70,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
             [
                 "OPENAI_API_KEY=file-openai-key",
                 "OPENAI_KEY_ENCRYPTION_SECRET=file-encryption-secret",
+                "NANO_BANANA_PROMPT_VERSION=csat_v1",
                 "HWPX_SKILL_DIR=D:/file/runtime",
                 "APP_URL=https://file.mathtohwp.vercel.app/",
                 "SUPABASE_URL=https://file.supabase.co",
@@ -72,6 +81,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
 
     monkeypatch.setenv("OPENAI_API_KEY", "env-openai-key")
     monkeypatch.setenv("OPENAI_KEY_ENCRYPTION_SECRET", "env-encryption-secret")
+    monkeypatch.setenv("NANO_BANANA_PROMPT_VERSION", "csat_v3")
     monkeypatch.setenv("HWPX_SKILL_DIR", "D:/env/runtime")
     monkeypatch.setenv("APP_URL", "https://mathtohwp.vercel.app/")
     monkeypatch.setenv("SUPABASE_URL", "https://env.supabase.co")
@@ -80,6 +90,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
 
     assert settings.openai_api_key == "env-openai-key"
     assert settings.openai_key_encryption_secret == "env-encryption-secret"
+    assert settings.nano_banana_prompt_version == "csat_v3"
     assert settings.hwpx_skill_dir == "D:/env/runtime"
     assert settings.app_url == "https://mathtohwp.vercel.app"
     assert settings.auth.supabase_url == "https://env.supabase.co"
@@ -95,6 +106,12 @@ def test_get_settings_reads_database_url(tmp_path):
     settings = get_settings(tmp_path)
 
     assert settings.database_url == "postgresql://postgres:secret@db.example.supabase.co:5432/postgres"
+
+
+def test_get_settings_uses_default_nano_banana_prompt_version(tmp_path):
+    settings = get_settings(tmp_path)
+
+    assert settings.nano_banana_prompt_version == "csat_v1"
 
 
 def test_get_settings_ignores_api_key_env_for_backend_runtime(tmp_path):
