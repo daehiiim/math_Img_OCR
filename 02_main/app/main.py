@@ -114,6 +114,18 @@ class RunJobRequest(BaseModel):
     do_explanation: bool = True
 
 
+def _collect_selected_actions(run_request: RunJobRequest) -> list[Literal["ocr", "image_stylize", "explanation"]]:
+    """실행 요청에서 사용자가 선택한 액션 목록을 순서대로 추린다."""
+    selected_actions: list[Literal["ocr", "image_stylize", "explanation"]] = []
+    if run_request.do_ocr:
+        selected_actions.append("ocr")
+    if run_request.do_image_stylize:
+        selected_actions.append("image_stylize")
+    if run_request.do_explanation:
+        selected_actions.append("explanation")
+    return selected_actions
+
+
 class CheckoutSessionRequest(BaseModel):
     plan_id: Literal["single", "starter", "pro"]
     success_url: str
@@ -230,14 +242,16 @@ def run_pipeline(
     """OCR 파이프라인을 실행한다."""
     try:
         run_request = payload or RunJobRequest()
-        if not (run_request.do_ocr or run_request.do_image_stylize or run_request.do_explanation):
+        selected_actions = _collect_selected_actions(run_request)
+        if not selected_actions:
             raise ValueError("at least one action must be selected")
 
         billing_service = _get_billing_service()
         openai_key = billing_service.resolve_openai_api_key(current_user)
-        billing_service.ensure_job_region_credits_available(
+        billing_service.ensure_job_action_credits_available(
             current_user,
             job_id,
+            selected_actions,
             processing_type=openai_key.processing_type,
         )
         result = pipeline.run_pipeline(
@@ -253,14 +267,15 @@ def run_pipeline(
         )
         charge_result = {"charged_count": 0}
         if result.get("status") in ("completed", "failed", "exported"):
-            charge_result = billing_service.consume_job_region_credits(
+            charge_result = billing_service.consume_job_action_credits(
                 current_user,
                 job_id,
+                list(result.get("executed_actions") or []),
                 processing_type=openai_key.processing_type,
             )
         return {
             **result,
-            "charged_count": int(charge_result.get("charged_count") or 0),
+            "charged_count": int(charge_result.get("charged_count") or len(charge_result.get("charged_actions") or [])),
         }
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")

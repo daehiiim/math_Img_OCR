@@ -13,6 +13,16 @@ const runPipelineMock = vi.fn(async () => ({
   exportable_count: 1,
 }));
 const exportHwpxMock = vi.fn(async () => undefined);
+let mockAuthUser = {
+  name: "김수학",
+  email: "math@example.com",
+  avatarInitials: "김",
+  credits: 2,
+  openAiConnected: true,
+  openAiMaskedKey: "sk-us••••7890",
+  usedCredits: 3,
+  chargedJobIds: [],
+};
 let mockJob: Job = {
   id: "job-1",
   fileName: "sample.png",
@@ -26,16 +36,7 @@ let mockJob: Job = {
 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({
-    user: {
-      name: "김수학",
-      email: "math@example.com",
-      avatarInitials: "김",
-      credits: 2,
-      openAiConnected: true,
-      openAiMaskedKey: "sk-us••••7890",
-      usedCredits: 3,
-      chargedJobIds: [],
-    },
+    user: mockAuthUser,
     consumeCredit: vi.fn(),
     refreshProfile: vi.fn(async () => undefined),
   }),
@@ -65,6 +66,16 @@ describe("JobDetailPage", () => {
   beforeEach(() => {
     runPipelineMock.mockClear();
     exportHwpxMock.mockClear();
+    mockAuthUser = {
+      name: "김수학",
+      email: "math@example.com",
+      avatarInitials: "김",
+      credits: 2,
+      openAiConnected: true,
+      openAiMaskedKey: "sk-us••••7890",
+      usedCredits: 3,
+      chargedJobIds: [],
+    };
     mockJob = {
       id: "job-1",
       fileName: "sample.png",
@@ -96,6 +107,54 @@ describe("JobDetailPage", () => {
       doImageStylize: true,
       doExplanation: false,
     });
+  });
+
+  it("서비스 API 모드에서는 선택한 작업 수만큼 차감 예정 크레딧을 표시한다", async () => {
+    const user = userEvent.setup();
+    mockAuthUser = {
+      ...mockAuthUser,
+      credits: 10,
+      openAiConnected: false,
+      openAiMaskedKey: null,
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("3 크레딧")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: /해설 작성/i }));
+
+    expect(screen.getByText("2 크레딧")).toBeInTheDocument();
+  });
+
+  it("OpenAI 연결 계정은 이미지 생성만 차감 예정으로 계산한다", async () => {
+    const user = userEvent.setup();
+    mockAuthUser = {
+      ...mockAuthUser,
+      credits: 10,
+      openAiConnected: true,
+      openAiMaskedKey: "sk-us••••7890",
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("1 크레딧")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: /이미지 생성/i }));
+
+    expect(screen.getByText("0 크레딧")).toBeInTheDocument();
   });
 
   it("실패 상태여도 내보낼 텍스트가 있으면 HWPX 내보내기 버튼을 보여준다", () => {

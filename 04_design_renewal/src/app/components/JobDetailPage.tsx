@@ -49,13 +49,21 @@ function isResultVisible(status: JobStatus): boolean {
   return status === "running" || status === "completed" || status === "failed" || status === "exported";
 }
 
-/** 이번 실행에서 새로 처리할 영역 수를 계산한다. */
-function calculateRequiredCredits(regions: Region[], openAiConnected: boolean): number {
-  if (openAiConnected) {
-    return 0;
+/** 선택한 작업과 API key 연결 여부를 기준으로 차감 예정 크레딧을 계산한다. */
+function calculateRequiredCredits(options: JobExecutionOptions, openAiConnected: boolean): number {
+  let requiredCredits = 0;
+
+  if (options.doImageStylize) {
+    requiredCredits += 1;
+  }
+  if (options.doOcr && !openAiConnected) {
+    requiredCredits += 1;
+  }
+  if (options.doExplanation && !openAiConnected) {
+    requiredCredits += 1;
   }
 
-  return regions.filter((region) => !region.wasCharged).length;
+  return requiredCredits;
 }
 
 /** 문제 또는 해설 텍스트가 있으면 내보내기 가능 영역으로 본다. */
@@ -78,7 +86,7 @@ export function JobDetailPage() {
   const [executionOptions, setExecutionOptions] = useState<JobExecutionOptions>(defaultExecutionOptions);
 
   const job = getJob(jobId || "");
-  const requiredCredits = calculateRequiredCredits(job?.regions ?? [], Boolean(user?.openAiConnected));
+  const requiredCredits = calculateRequiredCredits(executionOptions, Boolean(user?.openAiConnected));
   const hasSelectedAction =
     executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
   const exportableRegionCount = (job?.regions ?? []).filter(isExportableRegion).length;
@@ -179,7 +187,7 @@ export function JobDetailPage() {
 
     if ((user?.credits ?? 0) < requiredCredits) {
       toast.error("선택한 작업을 실행하기 위한 크레딧이 부족합니다.", {
-        description: "서비스 API 모드에서는 이번 실행 대상 영역 수만큼 먼저 잔액을 확인합니다.",
+        description: "선택한 작업 기준으로 잔액을 먼저 확인합니다.",
       });
       return;
     }
@@ -445,16 +453,15 @@ export function JobDetailPage() {
                 ))}
               </div>
 
-              <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">이번 실행 차감 예정</span>
-                  <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
+                <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">이번 실행 차감 예정</span>
+                    <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    선택한 작업 조합 기준으로 잔액을 먼저 확인하고, 실행 후 실제 수행된 작업만 차감합니다.
+                  </p>
                 </div>
-                <p className="mt-1 text-muted-foreground">
-                  서비스 API 모드에서는 새로 처리할 영역 수만큼 잔액을 먼저 확인하고,
-                  실행 후 문제 또는 해설이 생성된 영역만 실제 차감합니다.
-                </p>
-              </div>
 
               {(job.status === "created" || job.status === "regions_pending") ? (
                 <div className="text-center py-2">

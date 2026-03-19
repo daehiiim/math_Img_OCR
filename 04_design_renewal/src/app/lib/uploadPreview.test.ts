@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dataUrlToFile, validateImageFile } from "./uploadPreview";
+import { validateImageFile } from "./uploadPreview";
 
 describe("validateImageFile", () => {
   it("지원하지 않는 파일 형식은 오류를 반환한다", () => {
@@ -21,15 +21,5 @@ describe("validateImageFile", () => {
     const file = new File(["ok"], "sample.jpg", { type: "image/jpeg" });
 
     expect(validateImageFile(file)).toBeNull();
-  });
-});
-
-describe("dataUrlToFile", () => {
-  it("data url을 File 객체로 변환한다", () => {
-    const file = dataUrlToFile("data:text/plain;base64,SGVsbG8=", "demo.txt");
-
-    expect(file.name).toBe("demo.txt");
-    expect(file.type).toBe("text/plain");
-    expect(file.size).toBeGreaterThan(0);
   });
 });

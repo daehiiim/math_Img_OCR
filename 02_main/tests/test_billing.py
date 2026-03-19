@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import app.auth as auth_module
 import app.main as main_module
-from app.auth import AuthenticatedUser
+from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway, StoredOpenAiKey, build_billing_service
 from app.config import AppSettings, AuthSettings, BillingSettings
 from app.main import app
@@ -973,6 +973,105 @@ def test_billing_checkout_accepts_es256_authenticated_user(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["checkout_id"] == "chk_test_123"
+
+
+def test_run_pipeline_uses_action_credit_methods(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+    recorded_calls: dict[str, dict] = {}
+
+    class StubBillingService:
+        """run API가 액션 기반 과금 메서드를 호출하는지 기록한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            """서비스 API 모드의 OpenAI key 해석 결과를 돌려준다."""
+            assert current_user.user_id == user.user_id
+            return type(
+                "ResolvedKey",
+                (),
+                {
+                    "api_key": "sk-service-1234567890",
+                    "processing_type": "service_api",
+                },
+            )()
+
+        def ensure_job_action_credits_available(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """실행 전 액션 기반 선차감 검증 호출을 기록한다."""
+            recorded_calls["ensure"] = {
+                "user_id": current_user.user_id,
+                "job_id": job_id,
+                "actions": actions,
+                "processing_type": processing_type,
+            }
+            return {"required_credits": len(actions), "credits_balance": 5}
+
+        def consume_job_action_credits(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """실행 후 액션 기반 후차감 호출을 기록한다."""
+            recorded_calls["consume"] = {
+                "user_id": current_user.user_id,
+                "job_id": job_id,
+                "actions": actions,
+                "processing_type": processing_type,
+            }
+            return {"charged_actions": actions, "credits_balance": 3}
+
+    def fake_run_pipeline(*args, **kwargs):
+        """파이프라인 실행 결과를 최소 응답 형식으로 대체한다."""
+        assert kwargs["do_ocr"] is True
+        assert kwargs["do_image_stylize"] is True
+        assert kwargs["do_explanation"] is False
+        return {
+            "job_id": args[1],
+            "status": "completed",
+            "executed_actions": ["ocr", "image_stylize"],
+            "completed_count": 1,
+            "failed_count": 0,
+            "exportable_count": 1,
+        }
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+
+    client = TestClient(app)
+    response = client.post(
+        "/jobs/job-123/run",
+        json={
+            "do_ocr": True,
+            "do_image_stylize": True,
+            "do_explanation": False,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert recorded_calls["ensure"] == {
+        "user_id": "user-123",
+        "job_id": "job-123",
+        "actions": ["ocr", "image_stylize"],
+        "processing_type": "service_api",
+    }
+    assert recorded_calls["consume"] == {
+        "user_id": "user-123",
+        "job_id": "job-123",
+        "actions": ["ocr", "image_stylize"],
+        "processing_type": "service_api",
+    }
+    assert response.json()["charged_count"] == 2
 
 
 def test_polar_gateway_verify_event_accepts_polar_secret_prefix():
