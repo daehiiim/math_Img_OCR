@@ -24,9 +24,14 @@ describe("PublicHomePage", () => {
     expect(screen.getByRole("heading", { name: "컴퓨터에서도, 휴대폰에서도 문제를 한글로." })).toBeInTheDocument();
     expect(screen.getByText("로그인 없이 시작하고, 문서 제작도 간단히.")).toBeInTheDocument();
     expect(screen.getByText("바로 결과를 만들어내는 워크스테이션")).toBeInTheDocument();
+    expect(screen.getByText("사용자 OpenAI key 활용")).toBeInTheDocument();
+    expect(
+      screen.getByText("OCR과 해설은 본인 OpenAI API key로 처리하고, 이미지 생성은 크레딧을 사용합니다.")
+    ).toBeInTheDocument();
     expect(screen.getByText("사진을 찍으세요.")).toBeInTheDocument();
     expect(screen.getByText("검토하세요.")).toBeInTheDocument();
     expect(screen.getByText("변환하세요.")).toBeInTheDocument();
+    expect(screen.queryByText(/무료로 사용하십시오/)).not.toBeInTheDocument();
   });
 
   it("단계 설명의 줄바꿈 문자를 화면 줄바꿈으로 처리할 수 있는 클래스를 적용한다", () => {

@@ -3,6 +3,9 @@ Done
 - checkout 진단 스크립트 `02_main/scripts/polar_checkout_inspect.py` 추가 완료
 - Polar 운영 런북에 checkout 진단/`South Korea` preset 확인 절차 반영 완료
 - 회귀 테스트 추가 및 `test_billing.py`, `test_polar_checkout_inspect.py` 통과 완료
+- OpenAI 연결 시 남은 이미지 `∞` 표기를 실제 `credits` 값으로 교정하고 대시보드/헤더에 OpenAI 상태와 크레딧을 함께 노출하도록 수정 완료
+- `OpenAiConnectionPage`, `PublicHomePage`의 무료/무제한 문구를 `OCR·해설은 사용자 key`, `이미지 생성은 크레딧 필요` 정책으로 정리 완료
+- 프런트 회귀 테스트 `DashboardPage/AuthLayout/StudioLayout/OpenAiConnection/PublicHome` 추가 및 `04_design_renewal` 관련 회귀/빌드 통과 완료
 
 In Progress
 - 최우선 과제: Cloud Run 재배포 후 production checkout 진단과 실결제 1건 검증
@@ -18,10 +21,13 @@ Related Files
 - `D:\03_PROJECT\05_mathOCR\02_main\app\billing.py`
 - `D:\03_PROJECT\05_mathOCR\02_main\scripts\polar_checkout_inspect.py`
 - `D:\03_PROJECT\05_mathOCR\02_main\docs\polar_production_runbook_ko.md`
-- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_billing.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_polar_checkout_inspect.py`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\DashboardPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\OpenAiConnectionPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PublicHomePage.tsx`
 
 Last State
 - `cd D:\03_PROJECT\05_mathOCR && py -3.14 -m pytest 02_main\tests\test_billing.py 02_main\tests\test_polar_checkout_inspect.py` -> `44 passed`
 - `cd D:\03_PROJECT\05_mathOCR && py -3.14 02_main\scripts\polar_checkout_inspect.py --help` -> success
-- 작업트리에는 이번 작업 외 선행 변경이 유지됨: 루트 `.hwpx` 삭제/`templates/` 이동 변경
+- `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run test:run -- src/app/components/DashboardPage.test.tsx src/app/components/AuthLayout.test.tsx src/app/components/StudioLayout.test.tsx src/app/components/OpenAiConnectionPage.test.tsx src/app/components/PublicHomePage.test.tsx src/app/components/NewJobPage.test.tsx src/app/components/JobDetailPage.test.tsx src/app/components/Layout.test.tsx` -> `17 passed`
+- `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run build` -> success (`vite` chunk size warning 유지)
+- 작업트리에는 이번 작업 외 선행 변경이 유지됨: `02_main/tests/test_exporter.py`, `02_main/vendor/hwpxskill-math/templates/base/*`

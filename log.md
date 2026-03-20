@@ -41,3 +41,8 @@
 - optional checkout 필드가 `PydanticUndefined`일 때도 진단 dict가 `None`으로 정규화되도록 보강했고 회귀 테스트를 추가했다.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3.14 -m pytest 02_main\\tests\\test_billing.py 02_main\\tests\\test_polar_checkout_inspect.py` 기준 `44 passed`.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3.14 02_main\\scripts\\polar_checkout_inspect.py --help` 성공.
+- OpenAI 연결 상태에서 남은 이미지 수를 `∞`가 아니라 실제 `credits` 값으로 보여주도록 `DashboardPage`, `AuthLayout`, `StudioLayout`을 수정했고, 대시보드에서 OpenAI 연결 여부와 무관하게 이미지 충전 CTA를 노출하도록 정리했다.
+- `OpenAiConnectionPage`, `PublicHomePage`의 무료/무제한 뉘앙스 문구를 제거하고 `OCR·해설은 사용자 OpenAI key`, `이미지 생성은 크레딧 필요` 정책으로 안내 문구를 교정했다.
+- 프런트 회귀 테스트를 추가했다: `DashboardPage.test.tsx`, `AuthLayout.test.tsx`, `StudioLayout.test.tsx`, `OpenAiConnectionPage.test.tsx`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/DashboardPage.test.tsx src/app/components/AuthLayout.test.tsx src/app/components/StudioLayout.test.tsx src/app/components/OpenAiConnectionPage.test.tsx src/app/components/PublicHomePage.test.tsx src/app/components/NewJobPage.test.tsx src/app/components/JobDetailPage.test.tsx src/app/components/Layout.test.tsx` 기준 `17 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. Vite chunk size warning은 기존 번들 크기 경고로 유지됐다.

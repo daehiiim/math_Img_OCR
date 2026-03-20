@@ -26,17 +26,18 @@ export function StudioLayout() {
             {isAuthenticated && user ? (
               <>
                 <div className="hidden rounded-full border border-black/5 bg-[#f7f3ec] px-3 py-1.5 text-[12px] text-[#5c564f] sm:block">
-                  {user.openAiConnected ? (
-                    <span className="flex items-center gap-1.5">
-                      <KeyRound className="h-3.5 w-3.5 text-emerald-600" />
-                      OpenAI 연결됨
-                    </span>
-                  ) : (
+                  <span className="flex items-center gap-2">
                     <span className="flex items-center gap-1.5">
                       <ImageIcon className="h-3.5 w-3.5" />
-                      {user.credits}개 이미지 남음
+                      {`${user.credits}개 이미지 남음`}
                     </span>
-                  )}
+                    {user.openAiConnected ? (
+                      <span className="flex items-center gap-1.5 text-emerald-600">
+                        <KeyRound className="h-3.5 w-3.5" />
+                        OpenAI 연결됨
+                      </span>
+                    ) : null}
+                  </span>
                 </div>
                 <Button variant="outline" onClick={() => navigate("/workspace")}>
                   내 작업실

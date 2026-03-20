@@ -115,19 +115,18 @@ export function PublicHomePage() {
                 <div className="flex items-start gap-3">
                   <KeyRound className="mt-0.5 h-5 w-5 text-[#f6c17f]" />
                   <div>
-                    <p className="text-[15px]">누구나 무료 이용</p>
+                    <p className="text-[15px]">사용자 OpenAI key 활용</p>
                     <p className="mt-1 text-[13px] leading-6 text-white/65">
-                      본인의 OpenAI API key를 가지고 있다면 무료로 사용하십시오
+                      OCR과 해설은 본인 OpenAI API key로 처리하고, 이미지 생성은 크레딧을 사용합니다.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="mt-0.5 h-5 w-5 text-[#9bd2c5]" />
                   <div>
-                    <p className="text-[15px]">더 편하게</p>
+                    <p className="text-[15px]">이미지 생성은 크레딧</p>
                     <p className="mt-1 text-[13px] leading-6 text-white/65">
-                      간편하게 로그인하고 모든 기능을 사용하고 싶으면 크레딧을
-                      구매하세요
+                      로그인 후 크레딧을 충전하면 이미지 생성과 전체 자동 처리를 바로 진행할 수 있습니다.
                     </p>
                   </div>
                 </div>

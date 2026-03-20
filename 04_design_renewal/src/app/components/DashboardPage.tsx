@@ -59,8 +59,8 @@ export function DashboardPage() {
             </CardTitle>
             <CardDescription>
               {user.openAiConnected
-                ? "OpenAI API key 연결로 사용자 소유 키를 사용하고 있습니다"
-                : "이미지를 사용하여 OCR 작업을 실행하세요"}
+                ? "OCR·해설은 연결한 OpenAI API key를 사용하고, 이미지 생성은 크레딧을 사용합니다."
+                : "OCR·해설과 이미지 생성을 실행하려면 크레딧이 필요합니다."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -72,9 +72,7 @@ export function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-[12px] text-muted-foreground mb-1">남은 이미지</p>
-                  <p className="text-[24px]">
-                    {user.openAiConnected ? "∞" : user.credits.toLocaleString()}
-                  </p>
+                  <p className="text-[24px]">{user.credits.toLocaleString()}</p>
                 </div>
               </div>
 
@@ -90,33 +88,21 @@ export function DashboardPage() {
               </div>
 
               {/* Action Button */}
-              <div className="flex items-center justify-end">
-                {!user.openAiConnected && user.credits <= 10 && (
-                  <Button 
-                    onClick={() => navigate("/pricing")} 
-                    variant="default"
-                    className="gap-2"
-                  >
-                    <Coins className="w-4 h-4" />
-                    이미지 충전
-                  </Button>
-                )}
-                {!user.openAiConnected && user.credits > 10 && (
-                  <Button 
-                    onClick={() => navigate("/pricing")} 
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <Coins className="w-4 h-4" />
-                    이미지 추가
-                  </Button>
-                )}
-                {user.openAiConnected && (
+              <div className="flex flex-col items-start gap-3 sm:items-end">
+                {user.openAiConnected ? (
                   <div className="flex items-center gap-2 text-emerald-500">
                     <CheckCircle2 className="w-5 h-5" />
                     <span className="text-[14px]">OpenAI 연결됨</span>
                   </div>
-                )}
+                ) : null}
+                <Button
+                  onClick={() => navigate("/pricing")}
+                  variant={user.credits <= 10 ? "default" : "outline"}
+                  className="gap-2"
+                >
+                  <Coins className="w-4 h-4" />
+                  {user.credits <= 10 ? "이미지 충전" : "이미지 추가"}
+                </Button>
               </div>
             </div>
           </CardContent>

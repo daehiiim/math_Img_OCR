@@ -30,18 +30,17 @@ export function AuthLayout() {
         {isAuthenticated && user && !isLoginPage && (
           <div className="flex items-center gap-3">
             {/* Credits indicator */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#f4f4f5] text-[12px] text-[#71717a]">
-              <ImageIcon className="w-3 h-3" />
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#f4f4f5] text-[12px] text-[#71717a]">
+              <span className="flex items-center gap-1.5">
+                <ImageIcon className="w-3 h-3" />
+                <span className="text-[#111]">{`${user.credits}개 이미지 남음`}</span>
+              </span>
               {user.openAiConnected ? (
-                <span className="flex items-center gap-1">
-                  <KeyRound className="w-3 h-3 text-emerald-600" />
+                <span className="flex items-center gap-1 text-emerald-600">
+                  <KeyRound className="w-3 h-3" />
                   OpenAI 연결됨
                 </span>
-              ) : (
-                <span>
-                  <span className="text-[#111]">{user.credits}</span> 이미지 남음
-                </span>
-              )}
+              ) : null}
             </div>
 
             {/* Avatar dropdown */}

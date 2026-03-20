@@ -71,7 +71,7 @@ export function OpenAiConnectionPage() {
         {isConnected ? (
           <>
             <p className="mb-6 text-[14px] leading-relaxed text-[#71717a]">
-              사용자 소유 키로 처리하도록 연결되었습니다.
+              사용자 소유 키로 OCR과 해설을 처리합니다. 이미지 생성은 계정 크레딧을 계속 사용합니다.
             </p>
             <div className="mb-6 rounded-xl bg-[#fafaf8] p-4 text-left">
               <p className="text-[11px] uppercase tracking-[0.16em] text-[#9b948c]">
@@ -109,15 +109,15 @@ export function OpenAiConnectionPage() {
         ) : (
           <>
             <p className="mb-7 text-[14px] leading-relaxed text-[#71717a]">
-              먼저 본인 OpenAI API key를 연결해 무료 처리 모드로 시작하세요. 연결하지 않으면
-              아래에서 크레딧 구매로 넘어갈 수 있습니다.
+              OpenAI API key를 연결하면 OCR과 해설은 사용자 소유 키로 처리할 수 있습니다.
+              이미지 생성은 별도 크레딧이 필요합니다.
             </p>
 
             <div className="mb-6 space-y-2.5 text-left">
               {[
-                { icon: Sparkles, text: "본인 API key로 바로 OCR 실행" },
-                { icon: ShieldCheck, text: "크레딧 없이 사용자 소유 키로 처리" },
-                { icon: WalletCards, text: "연결하지 않으면 즉시 크레딧 구매로 이동" },
+                { icon: Sparkles, text: "OCR과 해설은 사용자 OpenAI key로 처리" },
+                { icon: ShieldCheck, text: "이미지 생성은 크레딧이 필요" },
+                { icon: WalletCards, text: "연결하지 않으면 모든 작업에 크레딧 사용" },
               ].map((item) => (
                 <div
                   key={item.text}
