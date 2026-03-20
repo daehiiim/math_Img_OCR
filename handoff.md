@@ -2,6 +2,7 @@ Done
 - Nano Banana provider 토글(`vertex|gemini_api`) 구현 완료
 - `GEMINI_API_KEY`/`NANO_BANANA_PROVIDER` 설정 로딩, provider별 `genai.Client(...)` 분기, API 에러 매핑 반영 완료
 - `.env.example` 및 운영 전환 문서 갱신 완료
+- 다음 AI agent용 운영 인수인계 문서 `description.md` 작성 완료
 
 In Progress
 - 최우선 과제: 운영 Cloud Run/Secret Manager 반영과 실데이터 검증
@@ -21,7 +22,8 @@ Related Files
 - `D:\03_PROJECT\05_mathOCR\02_main\app\main.py`
 - `D:\03_PROJECT\05_mathOCR\02_main\.env.example`
 - `D:\03_PROJECT\05_mathOCR\02_main\docs\production_nano_banana_web_rollout_ko.md`
+- `D:\03_PROJECT\05_mathOCR\description.md`
 
 Last State
 - 백엔드 검증: `cd D:\03_PROJECT\05_mathOCR\02_main && pytest -q tests` -> `104 passed`
-- 프런트 변경 없음
+- 문서 추가: `description.md` 작성 및 인수인계 링크 갱신

@@ -6,3 +6,4 @@
 - `main.py`에서 `GEMINI_API_KEY is not configured`, `Unsupported NANO_BANANA_PROVIDER`를 이미지 생성 설정 오류로 매핑했다.
 - `production_nano_banana_web_rollout_ko.md`를 Vertex 대체 문서가 아니라 선택 가능한 provider 운영 문서로 갱신했다.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\02_main && pytest -q tests` 기준 `104 passed`.
+- 다음 AI agent가 이어서 작업할 수 있도록 루트 `description.md`를 작성하고 `handoff.md`의 관련 파일 목록에 연결했다.
