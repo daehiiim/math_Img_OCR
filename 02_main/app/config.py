@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+DEFAULT_NANO_BANANA_PROVIDER = "vertex"
+
 
 @dataclass(frozen=True)
 class AuthSettings:
@@ -32,7 +34,9 @@ class AppSettings:
     auth: AuthSettings
     billing: BillingSettings
     openai_base_url: str | None = None
+    nano_banana_provider: str = DEFAULT_NANO_BANANA_PROVIDER
     nano_banana_model: str | None = None
+    gemini_api_key: str | None = None
     nano_banana_project_id: str | None = None
     nano_banana_location: str | None = None
     nano_banana_prompt_version: str = "csat_v1"
@@ -100,6 +104,12 @@ def _get_nano_banana_prompt_version(env_values: dict[str, str]) -> str:
     raise ValueError(f"Unsupported NANO_BANANA_PROMPT_VERSION: {version}")
 
 
+def _get_nano_banana_provider(env_values: dict[str, str]) -> str:
+    """Nano Banana provider 값을 소문자 토글 문자열로 정규화한다."""
+    value = _get_setting(env_values, "NANO_BANANA_PROVIDER")
+    return (value or DEFAULT_NANO_BANANA_PROVIDER).strip().lower()
+
+
 def get_settings(root_path: Path) -> AppSettings:
     """OCR API가 필요로 하는 인증/과금 설정 묶음을 반환한다."""
     env_values = _load_env_file(root_path)
@@ -108,7 +118,9 @@ def get_settings(root_path: Path) -> AppSettings:
         openai_api_key=_get_setting(env_values, "OPENAI_API_KEY"),
         openai_base_url=_normalize_url(_get_setting(env_values, "OPENAI_BASE_URL")),
         openai_key_encryption_secret=_get_setting(env_values, "OPENAI_KEY_ENCRYPTION_SECRET"),
+        nano_banana_provider=_get_nano_banana_provider(env_values),
         nano_banana_model=_get_setting(env_values, "NANO_BANANA_MODEL"),
+        gemini_api_key=_get_setting(env_values, "GEMINI_API_KEY"),
         nano_banana_project_id=_get_setting(env_values, "NANO_BANANA_PROJECT_ID"),
         nano_banana_location=_get_setting(env_values, "NANO_BANANA_LOCATION"),
         nano_banana_prompt_version=_get_nano_banana_prompt_version(env_values),

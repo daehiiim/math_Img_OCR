@@ -13,7 +13,9 @@ def test_get_settings_reads_env_file(tmp_path):
             [
                 "OPENAI_API_KEY=file-openai-key",
                 "OPENAI_KEY_ENCRYPTION_SECRET=file-encryption-secret",
+                "NANO_BANANA_PROVIDER=gemini_api",
                 "NANO_BANANA_MODEL=gemini-3-pro-image-preview",
+                "GEMINI_API_KEY=file-gemini-api-key",
                 "NANO_BANANA_PROJECT_ID=test-project",
                 "NANO_BANANA_LOCATION=us-central1",
                 "NANO_BANANA_PROMPT_VERSION=csat_v1",
@@ -40,7 +42,9 @@ def test_get_settings_reads_env_file(tmp_path):
 
     assert settings.openai_api_key == "file-openai-key"
     assert settings.openai_key_encryption_secret == "file-encryption-secret"
+    assert settings.nano_banana_provider == "gemini_api"
     assert settings.nano_banana_model == "gemini-3-pro-image-preview"
+    assert settings.gemini_api_key == "file-gemini-api-key"
     assert settings.nano_banana_project_id == "test-project"
     assert settings.nano_banana_location == "us-central1"
     assert settings.nano_banana_prompt_version == "csat_v1"
@@ -111,6 +115,7 @@ def test_get_settings_reads_database_url(tmp_path):
 def test_get_settings_uses_default_nano_banana_prompt_version(tmp_path):
     settings = get_settings(tmp_path)
 
+    assert settings.nano_banana_provider == "vertex"
     assert settings.nano_banana_prompt_version == "csat_v1"
 
 

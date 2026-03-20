@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+from dataclasses import dataclass
 from typing import Optional
 
 import requests
@@ -14,7 +15,13 @@ from app.pipeline.schema import ExtractorContext
 
 logger = logging.getLogger(__name__)
 SUPPORTED_STYLIZABLE_IMAGE_KINDS = {"geometry", "illustration", "generic"}
+SUPPORTED_NANO_BANANA_PROVIDERS = {"vertex", "gemini_api"}
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+GEMINI_API_KEY_NOT_CONFIGURED_ERROR = "GEMINI_API_KEY is not configured"
+NANO_BANANA_LOCATION_NOT_CONFIGURED_ERROR = "NANO_BANANA_LOCATION is not configured"
+NANO_BANANA_MODEL_NOT_CONFIGURED_ERROR = "NANO_BANANA_MODEL is not configured"
+NANO_BANANA_PROJECT_ID_NOT_CONFIGURED_ERROR = "NANO_BANANA_PROJECT_ID is not configured"
+NANO_BANANA_PROMPT_VERSION_NOT_CONFIGURED_ERROR = "NANO_BANANA_PROMPT_VERSION is not configured"
 
 NANO_BANANA_BASE_PROMPTS = {
     "csat_v1": (
@@ -50,6 +57,18 @@ NANO_BANANA_NEGATIVE_RULES = {
 }
 
 
+@dataclass(frozen=True)
+class NanoBananaSettings:
+    """Nano Banana provider별 필수 런타임 설정을 묶는다."""
+
+    provider: str
+    model: str
+    prompt_version: str
+    project_id: str | None = None
+    location: str | None = None
+    gemini_api_key: str | None = None
+
+
 def _get_openai_base_url(root_path) -> str:
     """백엔드 런타임 설정에서 OpenAI base URL을 읽는다."""
     settings = get_settings(root_path)
@@ -68,22 +87,70 @@ def _get_openai_api_key(root_path) -> str:
     raise ValueError("OPENAI_API_KEY is not configured in 02_main/.env or environment variables")
 
 
-def _get_nano_banana_settings(root_path) -> tuple[str, str, str, str]:
-    """Nano Banana 호출에 필요한 모델/프로젝트/리전을 읽는다."""
+def _require_setting(value: str | None, error_message: str) -> str:
+    """필수 설정값이 없으면 고정 에러 문자열로 실패시킨다."""
+    if value:
+        return value
+    raise ValueError(error_message)
+
+
+def _build_vertex_nano_banana_settings(settings, model: str, prompt_version: str) -> NanoBananaSettings:
+    """Vertex provider에 필요한 설정을 검증해 반환한다."""
+    return NanoBananaSettings(
+        provider="vertex",
+        model=model,
+        prompt_version=prompt_version,
+        project_id=_require_setting(
+            settings.nano_banana_project_id,
+            NANO_BANANA_PROJECT_ID_NOT_CONFIGURED_ERROR,
+        ),
+        location=_require_setting(
+            settings.nano_banana_location,
+            NANO_BANANA_LOCATION_NOT_CONFIGURED_ERROR,
+        ),
+    )
+
+
+def _build_gemini_api_nano_banana_settings(settings, model: str, prompt_version: str) -> NanoBananaSettings:
+    """Gemini API provider에 필요한 설정을 검증해 반환한다."""
+    return NanoBananaSettings(
+        provider="gemini_api",
+        model=model,
+        prompt_version=prompt_version,
+        gemini_api_key=_require_setting(
+            settings.gemini_api_key,
+            GEMINI_API_KEY_NOT_CONFIGURED_ERROR,
+        ),
+    )
+
+
+def _get_nano_banana_settings(root_path) -> NanoBananaSettings:
+    """Nano Banana 호출에 필요한 provider별 설정을 읽고 검증한다."""
     settings = get_settings(root_path)
-    model = settings.nano_banana_model
-    project_id = settings.nano_banana_project_id
-    location = settings.nano_banana_location or "global"
-    prompt_version = settings.nano_banana_prompt_version
-    if not model:
-        raise ValueError("NANO_BANANA_MODEL is not configured")
-    if not project_id:
-        raise ValueError("NANO_BANANA_PROJECT_ID is not configured")
-    if not location:
-        raise ValueError("NANO_BANANA_LOCATION is not configured")
-    if not prompt_version:
-        raise ValueError("NANO_BANANA_PROMPT_VERSION is not configured")
-    return model, project_id, location, prompt_version
+    provider = settings.nano_banana_provider
+    model = _require_setting(settings.nano_banana_model, NANO_BANANA_MODEL_NOT_CONFIGURED_ERROR)
+    prompt_version = _require_setting(
+        settings.nano_banana_prompt_version,
+        NANO_BANANA_PROMPT_VERSION_NOT_CONFIGURED_ERROR,
+    )
+    if provider not in SUPPORTED_NANO_BANANA_PROVIDERS:
+        raise ValueError(f"Unsupported NANO_BANANA_PROVIDER: {provider}")
+    if provider == "vertex":
+        return _build_vertex_nano_banana_settings(settings, model, prompt_version)
+    return _build_gemini_api_nano_banana_settings(settings, model, prompt_version)
+
+
+def _build_nano_banana_client(genai_module, settings: NanoBananaSettings):
+    """Provider 설정에 맞는 google-genai Client를 생성한다."""
+    if settings.provider == "vertex":
+        return genai_module.Client(
+            vertexai=True,
+            project=settings.project_id,
+            location=settings.location,
+        )
+    if settings.provider == "gemini_api":
+        return genai_module.Client(api_key=settings.gemini_api_key)
+    raise ValueError(f"Unsupported NANO_BANANA_PROVIDER: {settings.provider}")
 
 
 def _normalize_stylizable_image_kind(kind: str | None) -> str:
@@ -464,9 +531,9 @@ def generate_styled_image_with_nano_banana(
     prompt_version: str | None = None,
 ) -> bytes:
     """Nano Banana 모델로 수능 스타일 이미지를 생성해 PNG 바이트를 반환한다."""
-    resolved_model, project_id, location, resolved_prompt_version = _get_nano_banana_settings(root_path)
-    target_model = model_name or resolved_model
-    target_prompt_version = prompt_version or resolved_prompt_version
+    settings = _get_nano_banana_settings(root_path)
+    target_model = model_name or settings.model
+    target_prompt_version = prompt_version or settings.prompt_version
     target_prompt_kind = _normalize_stylizable_image_kind(prompt_kind)
     prompt = build_nano_banana_prompt(target_prompt_kind, target_prompt_version)
 
@@ -477,13 +544,14 @@ def generate_styled_image_with_nano_banana(
         raise ValueError("google-genai package is required for Nano Banana integration") from error
 
     logger.info(
-        "Nano Banana request model=%s prompt_version=%s prompt_kind=%s",
+        "Nano Banana request provider=%s model=%s prompt_version=%s prompt_kind=%s",
+        settings.provider,
         target_model,
         target_prompt_version,
         target_prompt_kind,
     )
 
-    client = genai.Client(vertexai=True, project=project_id, location=location)
+    client = _build_nano_banana_client(genai, settings)
     response = client.models.generate_content(
         model=target_model,
         contents=[

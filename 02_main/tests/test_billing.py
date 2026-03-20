@@ -1296,7 +1296,18 @@ def test_run_pipeline_returns_user_openai_key_detail_for_missing_secret(monkeypa
     assert response.json()["detail"] == "사용자 OpenAI 키 설정이 완료되지 않았습니다."
 
 
-def test_run_pipeline_returns_image_config_detail_for_missing_nano_banana_setting(monkeypatch):
+@pytest.mark.parametrize(
+    "error_message",
+    [
+        "NANO_BANANA_MODEL is not configured",
+        "GEMINI_API_KEY is not configured",
+        "Unsupported NANO_BANANA_PROVIDER: invalid-provider",
+    ],
+)
+def test_run_pipeline_returns_image_config_detail_for_image_provider_misconfiguration(
+    monkeypatch,
+    error_message: str,
+):
     user = make_user()
     app.dependency_overrides[require_authenticated_user] = lambda: user
 
@@ -1327,7 +1338,7 @@ def test_run_pipeline_returns_image_config_detail_for_missing_nano_banana_settin
 
     def fake_run_pipeline(*args, **kwargs):
         """Nano Banana 설정 누락 예외를 직접 재현한다."""
-        raise ValueError("NANO_BANANA_MODEL is not configured")
+        raise ValueError(error_message)
 
     monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
     monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)

@@ -190,7 +190,12 @@ def _map_runtime_value_error(error: ValueError) -> HTTPException | None:
     normalized = str(error).lower()
     if "openai_key_encryption_secret" in normalized:
         return HTTPException(status_code=500, detail=USER_OPENAI_KEY_CONFIG_DETAIL)
-    if "nano_banana_" in normalized or "google-genai package is required" in normalized:
+    if (
+        "nano_banana_" in normalized
+        or "gemini_api_key" in normalized
+        or "unsupported nano_banana_provider" in normalized
+        or "google-genai package is required" in normalized
+    ):
         return HTTPException(status_code=500, detail=IMAGE_PIPELINE_CONFIG_DETAIL)
     if "supabase" in normalized and "not configured" in normalized:
         return HTTPException(status_code=503, detail=STORAGE_FAILURE_DETAIL)
