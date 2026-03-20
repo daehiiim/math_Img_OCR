@@ -1,26 +1,27 @@
 Done
-- HWPX export를 `math_templete_example.hwpx` 기준 템플릿으로 전환 완료
-- masterpage/footer current-page-only 적용 및 exporter/template/style ref 검증 추가 완료
-- `py -3 -m pytest 02_main\tests\test_exporter.py 02_main\tests\test_pipeline_storage.py -q` -> `20 passed`
+- HWPX export 기준 템플릿을 `result_answer.hwpx` 기반으로 재교체 완료
+- `section0.xml` 합성형 exporter를 레퍼런스 블록 복제형 renderer로 교체 완료
+- footer current-page-only 적용 완료
+- `templates/generated_example.hwpx` 재생성 완료
+- `py -3 -m pytest 02_main\tests\test_exporter.py 02_main\tests\test_pipeline_storage.py -q` -> `23 passed`
 
 In Progress
-- 최우선 과제: Cloud Run 재배포 후 production checkout 진단과 실결제 1건 검증
-- 진행 상태: Polar checkout 코드/문서/테스트는 완료됐고 운영 배포 및 실제 `checkout_id` 진단 실행은 미진행
-- 다음 단계: backend 재배포 후 `py scripts/polar_checkout_inspect.py --checkout-id <CHECKOUT_ID>` 실행, 실결제 1건에서 `credits_applied=true` 검증
+- 최우선 과제: 한글에서 `generated_example.hwpx` 수동 오픈 검증
+- 진행 상태: XML 구조/테스트 비교는 통과했고 `result_answer`와 header/first block/picture/choice 구조 일치 확인 완료
+- 다음 단계: 한글에서 `generated_example.hwpx` 와 `result_answer.hwpx` 를 나란히 열어 시각 차이 확인
 
 Next
-- Polar 운영 공통 실패 checkout 1건 재조회 결과 수집
-- 실결제 후 `payment_events`, `credit_ledger`, `profiles.credits_balance` 적립 확인
-- HWPX 생성물 한글 수동 오픈 검증 1회 수행
+- 수동 오픈에서 어긋나는 줄간격/탭/이미지 크기 있으면 `hwpx_reference_renderer.py` 미세 조정
+- 실제 OCR job 데이터 1건으로 export 재검증
 
 Related Files
 - `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\exporter.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\hwpx_reference_renderer.py`
 - `D:\03_PROJECT\05_mathOCR\02_main\vendor\hwpxskill-math\templates\base\`
 - `D:\03_PROJECT\05_mathOCR\02_main\tests\test_exporter.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\scripts\polar_checkout_inspect.py`
+- `D:\03_PROJECT\05_mathOCR\templates\generated_example.hwpx`
 
 Last State
 - 브랜치: `codex-hwpx-template-hardening`
-- HWPX runtime required files에 `masterpage0.xml`, `masterpage1.xml`, `BinData/image1.PNG` 추가됨
-- footer는 `numType="PAGE"`만 유지하고 정적 총페이지 텍스트 제거됨
-- 작업트리에는 이번 HWPX 템플릿 자산 교체와 exporter/test 변경이 남아 있음
+- runtime required image는 `BinData/image1.bmp` 기준
+- `generated_example.hwpx` 구조 비교: header `27/35/30`, 첫 문단 `29/1/tbl+line+rect`, 그림 `34/1`, 보기 `11/4`, footer 총페이지 제거

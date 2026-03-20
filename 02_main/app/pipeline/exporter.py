@@ -17,6 +17,7 @@ from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo
 
 from app.config import get_settings
+from app.pipeline.hwpx_reference_renderer import render_section_from_reference
 from app.pipeline.schema import JobPipelineContext
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,7 +39,7 @@ REQUIRED_RUNTIME_FILES = (
     Path("templates/base/Contents/masterpage0.xml"),
     Path("templates/base/Contents/masterpage1.xml"),
     Path("templates/base/Contents/section0.xml"),
-    Path("templates/base/BinData/image1.PNG"),
+    Path("templates/base/BinData/image1.bmp"),
     Path("templates/base/mimetype"),
 )
 RUNTIME_MODULE_NAMES = ("xml_primitives", "exam_helpers", "hwpx_utils")
@@ -248,22 +249,24 @@ def export_hwpx(root_path: Path, job: JobPipelineContext, export_dir: Path) -> P
             bindata_dir = work_dir / "BinData"
             bindata_dir.mkdir(parents=True, exist_ok=True)
 
-            images_info = _generate_section0_xml(
+            images_info = render_section_from_reference(
+                section_path=section_path,
                 root_path=root_path,
                 job=job,
-                output_path=section_path,
-                bindata_tgt_dir=bindata_dir,
+                bindata_dir=bindata_dir,
                 runtime=runtime_modules,
                 context=context,
                 warnings=warnings,
             )
             runtime_modules.update_metadata(
                 content_hpf,
-                f"{context.year}학년도 수학영역",
+                f"{context.year}학년도 수학시험 문제지",
                 "MathOCR",
             )
             _inject_images_to_manifest(content_hpf, images_info)
             _update_header_xml(header_xml_path, images_info, warnings)
+            _normalize_masterpage_footer(work_dir / "Contents" / "masterpage0.xml")
+            _normalize_masterpage_footer(work_dir / "Contents" / "masterpage1.xml")
             _validate_template_contract(work_dir, content_hpf, header_xml_path, section_path)
             runtime_modules.pack_hwpx(work_dir, hwpx_path)
 
@@ -277,6 +280,22 @@ def export_hwpx(root_path: Path, job: JobPipelineContext, export_dir: Path) -> P
 
     warnings.emit()
     return hwpx_path
+
+
+def _normalize_masterpage_footer(masterpage_path: Path) -> None:
+    """footer 가운데 셀에서 총페이지 정적 문단을 제거한다."""
+    ET.register_namespace("", "http://www.hancom.co.kr/hwpml/2011/master-page")
+    tree = ET.parse(str(masterpage_path))
+    root = tree.getroot()
+    for cell in root.findall(".//hp:tc", HWPX_NS):
+        if cell.find(".//hp:autoNum[@numType='PAGE']", HWPX_NS) is None:
+            continue
+        for sub_list in cell.findall(".//hp:subList", HWPX_NS):
+            for paragraph in list(sub_list.findall("hp:p", HWPX_NS)):
+                texts = "".join(node.text or "" for node in paragraph.findall(".//hp:t", HWPX_NS)).strip()
+                if texts.isdigit():
+                    sub_list.remove(paragraph)
+    tree.write(str(masterpage_path), encoding="UTF-8", xml_declaration=True)
 
 
 def _parse_math_text_to_runs(

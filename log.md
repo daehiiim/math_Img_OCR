@@ -50,3 +50,11 @@
 - `tests/test_exporter.py`에 masterpage 존재, page layout, 연도 치환, footer 현재 페이지만 유지, section style ref 제한 테스트를 추가했다.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_exporter.py -q` 기준 `9 passed`.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_exporter.py D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_pipeline_storage.py -q` 기준 `20 passed`.
+- HWPX 기준 템플릿 방향을 다시 바로잡았다. `math_templete_example.hwpx` 기반 합성형 exporter를 폐기하고 [`result_answer.hwpx`](/D:/03_PROJECT/05_mathOCR/templates/result_answer.hwpx) 를 런타임 기준 템플릿으로 재지정했다.
+- vendored runtime `02_main/vendor/hwpxskill-math/templates/base` 자산을 `result_answer` 언팩본으로 교체했다. `BinData/image1.bmp`, `header.xml`, `content.hpf`, `masterpage0.xml`, `masterpage1.xml`, `section0.xml`, preview/settings 자산이 모두 레퍼런스 계열로 바뀌었다.
+- [`hwpx_reference_renderer.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpx_reference_renderer.py) 를 추가했다. `section0.xml`을 새로 합성하지 않고, 레퍼런스 문단 블록을 깊은 복제한 뒤 번호/본문/수식/이미지/BinData만 치환하도록 exporter 구조를 재설계했다.
+- [`exporter.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/exporter.py) 는 새 renderer를 호출하도록 바뀌었고, export 시점에 masterpage footer에서 총페이지 정적 문단을 제거해 `현재 페이지`만 남기도록 강제한다.
+- [`tests/test_exporter.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_exporter.py) 에 `result_answer` 직접 비교 테스트를 추가했다. header 정의 개수, 첫 문단의 `tbl/line/rect/secPr/colPr`, 그림 문단 `paraPr=34/style=1`, 보기 문단 `paraPr=11/style=4` 를 고정 기준으로 검증한다.
+- 샘플 문서 [`generated_example.hwpx`](/D:/03_PROJECT/05_mathOCR/templates/generated_example.hwpx) 를 새 exporter로 다시 생성했다.
+- 구조 비교 결과, `generated_example.hwpx` 는 `result_answer.hwpx` 와 동일한 header 정의 개수(`charPr 27 / paraPr 35 / style 30`), 첫 문단 구조(`paraPr 29 / style 1 / tbl+line+rect`), 그림 문단(`34/1`), 보기 문단(`11/4`)을 사용하고 footer만 사용자 요구대로 총페이지를 제거했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_exporter.py 02_main\\tests\\test_pipeline_storage.py -q` 기준 `23 passed`.
