@@ -42,8 +42,8 @@ OPTIONAL_RUNTIME_FILES = (
 NS = {
     "hp": "http://www.hancom.co.kr/hwpml/2011/paragraph",
     "hh": "http://www.hancom.co.kr/hwpml/2011/head",
+    "opf": "http://www.idpf.org/2007/opf/",
 }
-REFERENCE_HWPX_PATH = Path(__file__).resolve().parents[2] / "templates" / "result_answer.hwpx"
 STYLE_GUIDE_HWPX_PATH = Path(__file__).resolve().parents[2] / "templates" / "style_guide.hwpx"
 
 
@@ -70,6 +70,13 @@ def copy_runtime_bundle(target_dir: Path) -> Path:
         destination_path.parent.mkdir(parents=True, exist_ok=True)
         destination_path.write_bytes(source_path.read_bytes())
     return target_dir
+
+
+def copy_style_guide_bundle(target_path: Path) -> Path:
+    """canonical style guide HWPX를 임시 경로로 복사한다."""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(STYLE_GUIDE_HWPX_PATH.read_bytes())
+    return target_path
 
 
 def make_export_job(image_path: str) -> JobPipelineContext:
@@ -153,12 +160,6 @@ def read_archive_xml(hwpx_path: Path, inner_path: str):
         return etree.fromstring(archive.read(inner_path))
 
 
-def read_reference_xml(inner_path: str):
-    """레퍼런스 HWPX 안 XML을 파싱해 반환한다."""
-    with ZipFile(REFERENCE_HWPX_PATH, "r") as archive:
-        return etree.fromstring(archive.read(inner_path))
-
-
 def read_style_guide_xml(inner_path: str):
     """style guide HWPX 안 XML을 파싱해 반환한다."""
     with ZipFile(STYLE_GUIDE_HWPX_PATH, "r") as archive:
@@ -170,19 +171,39 @@ def direct_paragraphs(root) -> list:
     return root.findall("hp:p", NS)
 
 
-def count_header_defs(header_root) -> tuple[int, int, int]:
-    """header 정의 개수를 반환한다."""
+def list_archive_names(hwpx_path: Path) -> list[str]:
+    """HWPX zip 안의 엔트리 목록을 정렬해 반환한다."""
+    with ZipFile(hwpx_path, "r") as archive:
+        return sorted(archive.namelist())
+
+
+def collect_header_id_sets(header_root) -> tuple[set[str], set[str], set[str]]:
+    """header 정의의 charPr/paraPr/style ID 집합을 반환한다."""
     return (
-        len(header_root.findall(".//hh:charPr", NS)),
-        len(header_root.findall(".//hh:paraPr", NS)),
-        len(header_root.findall(".//hh:style", NS)),
+        {node.get("id") for node in header_root.findall(".//hh:charPr", NS)},
+        {node.get("id") for node in header_root.findall(".//hh:paraPr", NS)},
+        {node.get("id") for node in header_root.findall(".//hh:style", NS)},
     )
+
+
+def collect_manifest_items(content_root) -> list[tuple[str, str, str | None]]:
+    """content.hpf manifest item의 핵심 속성을 정렬해 반환한다."""
+    items: list[tuple[str, str, str | None]] = []
+    for node in content_root.findall(".//opf:item", NS):
+        items.append((node.get("id", ""), node.get("href", ""), node.get("media-type")))
+    return sorted(items)
+
+
+def serialize_xml_for_compare(element) -> bytes:
+    """공백 차이를 제거한 canonical XML 바이트를 반환한다."""
+    return etree.tostring(element, method="c14n")
 
 
 def make_runtime_paths(module, tmp_path, monkeypatch):
     """exporter 테스트용 runtime 환경을 만든다."""
     app_root = tmp_path / "02_main"
     copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+    copy_style_guide_bundle(tmp_path / "templates" / "style_guide.hwpx")
     monkeypatch.setattr(module, "ROOT", app_root)
     monkeypatch.setattr(module, "_get_codex_home", lambda: tmp_path / "missing-codex-home")
     monkeypatch.setattr(module, "_get_home_dir", lambda: tmp_path / "missing-home")
@@ -234,13 +255,14 @@ def test_resolve_hwpx_runtime_reports_checked_paths_and_missing_files(tmp_path):
     module = load_exporter_module()
     app_root = tmp_path / "02_main"
     configured_dir = tmp_path / "missing-configured"
-    with pytest.raises(FileNotFoundError) as exc_info:
+    with pytest.raises(module.HwpxTemplateError) as exc_info:
         module._resolve_hwpx_runtime(
             app_root=app_root,
             configured_skill_dir=str(configured_dir),
             codex_home=tmp_path / "missing-codex-home",
             home_dir=tmp_path / "missing-home",
         )
+    assert exc_info.value.code == module.TEMPLATE_RUNTIME_MISSING_CODE
     message = str(exc_info.value)
     assert "HWPX export runtime not found." in message
     assert str(configured_dir) in message
@@ -262,42 +284,69 @@ def test_export_hwpx_creates_valid_file_using_vendored_runtime(tmp_path, monkeyp
     assert any(name.startswith("BinData/image") and name != "BinData/image1.bmp" for name in names)
 
 
-def test_export_hwpx_uses_reference_masterpages_and_page_layout(tmp_path, monkeypatch):
-    """masterpage와 page layout은 result_answer 기준을 유지해야 한다."""
+def test_export_hwpx_uses_style_guide_secpr_exactly(tmp_path, monkeypatch):
+    """section secPr/pagePr/masterPage는 style guide와 완전히 같아야 한다."""
     module = load_exporter_module()
     root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
     export_dir = tmp_path / "exports"
     hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
     section_root = read_archive_xml(hwpx_path, "Contents/section0.xml")
-    sec_pr = section_root.find(".//hp:secPr", NS)
-    page_pr = sec_pr.find("hp:pagePr", NS)
-    margin = page_pr.find("hp:margin", NS)
-    refs = [node.get("idRef") for node in sec_pr.findall("hp:masterPage", NS)]
-    col_pr = section_root.find(".//hp:colPr", NS)
-    assert sec_pr.get("masterPageCnt") == "2"
-    assert page_pr.get("width") == "77102"
-    assert page_pr.get("height") == "111685"
-    assert margin.get("header") == "6803"
-    assert margin.get("footer") == "2551"
-    assert refs == ["masterpage0", "masterpage1"]
-    assert col_pr.get("sameGap") == "3316"
+    style_section_root = read_style_guide_xml("Contents/section0.xml")
+    generated_sec_pr = section_root.find(".//hp:secPr", NS)
+    style_sec_pr = style_section_root.find(".//hp:secPr", NS)
+    assert serialize_xml_for_compare(generated_sec_pr) == serialize_xml_for_compare(style_sec_pr)
 
 
-def test_export_hwpx_header_matches_result_answer_template_counts(tmp_path, monkeypatch):
-    """header 정의 개수는 style guide 기준을 유지하고 호환 스타일만 추가해야 한다."""
+def test_export_hwpx_header_matches_style_guide_id_sets_exactly(tmp_path, monkeypatch):
+    """header의 charPr/paraPr/style ID 집합은 style guide와 완전히 같아야 한다."""
     module = load_exporter_module()
     root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
     export_dir = tmp_path / "exports"
     hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
     generated_header = read_archive_xml(hwpx_path, "Contents/header.xml")
-    reference_header = read_style_guide_xml("Contents/header.xml")
-    generated_counts = count_header_defs(generated_header)
-    reference_counts = count_header_defs(reference_header)
-    assert generated_counts[0] == reference_counts[0]
-    assert generated_counts[1] >= reference_counts[1]
-    assert generated_counts[2] == reference_counts[2]
-    assert generated_header.find(".//hh:paraPr[@id='19']", NS) is not None
-    assert generated_header.find(".//hh:paraPr[@id='21']", NS) is not None
+    style_header = read_style_guide_xml("Contents/header.xml")
+    assert collect_header_id_sets(generated_header) == collect_header_id_sets(style_header)
+
+
+def test_export_hwpx_contains_style_guide_masterpages_exactly(tmp_path, monkeypatch):
+    """생성 산출물의 masterpage는 style guide canonical과 완전히 같아야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+    style_guide_names = list_archive_names(STYLE_GUIDE_HWPX_PATH)
+    assert "Contents/masterpage0.xml" in style_guide_names
+    assert "Contents/masterpage1.xml" in style_guide_names
+    generated_masterpage0 = read_archive_xml(hwpx_path, "Contents/masterpage0.xml")
+    generated_masterpage1 = read_archive_xml(hwpx_path, "Contents/masterpage1.xml")
+    style_masterpage0 = read_style_guide_xml("Contents/masterpage0.xml")
+    style_masterpage1 = read_style_guide_xml("Contents/masterpage1.xml")
+    assert serialize_xml_for_compare(generated_masterpage0) == serialize_xml_for_compare(style_masterpage0)
+    assert serialize_xml_for_compare(generated_masterpage1) == serialize_xml_for_compare(style_masterpage1)
+
+
+def test_export_hwpx_uses_style_guide_even_when_vendored_base_changes(tmp_path, monkeypatch):
+    """vendor base가 변해도 canonical source는 style guide여야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    vendored_section = (
+        tmp_path / "02_main" / "vendor" / "hwpxskill-math" / "templates" / "base" / "Contents" / "section0.xml"
+    )
+    vendored_masterpage = (
+        tmp_path / "02_main" / "vendor" / "hwpxskill-math" / "templates" / "base" / "Contents" / "masterpage0.xml"
+    )
+    vendored_section.write_text("<broken-section/>", encoding="utf-8")
+    vendored_masterpage.write_text("<broken-masterpage/>", encoding="utf-8")
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+    generated_section = read_archive_xml(hwpx_path, "Contents/section0.xml")
+    generated_masterpage = read_archive_xml(hwpx_path, "Contents/masterpage0.xml")
+    style_section = read_style_guide_xml("Contents/section0.xml")
+    style_masterpage = read_style_guide_xml("Contents/masterpage0.xml")
+    assert serialize_xml_for_compare(generated_section.find(".//hp:secPr", NS)) == serialize_xml_for_compare(
+        style_section.find(".//hp:secPr", NS)
+    )
+    assert serialize_xml_for_compare(generated_masterpage) == serialize_xml_for_compare(style_masterpage)
 
 
 def test_export_hwpx_uses_fixed_title(tmp_path, monkeypatch):
@@ -313,6 +362,28 @@ def test_export_hwpx_uses_fixed_title(tmp_path, monkeypatch):
     assert title.text == "생성결과"
 
 
+def test_export_hwpx_content_manifest_matches_style_guide_except_title_and_images(tmp_path, monkeypatch):
+    """content.hpf는 title과 추가 이미지 manifest만 제외하고 style guide와 같아야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
+    generated_content = read_archive_xml(hwpx_path, "Contents/content.hpf")
+    style_content = read_style_guide_xml("Contents/content.hpf")
+    generated_title = generated_content.find(".//opf:title", NS)
+    style_title = style_content.find(".//opf:title", NS)
+    generated_title.text = style_title.text
+    generated_items = collect_manifest_items(generated_content)
+    style_items = collect_manifest_items(style_content)
+    dynamic_items = [
+        item
+        for item in generated_items
+        if item[1].startswith("BinData/image") and item[1] != "BinData/image1.BMP" and item[1] != "BinData/image1.bmp"
+    ]
+    assert all(item[1].startswith("BinData/image") for item in dynamic_items)
+    assert [item for item in generated_items if item not in dynamic_items] == style_items
+
+
 def test_export_hwpx_first_block_preserves_reference_controls(tmp_path, monkeypatch):
     """첫 문단은 title table과 secPr scaffold를 그대로 가져야 한다."""
     module = load_exporter_module()
@@ -320,9 +391,10 @@ def test_export_hwpx_first_block_preserves_reference_controls(tmp_path, monkeypa
     export_dir = tmp_path / "exports"
     hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
     first_para = direct_paragraphs(read_archive_xml(hwpx_path, "Contents/section0.xml"))[0]
+    style_first_para = direct_paragraphs(read_style_guide_xml("Contents/section0.xml"))[0]
     runs = first_para.findall("hp:run", NS)
-    assert first_para.get("paraPrIDRef") == "13"
-    assert first_para.get("styleIDRef") == "1"
+    assert first_para.get("paraPrIDRef") == style_first_para.get("paraPrIDRef")
+    assert first_para.get("styleIDRef") == style_first_para.get("styleIDRef")
     assert first_para.find(".//hp:tbl", NS) is not None
     assert first_para.find(".//hp:line", NS) is not None
     assert first_para.find(".//hp:rect", NS) is not None
@@ -330,20 +402,21 @@ def test_export_hwpx_first_block_preserves_reference_controls(tmp_path, monkeypa
     assert "".join(runs[2].xpath(".//hp:t/text()", namespaces=NS)).strip() == "1."
 
 
-def test_export_hwpx_uses_reference_picture_and_choice_paragraphs(tmp_path, monkeypatch):
-    """그림과 보기는 direct paragraph 구조를 유지해야 한다."""
+def test_export_hwpx_uses_style_guide_picture_and_choice_paragraphs(tmp_path, monkeypatch):
+    """그림과 보기는 style guide direct paragraph style을 그대로 써야 한다."""
     module = load_exporter_module()
     root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
     export_dir = tmp_path / "exports"
     hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
     paragraphs = direct_paragraphs(read_archive_xml(hwpx_path, "Contents/section0.xml"))
+    style_paragraphs = direct_paragraphs(read_style_guide_xml("Contents/section0.xml"))
     picture_para = paragraphs[2]
     choice_para = paragraphs[3]
     eq_scripts = choice_para.xpath(".//hp:equation/hp:script/text()", namespaces=NS)
-    assert picture_para.get("paraPrIDRef") == "14"
-    assert picture_para.get("styleIDRef") == "1"
-    assert choice_para.get("paraPrIDRef") == "7"
-    assert choice_para.get("styleIDRef") == "3"
+    assert picture_para.get("paraPrIDRef") == style_paragraphs[2].get("paraPrIDRef")
+    assert picture_para.get("styleIDRef") == style_paragraphs[2].get("styleIDRef")
+    assert choice_para.get("paraPrIDRef") == style_paragraphs[3].get("paraPrIDRef")
+    assert choice_para.get("styleIDRef") == style_paragraphs[3].get("styleIDRef")
     assert len(choice_para.findall("hp:run", NS)) == 1
     assert eq_scripts == ["1", "3/2", "9/4", "7/3", "5/2"]
 
@@ -369,15 +442,33 @@ def test_export_hwpx_explanation_mixed_line_keeps_single_run_structure(tmp_path,
     export_dir = tmp_path / "exports"
     hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
     mixed_para = direct_paragraphs(read_archive_xml(hwpx_path, "Contents/section0.xml"))[8]
+    style_mixed_para = direct_paragraphs(read_style_guide_xml("Contents/section0.xml"))[8]
     runs = mixed_para.findall("hp:run", NS)
     equations = mixed_para.findall(".//hp:equation", NS)
     texts = mixed_para.xpath(".//hp:t/text()", namespaces=NS)
-    assert mixed_para.get("paraPrIDRef") == "2"
-    assert mixed_para.get("styleIDRef") == "0"
+    assert mixed_para.get("paraPrIDRef") == style_mixed_para.get("paraPrIDRef")
+    assert mixed_para.get("styleIDRef") == style_mixed_para.get("styleIDRef")
     assert len(runs) == 1
     assert len(equations) == 2
     assert any("이다. 또한" in text for text in texts)
     assert all(node.get("font") == "HYhwpEQ" for node in equations)
+
+
+def test_export_hwpx_explanation_inline_equations_use_compact_width_for_short_scripts(tmp_path, monkeypatch):
+    """짧은 inline 수식은 긴 각도식 width를 그대로 재사용하면 안 된다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
+    section_root = read_archive_xml(hwpx_path, "Contents/section0.xml")
+
+    widths_by_script = {
+        node.findtext("hp:script", default="", namespaces=NS): int(node.find("hp:sz", NS).get("width"))
+        for node in section_root.findall(".//hp:equation", NS)
+    }
+
+    assert widths_by_script["ABC"] < widths_by_script["ANGLE BAC= ANGLE DAE"]
+    assert widths_by_script["ADE"] < widths_by_script["ANGLE ABC= ANGLE ADE"]
 
 
 def test_export_hwpx_renders_current_year_and_current_page_only_footer(tmp_path, monkeypatch):
@@ -400,19 +491,25 @@ def test_export_hwpx_renders_current_year_and_current_page_only_footer(tmp_path,
 
 
 def test_export_hwpx_section_uses_only_header_defined_style_refs(tmp_path, monkeypatch):
-    """section/masterpage style ref는 header 정의 안에 있어야 한다."""
+    """section/masterpage의 paraPr/charPr/style ref는 header 정의 안에 있어야 한다."""
     module = load_exporter_module()
     root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
     export_dir = tmp_path / "exports"
     hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
     header_root = read_archive_xml(hwpx_path, "Contents/header.xml")
     section_root = read_archive_xml(hwpx_path, "Contents/section0.xml")
+    masterpage0_root = read_archive_xml(hwpx_path, "Contents/masterpage0.xml")
+    masterpage1_root = read_archive_xml(hwpx_path, "Contents/masterpage1.xml")
     valid_para_ids = {node.get("id") for node in header_root.findall(".//hh:paraPr", NS)}
     valid_char_ids = {node.get("id") for node in header_root.findall(".//hh:charPr", NS)}
-    used_para_ids = {node.get("paraPrIDRef") for node in section_root.findall(".//hp:p", NS)}
-    used_char_ids = {node.get("charPrIDRef") for node in section_root.findall(".//hp:run", NS)}
+    valid_style_ids = {node.get("id") for node in header_root.findall(".//hh:style", NS)}
+    roots = [section_root, masterpage0_root, masterpage1_root]
+    used_para_ids = {node.get("paraPrIDRef") for root in roots for node in root.findall(".//hp:p", NS)}
+    used_char_ids = {node.get("charPrIDRef") for root in roots for node in root.findall(".//hp:run", NS)}
+    used_style_ids = {node.get("styleIDRef") for root in roots for node in root.findall(".//hp:p", NS)}
     assert used_para_ids <= valid_para_ids
     assert used_char_ids <= valid_char_ids
+    assert used_style_ids <= valid_style_ids
 
 
 def test_export_hwpx_skips_empty_failed_regions_and_renumbers_items(tmp_path, monkeypatch):

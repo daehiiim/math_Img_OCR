@@ -2,6 +2,18 @@
 
 :root {
   --font-size: 16px;
+  --font-landing-heading-stack: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --font-ui-sans-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --tracking-display-wide: -0.05em;
+  --tracking-title-tight: -0.032em;
+  --body-contrast-relaxed: rgba(20, 17, 13, 0.76);
+  --landing-background: #f4efe6;
+  --landing-surface: rgba(255, 255, 255, 0.62);
+  --landing-border: rgba(20, 17, 13, 0.12);
+  --landing-border-strong: rgba(20, 17, 13, 0.22);
+  --landing-ink: #14110d;
+  --landing-ink-muted: rgba(20, 17, 13, 0.72);
+  --landing-ink-soft: rgba(20, 17, 13, 0.52);
   --background: #ffffff;
   --foreground: oklch(0.145 0 0);
   --card: #ffffff;
@@ -79,6 +91,7 @@
 }
 
 @theme inline {
+  --font-sans: var(--font-ui-sans-stack);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -135,7 +148,7 @@
 
   html {
     font-size: var(--font-size);
-    font-family: 'Inter', 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-ui-sans-stack);
   }
 
   h1 {
@@ -178,5 +191,35 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+}
+
+@layer utilities {
+  .landing-display {
+    font-family: var(--font-landing-heading-stack);
+  }
+
+  .landing-serif {
+    font-family: var(--font-landing-heading-stack);
+  }
+
+  .landing-heading {
+    font-family: var(--font-landing-heading-stack);
+  }
+
+  .landing-ui {
+    font-family: var(--font-ui-sans-stack);
+  }
+
+  .landing-tracking-display {
+    letter-spacing: var(--tracking-display-wide);
+  }
+
+  .landing-tracking-title {
+    letter-spacing: var(--tracking-title-tight);
+  }
+
+  .landing-copy-muted {
+    color: var(--body-contrast-relaxed);
   }
 }

@@ -72,3 +72,36 @@
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/ResultsViewer.test.tsx src/app/components/JobDetailPage.test.tsx src/app/api/jobApi.test.ts` 기준 `20 passed`.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run` 기준 `102 passed`.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. Vite chunk size warning은 기존 번들 크기 경고로 유지됐다.
+- 샘플 fixture 기준 실제 exporter를 호출해 검증용 [생성결과.hwpx](/D:/03_PROJECT/05_mathOCR/templates/생성결과.hwpx)를 생성했다.
+- 생성 확인: `Contents/content.hpf`의 title이 `생성결과`이고 파일 크기는 `100308 bytes`다.
+- 한글 inline 수식 공백의 직접 원인을 `hwpx_reference_renderer.py`의 mixed equation 단일 템플릿 재사용으로 확정했다. 첫 번째 긴 각도식의 `width=8386`이 `ABC`, `ADE` 같은 짧은 수식에도 그대로 복제돼 과도한 공백이 생기고 있었다.
+- mixed equation 템플릿을 하나만 쓰지 않도록 수정했다. 이제 mixed 문단의 equation 템플릿 전체를 수집하고, 수식 길이에 가장 가까운 템플릿을 고른 뒤 참조 샘플 폭으로 width를 선형 보간한다.
+- 회귀 테스트 `test_export_hwpx_explanation_inline_equations_use_compact_width_for_short_scripts`를 추가했다. 짧은 inline 수식 width가 긴 각도식 width를 그대로 재사용하지 않는지 검증한다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_exporter.py -q` 기준 `17 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_pipeline_storage.py -k export -q` 기준 `2 passed`.
+- 생성 XML 점검 결과, 같은 fixture에서 `ANGLE BAC= ANGLE DAE=8386`, `ANGLE ABC= ANGLE ADE=8386`, `ABC=1480`, `ADE=1480`으로 확인됐다.
+- 기존 `templates\\생성결과.hwpx`는 다른 프로세스가 점유 중이라 현재 세션에서 덮어쓰지 못했다. 실제 한글 검증 전 파일을 닫고 다시 생성하면 된다.
+- `style_guide.hwpx`를 다시 점검한 결과 실제 파일에는 `masterpage0.xml`, `masterpage1.xml`, `masterPage` ref가 없고 header style set도 기존 base보다 훨씬 작다는 점을 확인했다.
+- 이 모순을 테스트로 먼저 고정했다. `test_exporter.py`를 style guide exact parity 기준으로 바꿔 `secPr`, `header ID set`, `masterpage`, `content manifest`, `section/masterpage style ref` 계약이 깨지면 바로 실패하도록 정리했다.
+- canonical bundle 자산을 재구성했다. `style_guide.hwpx`에 `BinData/image1.bmp`, `Contents/masterpage0.xml`, `Contents/masterpage1.xml`를 추가하고 `content.hpf`, `section0.xml`의 manifest/masterPage ref를 보강한 뒤 vendored base에도 동일 내용을 동기화했다.
+- canonical masterpage는 총 페이지 정적 숫자를 제거한 현재 페이지 전용 footer로 고정했고, paraPr/charPr/style ref를 모두 style guide header 안의 ID만 사용하도록 재매핑했다.
+- `exporter.py`에서는 footer 후처리를 제거하고 `HWPX_TEMPLATE_RUNTIME_MISSING`, `HWPX_TEMPLATE_MANIFEST_MISSING`, `HWPX_TEMPLATE_MASTERPAGE_MISSING`, `HWPX_TEMPLATE_STYLE_REF_MISMATCH`, `HWPX_TEMPLATE_CANONICAL_CORRUPTED` 오류 코드를 구조화해 서버 로그에서 원인을 구분할 수 있게 했다.
+- `hwpx_reference_renderer.py`는 해설 문단 판별의 `paraPrIDRef` 하드코딩을 제거해 style guide anchor와 호환되도록 바꿨고, `section0.xml` 저장 시 pretty print를 끄도록 조정해 canonical `secPr` 공백까지 보존하도록 했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_exporter.py -q` 기준 `19 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests -q` 기준 `137 passed`.
+- canonical source를 exporter 코드 경로에서 실제로 고정했다. 이제 `exporter.py`는 vendored base를 복사하지 않고 `/D:/03_PROJECT/05_mathOCR/templates/style_guide.hwpx`를 작업 디렉터리로 직접 풀어 쓴다.
+- `exporter.py`에 canonical bundle 추출 계층을 추가했다. `style_guide.hwpx` 누락 시 `HWPX_TEMPLATE_CANONICAL_MISSING`, archive 손상 시 `HWPX_TEMPLATE_CANONICAL_CORRUPTED`, manifest/masterpage/style drift 시 기존 세분화 코드로 서버 로그가 남는다.
+- exporter 내부 계약 검증을 강화했다. generated `header.xml`의 style ID set, `section0.xml`의 `secPr`, `masterpage0/1.xml`, `content.hpf` manifest를 canonical 기준으로 다시 확인하고 drift면 즉시 실패시킨다.
+- footer 후처리는 실제 정적 숫자가 남아 있을 때만 파일을 다시 쓰도록 바꿨다. canonical masterpage가 이미 정상인 경우 재직렬화를 피해서 bundle parity를 유지한다.
+- `test_exporter.py`에 vendor base 훼손 회귀 테스트를 추가했다. 임시 runtime의 `templates/base/Contents/section0.xml`, `masterpage0.xml`를 깨뜨려도 export 결과가 `style_guide.hwpx` canonical을 유지하는지 검증한다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_exporter.py -q` 기준 `20 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_pipeline_storage.py -k export -q` 기준 `2 passed`.
+- canonical exporter 경로로 샘플 HWPX를 새로 생성했다. 출력 파일은 `/D:/03_PROJECT/05_mathOCR/templates/generated-canonical-sample.hwpx` 이다.
+- 샘플 생성은 reference-like fixture와 간단한 기하 도형 PNG를 사용했다. 내부 title은 `생성결과`로 유지되고 `Contents/masterpage0.xml`, `Contents/masterpage1.xml` 존재를 확인했다.
+- 생성 확인: 파일 크기 `101464 bytes`, `TITLE_OK=True`, `HAS_MASTERPAGE0=True`, `HAS_MASTERPAGE1=True`.
+- 공개 홈 랜딩을 serif 중심 초안에서 Apple식 sans-first 방향으로 다시 정렬했다. 사용자 피드백에 따라 `PublicHomePage`의 hero, 섹션 타이틀, 오브제 타이포를 산세리프로 전환했다.
+- `fonts.css`는 `Noto Sans KR`만 로드하도록 단순화했고, `theme.css`에는 `-apple-system` 중심의 landing heading/UI stack과 sans용 tracking 토큰을 추가했다.
+- `PublicHomePage.test.tsx`에 메인 카피와 섹션 타이틀이 `landing-heading` 산세리프 클래스를 사용한다는 회귀 테스트를 추가했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` 기준 `4 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. Vite chunk size warning은 기존 번들 크기 경고로 유지됐다.
+- 수동 확인: 로컬 dev 서버에서 공개 홈을 데스크톱 `1440px`와 모바일 `390px` 폭으로 확인했고, 헤드라인 줄바꿈과 CTA 노출이 sans 방향에서 안정적으로 보였다.

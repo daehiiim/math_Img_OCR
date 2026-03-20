@@ -41,7 +41,7 @@ class ReferenceProfile:
     explanation_plain: Any
     explanation_mixed: Any
     mixed_text: Any
-    mixed_equation: Any
+    mixed_equations: tuple[Any, ...]
 
 
 def render_section_from_reference(
@@ -105,7 +105,7 @@ def load_reference_profile(section_path: Path) -> ReferenceProfile:
         explanation_plain=explanation_plain,
         explanation_mixed=explanation_mixed,
         mixed_text=extract_mixed_text_template(explanation_mixed),
-        mixed_equation=extract_mixed_equation_template(explanation_mixed),
+        mixed_equations=extract_mixed_equation_templates(explanation_mixed),
     )
 
 
@@ -157,7 +157,7 @@ def build_problem_paragraph(
     number_run = runs[2] if number == 1 else runs[0]
     text_run = runs[3] if number == 1 else runs[1]
     fill_text_run(number_run, f"{number}.")
-    fill_mixed_run(text_run, stem, profile.mixed_text, profile.mixed_equation, idgen)
+    fill_mixed_run(text_run, stem, profile.mixed_text, profile.mixed_equations, idgen)
     return paragraph
 
 
@@ -228,7 +228,7 @@ def build_explanation_paragraph(profile: ReferenceProfile, line: str, idgen: Any
     if has_math_tag(normalized_line):
         paragraph = clone_dynamic_paragraph(profile.explanation_mixed, idgen)
         run = paragraph.find("hp:run", NS)
-        fill_mixed_run(run, normalized_line, profile.mixed_text, profile.mixed_equation, idgen)
+        fill_mixed_run(run, normalized_line, profile.mixed_text, profile.mixed_equations, idgen)
         return paragraph
     paragraph = clone_dynamic_paragraph(profile.explanation_plain, idgen)
     run = paragraph.find("hp:run", NS)
@@ -364,14 +364,20 @@ def build_choice_equation(template: Any, script: str, idgen: Any) -> Any:
     return equation
 
 
-def fill_mixed_run(run: Any, text: str, text_template: Any, equation_template: Any, idgen: Any) -> None:
+def fill_mixed_run(
+    run: Any,
+    text: str,
+    text_template: Any,
+    equation_templates: tuple[Any, ...],
+    idgen: Any,
+) -> None:
     """하나의 run 안에 text/equation child를 섞어 다시 채운다."""
     clear_children(run)
     for is_math, part in split_math_text(text):
         if not part:
             continue
         if is_math:
-            run.append(build_inline_equation(equation_template, part, idgen))
+            run.append(build_inline_equation(equation_templates, part, idgen))
             continue
         run.append(build_text_node(text_template, part))
 
@@ -383,12 +389,14 @@ def fill_text_run(run: Any, text: str) -> None:
     text_node.text = text
 
 
-def build_inline_equation(template: Any, script: str, idgen: Any) -> Any:
-    """레퍼런스 inline equation을 복제해 script와 id를 교체한다."""
+def build_inline_equation(templates: tuple[Any, ...], script: str, idgen: Any) -> Any:
+    """수식 길이에 가까운 inline equation 템플릿을 골라 script와 폭을 갱신한다."""
+    template = select_inline_equation_template(templates, script)
     equation = deepcopy(template)
     equation.set("id", idgen.next())
     equation.set("zOrder", idgen.next())
     equation.find("hp:script", NS).text = script
+    resize_inline_equation(equation, templates, script)
     return equation
 
 
@@ -486,10 +494,83 @@ def extract_mixed_text_template(paragraph: Any) -> Any:
     return next(child for child in run if etree.QName(child).localname == "t")
 
 
-def extract_mixed_equation_template(paragraph: Any) -> Any:
-    """mixed 문단에서 inline equation 템플릿 하나를 추출한다."""
+def extract_mixed_equation_templates(paragraph: Any) -> tuple[Any, ...]:
+    """mixed 문단에서 inline equation 템플릿들을 모두 추출한다."""
     run = paragraph.find("hp:run", NS)
-    return next(child for child in run if etree.QName(child).localname == "equation")
+    return tuple(child for child in run if etree.QName(child).localname == "equation")
+
+
+def select_inline_equation_template(templates: tuple[Any, ...], script: str) -> Any:
+    """대상 수식 길이와 가장 가까운 템플릿을 선택한다."""
+    target_metric = measure_equation_script(script)
+    return min(
+        templates,
+        key=lambda template: (
+            abs(measure_equation_script(read_equation_script(template)) - target_metric),
+            read_equation_width(template),
+        ),
+    )
+
+
+def resize_inline_equation(equation: Any, templates: tuple[Any, ...], script: str) -> None:
+    """참조 템플릿 폭을 기반으로 현재 수식에 맞는 width를 다시 계산한다."""
+    size = equation.find("hp:sz", NS)
+    if size is None:
+        return
+    estimated_width = estimate_inline_equation_width(templates, script, read_equation_width(equation))
+    if estimated_width > 0:
+        size.set("width", str(estimated_width))
+
+
+def estimate_inline_equation_width(templates: tuple[Any, ...], script: str, fallback_width: int) -> int:
+    """참조 수식 길이 샘플로 현재 inline 수식 width를 선형 보간한다."""
+    target_metric = measure_equation_script(script)
+    if target_metric <= 0:
+        return fallback_width
+    samples = collect_equation_width_samples(templates)
+    if not samples:
+        return fallback_width
+    if len(samples) == 1:
+        metric, width = samples[0]
+        return max(525, round(width * target_metric / metric))
+    low_metric, low_width = samples[0]
+    high_metric, high_width = samples[-1]
+    if high_metric == low_metric:
+        return max(525, low_width)
+    slope = (high_width - low_width) / (high_metric - low_metric)
+    intercept = low_width - (slope * low_metric)
+    estimated_width = round((slope * target_metric) + intercept)
+    minimum_width = max(525, round(low_width * 0.6))
+    return max(minimum_width, estimated_width)
+
+
+def collect_equation_width_samples(templates: tuple[Any, ...]) -> list[tuple[int, int]]:
+    """템플릿 수식 길이별 평균 width 샘플을 오름차순으로 정리한다."""
+    grouped: dict[int, list[int]] = {}
+    for template in templates:
+        metric = measure_equation_script(read_equation_script(template))
+        width = read_equation_width(template)
+        if metric <= 0 or width <= 0:
+            continue
+        grouped.setdefault(metric, []).append(width)
+    return sorted((metric, round(sum(widths) / len(widths))) for metric, widths in grouped.items())
+
+
+def read_equation_script(equation: Any) -> str:
+    """equation node 안의 script 문자열을 읽어 온다."""
+    return equation.findtext("hp:script", default="", namespaces=NS)
+
+
+def read_equation_width(equation: Any) -> int:
+    """equation node 안의 width 값을 정수로 반환한다."""
+    size = equation.find("hp:sz", NS)
+    return int(size.get("width", "0")) if size is not None else 0
+
+
+def measure_equation_script(text: str) -> int:
+    """공백을 제외한 수식 길이를 계산해 width 추정 기준으로 사용한다."""
+    compact = re.sub(r"\s+", "", normalize_hwp_equation_script(text))
+    return len(compact)
 
 
 def copy_region_image(
@@ -534,7 +615,7 @@ def clear_direct_paragraphs(root: Any) -> None:
 def write_section_xml(section_path: Path, root: Any) -> None:
     """완성된 section XML을 UTF-8로 저장한다."""
     tree = etree.ElementTree(root)
-    tree.write(str(section_path), encoding="UTF-8", xml_declaration=True, pretty_print=True)
+    tree.write(str(section_path), encoding="UTF-8", xml_declaration=True, pretty_print=False)
 
 
 def require_paragraph(paragraphs: list[Any], matcher: Any) -> Any:
@@ -549,8 +630,7 @@ def is_explanation_plain_paragraph(paragraph: Any) -> bool:
     """해설의 plain body 문단인지 판별한다."""
     texts = "".join(paragraph.xpath(".//hp:t/text()", namespaces=NS)).strip()
     return (
-        paragraph.get("paraPrIDRef") in {"2", "4"}
-        and paragraph.get("styleIDRef") == "0"
+        paragraph.get("styleIDRef") == "0"
         and not paragraph.findall(".//hp:equation", NS)
         and bool(texts)
         and "[해설]" not in texts
@@ -560,8 +640,7 @@ def is_explanation_plain_paragraph(paragraph: Any) -> bool:
 def is_explanation_mixed_paragraph(paragraph: Any) -> bool:
     """해설의 mixed body 문단인지 판별한다."""
     return (
-        paragraph.get("paraPrIDRef") in {"2", "4"}
-        and paragraph.get("styleIDRef") == "0"
+        paragraph.get("styleIDRef") == "0"
         and bool(paragraph.findall(".//hp:equation", NS))
     )
 

@@ -1,28 +1,25 @@
 Done
-- `style_guide.hwpx` 기준 base 템플릿으로 HWPX export를 교체하고 metadata title/다운로드 파일명을 `생성결과.hwpx`로 고정했다.
-- EXIF 정규화, 2차 crop padding, 이미지 bbox 프롬프트 보수화, OCR/해설 수식 정규화, 문제 번호 재부여, 프런트 결과 미리보기 문구 정리를 반영했다.
-- 자동 검증 완료: `py -3 -m pytest 02_main/tests -q` -> `134 passed`, `npm run test:run` -> `102 passed`, `npm run build` 성공
+- `exporter.py`가 canonical source로 `/D:/03_PROJECT/05_mathOCR/templates/style_guide.hwpx`를 직접 풀어 쓰도록 바꿨다.
+- 공개 홈 `/` 랜딩을 Apple식 sans-first 톤으로 재정렬했고 `PublicHomePage.tsx`, `fonts.css`, `theme.css`, `PublicHomePage.test.tsx`를 갱신했다.
+- 공개 홈 회귀 검증: `npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `4 passed`, `npm run build` 성공
 
 In Progress
-- 최우선 과제: 한글에서 새 `생성결과.hwpx` 산출물을 육안 검증
-- 진행 상태: 백엔드/프런트 전체 테스트와 빌드는 모두 통과했고 style_guide 기준 paragraph anchor 호환성도 자동 검증했다
-- 다음 단계: 실제 OCR job 1건으로 export 후 보기 간격, inline 수식 baseline, 이미지 위치, 다운로드 파일명 표시를 한글과 브라우저에서 확인
+- 최우선 과제: 공개 홈 sans 리디자인 마감 점검
+- 진행 상태: serif 초안을 철회하고 hero/섹션 타이틀/오브제를 sans로 재구성했으며 데스크톱·모바일 수동 확인까지 끝냈다
+- 다음 단계: 사용자 추가 피드백이 오면 카피 밀도와 간격만 미세 조정한다
 
 Next
-- 필요 시 style_guide 기준 세부 문단 간격과 이미지 anchor offset을 미세 조정
-- 필요 시 실서비스 샘플 1건으로 `cropUrl`/`imageCropUrl`/`styledImageUrl` 미리보기 의미를 재검증
+- 필요 시 공개 홈 전체 회귀 범위를 `App.tsx` 진입 기준으로 넓혀 로그인/새 작업/가격 동선을 추가 점검
+- 한글에서 canonical export 산출물 육안 검증도 별도 후속 과제로 남아 있다
 
 Related Files
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\figure.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\extractor.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\hwpx_reference_renderer.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\exporter.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\main.py`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\ResultsViewer.tsx`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\api\jobApi.ts`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PublicHomePage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PublicHomePage.test.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\styles\fonts.css`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\styles\theme.css`
 
 Last State
-- `py -3 -m pytest 02_main/tests/test_pipeline_storage.py 02_main/tests/test_exporter.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_nano_banana_prompt.py 02_main/tests/test_extractor_normalization.py -q` -> `51 passed`
-- `py -3 -m pytest 02_main/tests -q` -> `134 passed`
-- `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run test:run` -> `25 files / 102 passed`
-- `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run build` -> 성공 (기존 chunk size warning 유지)
+- `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `4 passed`
+- `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run build` -> 성공
+- 공개 홈 수동 확인: `1440px`, `390px` viewport에서 헤드라인 줄바꿈과 CTA 노출 정상
+- 배포 환경 변경 없음
