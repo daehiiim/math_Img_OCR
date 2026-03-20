@@ -1,5 +1,12 @@
 ## 2026-03-20
 
+- `result_answer` 정합형 HWPX subtree renderer의 direct paragraph anchor 판별을 보강했다. 해설 mixed 문단 탐색이 choice 문단을 잘못 잡던 문제를 `paraPrIDRef=4`, `styleIDRef=0`, equation 존재 조건으로 교정했다.
+- choice parser가 `① <math>...</math>` 형태의 OCR 선택지를 그대로 `hp:script`에 넣던 문제를 수정했다. 이제 단일 `<math>` wrapper는 제거하고 내부 script만 주입한다.
+- choice 파싱이 실패한 경우 reference blank paragraph까지 강제로 붙이던 흐름을 정리했다. 선택지가 없으면 choice 문단과 choice gap을 모두 생략한다.
+- 새 renderer 기준 회귀를 검증했다: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_exporter.py` 기준 `14 passed`.
+- exporter/storage 연동까지 포함해 재검증했다: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_exporter.py 02_main\\tests\\test_pipeline_storage.py -q` 기준 `25 passed`.
+- 새 renderer 코드로 샘플 문서를 다시 생성했다: `templates/generated-example.hwpx`.
+
 - Nano Banana 이미지 생성 경로에 `NANO_BANANA_PROVIDER=vertex|gemini_api` 명시 토글을 추가했다.
 - `AppSettings`에 `nano_banana_provider`, `gemini_api_key`를 추가하고 `.env.example`에 운영 예시를 반영했다.
 - `extractor.py`에서 provider별 필수 설정 검증과 `genai.Client(...)` 초기화를 분리했다.

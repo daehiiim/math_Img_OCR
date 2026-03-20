@@ -85,8 +85,8 @@ def load_reference_profile(section_path: Path) -> ReferenceProfile:
     picture = require_paragraph(paragraphs, lambda node: node.find(".//hp:pic", NS) is not None)
     choice = require_paragraph(paragraphs, lambda node: "①" in "".join(node.xpath(".//hp:t/text()", namespaces=NS)))
     explanation_label = require_paragraph(paragraphs, lambda node: "[해설]" in "".join(node.xpath(".//hp:t/text()", namespaces=NS)))
-    explanation_mixed = require_paragraph(paragraphs, lambda node: bool(node.findall(".//hp:equation", NS)))
-    explanation_plain = require_paragraph(paragraphs, lambda node: node.get("paraPrIDRef") == "4" and node.get("styleIDRef") == "0" and not node.findall(".//hp:equation", NS) and bool("".join(node.xpath(".//hp:t/text()", namespaces=NS)).strip()) and "[해설]" not in "".join(node.xpath(".//hp:t/text()", namespaces=NS)))
+    explanation_mixed = require_paragraph(paragraphs, is_explanation_mixed_paragraph)
+    explanation_plain = require_paragraph(paragraphs, is_explanation_plain_paragraph)
     problem_gap = next_sibling(paragraphs, first_problem)
     choice_gap = next_sibling(paragraphs, choice)
     explanation_blank = next_sibling(paragraphs, explanation_label)
@@ -136,8 +136,9 @@ def append_region(
     root.append(build_problem_paragraph(profile, parsed.stem, number, year, idgen))
     root.append(clone_static_paragraph(profile.problem_gap, idgen))
     append_picture_paragraph(root, profile.picture, root_path, bindata_dir, region, idgen, warnings, images_info)
-    append_choice_paragraph(root, profile, parsed.choices, idgen)
-    root.append(clone_static_paragraph(profile.choice_gap, idgen))
+    if parsed.choices is not None:
+        append_choice_paragraph(root, profile, parsed.choices, idgen)
+        root.append(clone_static_paragraph(profile.choice_gap, idgen))
     append_explanation_paragraphs(root, profile, region.extractor.explanation or "", idgen)
 
 
@@ -252,8 +253,19 @@ def parse_choices(choice_text: str) -> tuple[str, ...] | None:
     for index, marker in enumerate(CHOICE_MARKERS):
         start = positions[index] + len(marker)
         end = positions[index + 1] if index < len(CHOICE_MARKERS) - 1 else len(choice_text)
-        values.append(choice_text[start:end].strip())
+        values.append(normalize_choice_value(choice_text[start:end]))
     return tuple(values) if all(values) else None
+
+
+def normalize_choice_value(raw_value: str) -> str:
+    """선택지 문자열에서 단일 `<math>` wrapper를 제거한다."""
+    value = raw_value.strip()
+    if not has_math_tag(value):
+        return value
+    segments = split_math_text(value)
+    if len(segments) == 1 and segments[0][0]:
+        return segments[0][1]
+    return value
 
 
 def build_choice_label(template: Any, marker: str) -> Any:
@@ -456,6 +468,27 @@ def require_paragraph(paragraphs: list[Any], matcher: Any) -> Any:
         if matcher(paragraph):
             return paragraph
     raise ValueError("reference subtree 손상")
+
+
+def is_explanation_plain_paragraph(paragraph: Any) -> bool:
+    """해설의 plain body 문단인지 판별한다."""
+    texts = "".join(paragraph.xpath(".//hp:t/text()", namespaces=NS)).strip()
+    return (
+        paragraph.get("paraPrIDRef") == "4"
+        and paragraph.get("styleIDRef") == "0"
+        and not paragraph.findall(".//hp:equation", NS)
+        and bool(texts)
+        and "[해설]" not in texts
+    )
+
+
+def is_explanation_mixed_paragraph(paragraph: Any) -> bool:
+    """해설의 mixed body 문단인지 판별한다."""
+    return (
+        paragraph.get("paraPrIDRef") == "4"
+        and paragraph.get("styleIDRef") == "0"
+        and bool(paragraph.findall(".//hp:equation", NS))
+    )
 
 
 def next_sibling(paragraphs: list[Any], paragraph: Any) -> Any:

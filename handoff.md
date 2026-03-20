@@ -1,33 +1,26 @@
 Done
-- Polar checkout 생성 시 `customer_billing_address.country=KR`, `require_billing_address=true` preset 구현 완료
-- checkout 진단 스크립트 `02_main/scripts/polar_checkout_inspect.py` 추가 완료
-- Polar 운영 런북에 checkout 진단/`South Korea` preset 확인 절차 반영 완료
-- 회귀 테스트 추가 및 `test_billing.py`, `test_polar_checkout_inspect.py` 통과 완료
-- OpenAI 연결 시 남은 이미지 `∞` 표기를 실제 `credits` 값으로 교정하고 대시보드/헤더에 OpenAI 상태와 크레딧을 함께 노출하도록 수정 완료
-- `OpenAiConnectionPage`, `PublicHomePage`의 무료/무제한 문구를 `OCR·해설은 사용자 key`, `이미지 생성은 크레딧 필요` 정책으로 정리 완료
-- 프런트 회귀 테스트 `DashboardPage/AuthLayout/StudioLayout/OpenAiConnection/PublicHome` 추가 및 `04_design_renewal` 관련 회귀/빌드 통과 완료
+- `result_answer` subtree 복제형 HWPX renderer에서 choice/explanation inline 수식 구조를 reference subtree 기준으로 교정 완료
+- choice `<math>` wrapper 제거, explanation mixed anchor 오탐 수정, choice 미파싱 시 gap 생략 처리 완료
+- `py -3 -m pytest 02_main\tests\test_exporter.py 02_main\tests\test_pipeline_storage.py -q` 기준 `25 passed`
+- 샘플 문서 `templates/generated-example.hwpx` 재생성 완료
 
 In Progress
-- 최우선 과제: Cloud Run 재배포 후 production checkout 진단과 실결제 1건 검증
-- 진행 상태: 코드/문서/테스트는 완료됐고 운영 배포 및 실제 `checkout_id` 진단 실행은 미진행
-- 다음 단계: backend 재배포 후 `py scripts/polar_checkout_inspect.py --checkout-id <CHECKOUT_ID>`로 preset/processor 상태를 확인하고 실결제 1건에서 `credits_applied=true`를 검증
+- 최우선 과제: 한글에서 `generated-example.hwpx` 와 `result_answer.hwpx` 를 나란히 열어 최종 시각 검증
+- 진행 상태: XML 구조/회귀 테스트는 통과했고 샘플 산출물도 재생성됨
+- 다음 단계: 보기 간격, inline 수식 baseline, 이미지 위치, footer current-page-only를 한글에서 육안 확인
 
 Next
-- Polar 운영 공통 실패 checkout 1건에 대해 진단 스크립트 재조회 결과 수집
-- 실결제 후 `payment_events`, `credit_ledger`, `profiles.credits_balance` 적립 확인
-- Nano Banana 운영 실데이터 1건 검증
+- 시각 검증 결과에 따라 paragraph template 세부 조정 여부 결정
+- 필요 시 실제 OCR job 데이터 1건으로 추가 샘플 생성
 
 Related Files
-- `D:\03_PROJECT\05_mathOCR\02_main\app\billing.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\scripts\polar_checkout_inspect.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\docs\polar_production_runbook_ko.md`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\DashboardPage.tsx`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\OpenAiConnectionPage.tsx`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PublicHomePage.tsx`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\hwpx_reference_renderer.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\exporter.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_exporter.py`
+- `D:\03_PROJECT\05_mathOCR\templates\result_answer.hwpx`
+- `D:\03_PROJECT\05_mathOCR\templates\generated-example.hwpx`
 
 Last State
-- `cd D:\03_PROJECT\05_mathOCR && py -3.14 -m pytest 02_main\tests\test_billing.py 02_main\tests\test_polar_checkout_inspect.py` -> `44 passed`
-- `cd D:\03_PROJECT\05_mathOCR && py -3.14 02_main\scripts\polar_checkout_inspect.py --help` -> success
-- `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run test:run -- src/app/components/DashboardPage.test.tsx src/app/components/AuthLayout.test.tsx src/app/components/StudioLayout.test.tsx src/app/components/OpenAiConnectionPage.test.tsx src/app/components/PublicHomePage.test.tsx src/app/components/NewJobPage.test.tsx src/app/components/JobDetailPage.test.tsx src/app/components/Layout.test.tsx` -> `17 passed`
-- `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run build` -> success (`vite` chunk size warning 유지)
-- 작업트리에는 이번 작업 외 선행 변경이 유지됨: `02_main/tests/test_exporter.py`, `02_main/vendor/hwpxskill-math/templates/base/*`
+- `cd D:\03_PROJECT\05_mathOCR && py -3 -m pytest 02_main\tests\test_exporter.py` -> `14 passed`
+- `cd D:\03_PROJECT\05_mathOCR && py -3 -m pytest 02_main\tests\test_exporter.py 02_main\tests\test_pipeline_storage.py -q` -> `25 passed`
+- `cd D:\03_PROJECT\05_mathOCR\02_main && [inline python] export_hwpx(...)` -> `D:\03_PROJECT\05_mathOCR\templates\generated-example.hwpx` 생성
