@@ -12,6 +12,7 @@
 - Stripe는 Polar Finance에서 연결하는 payout processor 역할이다.
 - 운영 결제의 단일 진실 원천은 Polar production 상품/price 설정이다.
 - 백엔드는 `plan_id`, `credits`, 상품 가격, 상품 통화, Product ID 매핑이 어긋나면 결제를 즉시 막는다.
+- checkout 생성 시 billing country 기본값은 `South Korea (KR)`로 preset 된다. 이는 기본값일 뿐이며 고객이 국가를 바꾸지 못하게 잠그는 동작은 아니다.
 
 ## 3. Cloud Run 환경변수 계약
 
@@ -85,6 +86,26 @@ py scripts/polar_production_preflight.py --api-base-url http://localhost:8000
 
 이 단계는 `/billing/catalog`까지 함께 확인하므로, 배포 전 최종 확인에 가깝다.
 
+### 5.3 checkout ID 기준 진단
+
+```bash
+cd D:\03_PROJECT\05_mathOCR\02_main
+py scripts/polar_checkout_inspect.py --checkout-id <CHECKOUT_ID>
+```
+
+이 스크립트는 아래를 출력한다.
+
+- `status`
+- `payment_processor`
+- `is_payment_required`
+- `is_payment_form_required`
+- `customer_billing_address`
+- `billing_address_fields`
+- `currency`
+- `amount`
+- `product_id`
+- `product_price_id`
+
 ## 6. 배포 후 운영 검증 순서
 
 1. Cloud Run 환경변수와 revision이 최신인지 확인한다.
@@ -92,10 +113,12 @@ py scripts/polar_production_preflight.py --api-base-url http://localhost:8000
 3. `single`, `starter`, `pro`의 `currency`가 모두 `krw`인지 확인한다.
 4. 프런트 결제 페이지에서 가격 표시가 KRW로 나오는지 확인한다.
 5. `POST /billing/checkout` 호출 후 Polar hosted checkout으로 이동하는지 확인한다.
-6. 실제 checkout 화면에서 KRW 가격이 노출되는지 확인한다.
-7. 결제 완료 후 `checkout_id` 복귀와 `credits_applied=true`를 확인한다.
-8. `order.paid` webhook 수신 후 `credit_ledger`, `profiles.credits_balance` 적립을 확인한다.
-9. webhook redelivery를 1회 재전송해도 중복 적립이 없는지 확인한다.
+6. 생성 직후 `checkout_id`로 `py scripts/polar_checkout_inspect.py --checkout-id <CHECKOUT_ID>`를 실행해 `customer_billing_address.country=KR`와 `payment_processor`를 확인한다.
+7. 실제 checkout 화면에서 KRW 가격과 `Billing address=South Korea` 기본값이 노출되는지 확인한다.
+8. `Pay now` 클릭 후 같은 화면에 머무르면 동일 `checkout_id`로 진단 스크립트를 다시 실행해 `is_payment_form_required`, `payment_processor`, `status`를 확인한다.
+9. 결제 완료 후 `checkout_id` 복귀와 `credits_applied=true`를 확인한다.
+10. `order.paid` webhook 수신 후 `credit_ledger`, `profiles.credits_balance` 적립을 확인한다.
+11. webhook redelivery를 1회 재전송해도 중복 적립이 없는지 확인한다.
 
 ## 7. 장애 문구 해석
 
@@ -113,6 +136,10 @@ py scripts/polar_production_preflight.py --api-base-url http://localhost:8000
   - 상품 통화가 `KRW`가 아니다.
 - `configured Polar product id mismatch`
   - Cloud Run `POLAR_PRODUCT_*` 값과 실제 checkout/webhook에 들어온 Product ID가 다르다.
+- `is_payment_form_required=false`
+  - checkout은 열렸지만 결제 폼이 요구되지 않는 상태다. 앱 코드보다 Polar 결제 프로세서 연결 상태와 조직 설정을 우선 점검한다.
+- `payment_processor`가 비어 있음
+  - Polar checkout 세션에 결제 프로세서가 연결되지 않았을 가능성이 높다. Polar Dashboard의 Finance/processor 설정을 먼저 확인한다.
 
 ## 8. 최종 체크리스트
 
@@ -124,4 +151,6 @@ py scripts/polar_production_preflight.py --api-base-url http://localhost:8000
 - Cloud Run `POLAR_PRODUCT_*`와 Polar Product ID 일치
 - `/billing/catalog` 응답 정상
 - 실제 checkout KRW 노출 정상
+- 실제 checkout 기본 billing country가 `South Korea`로 preset
+- `py scripts/polar_checkout_inspect.py --checkout-id <CHECKOUT_ID>` 진단 가능
 - `order.paid` 적립 및 redelivery 중복 방지 정상

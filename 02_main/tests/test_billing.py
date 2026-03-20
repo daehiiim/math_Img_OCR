@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from pydantic_core import PydanticUndefined
 from fastapi.testclient import TestClient
 from standardwebhooks.webhooks import Webhook
 
@@ -1714,6 +1715,207 @@ def test_polar_gateway_verify_event_accepts_polar_secret_prefix():
 
     assert event["type"] == "order.paid"
     assert event["_event_id"] == "evt_123"
+
+
+def test_polar_gateway_create_checkout_presets_kr_billing_country(monkeypatch):
+    class FakeCheckoutsClient:
+        """checkout 생성 요청 payload를 기록한다."""
+
+        def __init__(self) -> None:
+            self.request = None
+
+        def create(self, *, request):
+            """생성 요청을 저장하고 최소 응답을 돌려준다."""
+            self.request = request
+            return type(
+                "FakeCheckout",
+                (),
+                {
+                    "id": "chk_live_123",
+                    "url": "https://polar.sh/checkout/chk_live_123",
+                    "status": "open",
+                },
+            )()
+
+    class FakePolarClient:
+        """checkouts client만 노출하는 테스트용 Polar 클라이언트다."""
+
+        def __init__(self) -> None:
+            self.checkouts = FakeCheckoutsClient()
+
+    fake_client = FakePolarClient()
+    monkeypatch.setattr("app.billing.Polar", lambda access_token, server: fake_client)
+
+    gateway = PolarGateway(
+        access_token="polar-token",
+        webhook_secret="whsec-test",
+        server="production",
+    )
+
+    result = gateway.create_checkout(
+        external_customer_id="user-123",
+        plan=BillingPlan(
+            plan_id="single",
+            product_id="prod_single",
+            title="Single",
+            amount=100,
+            currency="krw",
+            credits=1,
+        ),
+        success_url="https://example.com/success",
+        cancel_url="https://example.com/cancel",
+    )
+
+    request = fake_client.checkouts.request
+    assert request is not None
+    assert request.require_billing_address is True
+    assert request.customer_billing_address is not None
+    assert getattr(request.customer_billing_address.country, "value", request.customer_billing_address.country) == "KR"
+    assert result["id"] == "chk_live_123"
+
+
+def test_polar_gateway_get_checkout_returns_diagnostics(monkeypatch):
+    class FakeCheckoutsClient:
+        """checkout 조회 응답을 고정 값으로 반환한다."""
+
+        def get(self, *, id: str):
+            """진단 필드가 포함된 checkout 응답을 돌려준다."""
+            return type(
+                "FakeCheckout",
+                (),
+                {
+                    "id": id,
+                    "status": "open",
+                    "payment_processor": "stripe",
+                    "is_payment_required": True,
+                    "is_payment_form_required": False,
+                    "customer_billing_address": type(
+                        "FakeAddress",
+                        (),
+                        {
+                            "country": "KR",
+                            "line1": None,
+                            "line2": None,
+                            "postal_code": None,
+                            "city": None,
+                            "state": None,
+                        },
+                    )(),
+                    "billing_address_fields": type(
+                        "FakeAddressFields",
+                        (),
+                        {
+                            "country": "required",
+                            "state": "disabled",
+                            "city": "disabled",
+                            "postal_code": "disabled",
+                            "line1": "disabled",
+                            "line2": "disabled",
+                        },
+                    )(),
+                    "currency": "krw",
+                    "amount": 100,
+                    "product_id": "prod_single",
+                    "product_price_id": "price_single",
+                },
+            )()
+
+    class FakePolarClient:
+        """checkouts client만 노출하는 테스트용 Polar 클라이언트다."""
+
+        def __init__(self) -> None:
+            self.checkouts = FakeCheckoutsClient()
+
+    monkeypatch.setattr("app.billing.Polar", lambda access_token, server: FakePolarClient())
+
+    gateway = PolarGateway(
+        access_token="polar-token",
+        webhook_secret="whsec-test",
+        server="production",
+    )
+
+    checkout = gateway.get_checkout("chk_live_123")
+
+    assert checkout["payment_processor"] == "stripe"
+    assert checkout["is_payment_required"] is True
+    assert checkout["is_payment_form_required"] is False
+    assert checkout["customer_billing_address"] == {
+        "country": "KR",
+        "line1": None,
+        "line2": None,
+        "postal_code": None,
+        "city": None,
+        "state": None,
+    }
+    assert checkout["billing_address_fields"]["country"] == "required"
+    assert checkout["product_id"] == "prod_single"
+    assert checkout["product_price_id"] == "price_single"
+
+
+def test_polar_gateway_get_checkout_normalizes_undefined_optional_fields(monkeypatch):
+    class FakeCheckoutsClient:
+        """optional 진단 필드가 undefined 인 checkout을 반환한다."""
+
+        def get(self, *, id: str):
+            """address 내부 일부 필드를 undefined 로 둔다."""
+            return type(
+                "FakeCheckout",
+                (),
+                {
+                    "id": id,
+                    "status": "open",
+                    "payment_processor": "stripe",
+                    "is_payment_required": True,
+                    "is_payment_form_required": True,
+                    "customer_billing_address": type(
+                        "FakeAddress",
+                        (),
+                        {
+                            "country": "KR",
+                            "line1": PydanticUndefined,
+                            "line2": PydanticUndefined,
+                            "postal_code": PydanticUndefined,
+                            "city": PydanticUndefined,
+                            "state": PydanticUndefined,
+                        },
+                    )(),
+                    "billing_address_fields": type(
+                        "FakeAddressFields",
+                        (),
+                        {
+                            "country": "required",
+                            "state": PydanticUndefined,
+                            "city": PydanticUndefined,
+                            "postal_code": PydanticUndefined,
+                            "line1": PydanticUndefined,
+                            "line2": PydanticUndefined,
+                        },
+                    )(),
+                    "currency": "krw",
+                    "amount": 100,
+                    "product_id": "prod_single",
+                    "product_price_id": "price_single",
+                },
+            )()
+
+    class FakePolarClient:
+        """checkouts client만 노출하는 테스트용 Polar 클라이언트다."""
+
+        def __init__(self) -> None:
+            self.checkouts = FakeCheckoutsClient()
+
+    monkeypatch.setattr("app.billing.Polar", lambda access_token, server: FakePolarClient())
+
+    gateway = PolarGateway(
+        access_token="polar-token",
+        webhook_secret="whsec-test",
+        server="production",
+    )
+
+    checkout = gateway.get_checkout("chk_live_undefined")
+
+    assert checkout["customer_billing_address"]["line1"] is None
+    assert checkout["billing_address_fields"]["state"] is None
 
 
 def test_build_billing_service_requires_production_server_for_live_billing(monkeypatch):

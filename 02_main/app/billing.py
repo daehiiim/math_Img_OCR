@@ -25,6 +25,9 @@ POLAR_PRODUCT_PRICE_MISSING = "missing product price"
 POLAR_PRODUCT_CURRENCY_MISMATCH = "product currency mismatch"
 POLAR_PRODUCT_ID_MISMATCH = "configured Polar product id mismatch"
 POLAR_REQUIRED_CURRENCY = "krw"
+POLAR_DEFAULT_BILLING_COUNTRY = "KR"
+CHECKOUT_ADDRESS_FIELDS = ("country", "line1", "line2", "postal_code", "city", "state")
+CHECKOUT_BILLING_FIELD_NAMES = ("country", "state", "city", "postal_code", "line1", "line2")
 JOB_ACTION_REASON_MAP = {
     "ocr": "ocr_charge",
     "image_stylize": "image_stylize_charge",
@@ -194,6 +197,17 @@ def _normalize_optional_text(value: Any) -> str | None:
     return text or None
 
 
+def _normalize_checkout_value(value: Any) -> Any:
+    """Polar checkout 필드를 직렬화 가능한 기본값으로 바꾼다."""
+    value_type_name = type(value).__name__
+    if value is None or value_type_name in {"Unset", "PydanticUndefinedType"}:
+        return None
+    enum_value = getattr(value, "value", None)
+    if enum_value is not None:
+        return enum_value
+    return value
+
+
 def _normalize_int(value: Any, field_name: str) -> int:
     """정수 필드를 안전하게 변환한다."""
     try:
@@ -331,6 +345,46 @@ def _normalize_polar_sdk_error(action: str, error: Exception) -> ValueError:
     return ValueError(f"{action}: {message}")
 
 
+def _build_default_checkout_address() -> polar_models.AddressInput:
+    """운영 checkout 기본 청구지 국가를 South Korea로 preset 한다."""
+    return polar_models.AddressInput(country=POLAR_DEFAULT_BILLING_COUNTRY)
+
+
+def _read_checkout_address(value: Any) -> dict[str, Any] | None:
+    """checkout 주소 객체를 일반 dict로 정규화한다."""
+    if value is None:
+        return None
+    return {
+        field_name: _normalize_checkout_value(getattr(value, field_name, None))
+        for field_name in CHECKOUT_ADDRESS_FIELDS
+    }
+
+
+def _read_checkout_billing_fields(value: Any) -> dict[str, Any] | None:
+    """checkout 주소 필드 모드를 일반 dict로 정규화한다."""
+    if value is None:
+        return None
+    return {
+        field_name: _normalize_checkout_value(getattr(value, field_name, None))
+        for field_name in CHECKOUT_BILLING_FIELD_NAMES
+    }
+
+
+def _read_checkout_diagnostics(checkout: Any) -> dict[str, Any]:
+    """Polar checkout 응답에서 운영 진단 필드를 읽는다."""
+    return {
+        "payment_processor": _normalize_checkout_value(getattr(checkout, "payment_processor", None)),
+        "is_payment_required": getattr(checkout, "is_payment_required", None),
+        "is_payment_form_required": getattr(checkout, "is_payment_form_required", None),
+        "customer_billing_address": _read_checkout_address(getattr(checkout, "customer_billing_address", None)),
+        "billing_address_fields": _read_checkout_billing_fields(getattr(checkout, "billing_address_fields", None)),
+        "currency": _normalize_checkout_value(getattr(checkout, "currency", None)),
+        "amount": getattr(checkout, "amount", None),
+        "product_id": _normalize_checkout_value(getattr(checkout, "product_id", None)),
+        "product_price_id": _normalize_checkout_value(getattr(checkout, "product_price_id", None)),
+    }
+
+
 def _validate_required_polar_settings(
     access_token: str | None,
     server: str | None,
@@ -386,6 +440,8 @@ class PolarGateway:
             success_url=success_url,
             return_url=cancel_url,
             allow_discount_codes=False,
+            require_billing_address=True,
+            customer_billing_address=_build_default_checkout_address(),
         )
         try:
             checkout = self._client.checkouts.create(request=request)
@@ -408,6 +464,7 @@ class PolarGateway:
         return {
             "id": checkout.id,
             "status": str(getattr(checkout.status, "value", checkout.status)).lower(),
+            **_read_checkout_diagnostics(checkout),
         }
 
     def create_customer_session(self, customer_id: str, return_url: str | None = None) -> dict:

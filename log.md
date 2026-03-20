@@ -33,3 +33,11 @@
 - 자산 누락, 빈 파일, 읽기 실패를 `NANO_BANANA_PROMPT_ASSET_MISSING`, `NANO_BANANA_PROMPT_ASSET_EMPTY`, `NANO_BANANA_PROMPT_ASSET_READ_ERROR`로 로깅하고 `ValueError`로 올리도록 정리했다.
 - `tests/test_nano_banana_prompt.py`, `tests/test_config.py`를 확장해 새 버전 지원, 자산 누락 실패, 자산 기반 프롬프트 조합을 검증했다.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\02_main && pytest -q tests` 기준 `112 passed`.
+- Polar checkout 기본 청구지 국가 preset 요구를 반영했다. `app/billing.py`의 `PolarGateway.create_checkout`에서 `customer_billing_address.country=KR`, `require_billing_address=true`를 추가했다.
+- 같은 파일에 checkout 진단 헬퍼를 추가해 `payment_processor`, `is_payment_required`, `is_payment_form_required`, `customer_billing_address`, `billing_address_fields`, `currency`, `amount`, `product_id`, `product_price_id`를 읽도록 정리했다.
+- 운영 checkout 진단용 CLI `scripts/polar_checkout_inspect.py`를 추가했다. `--checkout-id` 하나로 JSON 진단값과 운영 메시지를 출력한다.
+- `docs/polar_production_runbook_ko.md`에 `South Korea` preset 확인, checkout 생성 직후/`Pay now` 직후 재진단, processor 설정 우선 점검 절차를 추가했다.
+- 회귀 테스트를 추가했다. `tests/test_billing.py`에서 gateway payload/진단 매핑을 검증하고 `tests/test_polar_checkout_inspect.py`에서 스크립트 메시지를 검증한다.
+- optional checkout 필드가 `PydanticUndefined`일 때도 진단 dict가 `None`으로 정규화되도록 보강했고 회귀 테스트를 추가했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3.14 -m pytest 02_main\\tests\\test_billing.py 02_main\\tests\\test_polar_checkout_inspect.py` 기준 `44 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3.14 02_main\\scripts\\polar_checkout_inspect.py --help` 성공.
