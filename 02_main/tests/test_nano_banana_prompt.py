@@ -91,6 +91,22 @@ def test_build_nano_banana_prompt_falls_back_to_generic_when_kind_is_unknown():
     assert "Do not add answer choice numbers" in prompt
 
 
+def test_build_nano_banana_prompt_supports_math_general_geometry_rules():
+    prompt = build_nano_banana_prompt("geometry", "math_general_v1")
+
+    assert "general math worksheet or textbook-style image" in prompt
+    assert "Preserve labels, numbers, angle markers" in prompt
+    assert "Do not add answer choice numbers" in prompt
+
+
+def test_build_nano_banana_prompt_raises_when_prompt_asset_is_missing(tmp_path, monkeypatch):
+    missing_assets_dir = tmp_path / "missing-prompts"
+    monkeypatch.setattr("app.pipeline.extractor.NANO_BANANA_PROMPTS_DIR", missing_assets_dir)
+
+    with pytest.raises(ValueError, match="NANO_BANANA_PROMPT_ASSET_MISSING"):
+        build_nano_banana_prompt("geometry", "csat_v1")
+
+
 def test_get_openai_api_key_does_not_read_legacy_api_key_env(tmp_path):
     legacy_path = tmp_path / "apiKey.env"
     legacy_path.write_text(
@@ -151,6 +167,37 @@ def test_get_nano_banana_settings_rejects_unsupported_provider(tmp_path):
 
     with pytest.raises(ValueError, match="Unsupported NANO_BANANA_PROVIDER: invalid-provider"):
         _get_nano_banana_settings(tmp_path)
+
+
+def test_generate_styled_image_with_nano_banana_uses_math_general_prompt_assets(
+    tmp_path,
+    monkeypatch,
+):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            [
+                "NANO_BANANA_PROVIDER=gemini_api",
+                "NANO_BANANA_MODEL=gemini-2.5-flash-image-preview",
+                "NANO_BANANA_PROMPT_VERSION=math_general_v1",
+                "GEMINI_API_KEY=test-gemini-api-key",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+    _install_fake_google_genai(monkeypatch, captured)
+
+    result = generate_styled_image_with_nano_banana(
+        tmp_path,
+        b"input-image",
+        prompt_kind="generic",
+    )
+
+    assert result == b"fake-png"
+    text_part = captured["generate_content_kwargs"]["contents"][0].parts[0]["text"]
+    assert "general math worksheet or textbook-style image" in text_part
+    assert "Keep only the problem-solving visual information" in text_part
 
 
 @pytest.mark.parametrize(

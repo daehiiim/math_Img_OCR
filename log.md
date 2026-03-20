@@ -7,3 +7,24 @@
 - `production_nano_banana_web_rollout_ko.md`를 Vertex 대체 문서가 아니라 선택 가능한 provider 운영 문서로 갱신했다.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\02_main && pytest -q tests` 기준 `104 passed`.
 - 다음 AI agent가 이어서 작업할 수 있도록 루트 `description.md`를 작성하고 `handoff.md`의 관련 파일 목록에 연결했다.
+- Billing RLS 장애 복구를 위해 `SupabaseBillingStore`의 과금 write 경로를 user JWT client에서 service role admin client로 옮겼다.
+- `main.py`에 billing persistence/config 전용 에러 매핑을 추가해 `credit_ledger` RLS 실패를 storage 503이 아니라 billing 500으로 분리했다.
+- 회귀 테스트를 추가했다: `tests/test_billing.py`에서 admin client write 경로와 billing 전용 HTTP detail을 검증했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\02_main && pytest -q tests/test_billing.py tests/test_job_response_fields.py` 기준 `45 passed`.
+- 운영 배포를 수행했다: `cd D:\\03_PROJECT\\05_mathOCR\\02_main && gcloud run deploy mathocr --source . --region us-central1 --project sapient-stacker-468504-r6 --quiet`.
+- 운영 실데이터 검증 결과, 기존 실패 job `ec422fd2-a33c-4a3f-8e44-6a1f52025b87` 재실행이 `200`으로 복구됐고 `credit_ledger.reason=image_stylize_charge`, `ocr_job_regions.image_charged=true`, `ocr_jobs.was_charged=true`가 반영됐다.
+- Cloud Run request 로그 기준 동일 job `/run` 요청이 `2026-03-20T04:04:11Z`에는 `503`, 배포 후 `2026-03-20T04:42:39Z`에는 `200`으로 기록됐다.
+- 현재 작업트리에는 별도 선행 변경이 남아 있다: `tests/test_config.py`, `tests/test_nano_banana_prompt.py`. 이 변경 때문에 `pytest -q tests/test_billing.py tests/test_job_response_fields.py tests/test_config.py tests/test_nano_banana_prompt.py` 실행 시 `NANO_BANANA_PROMPTS_DIR` import 누락으로 `tests/test_nano_banana_prompt.py` 수집 에러가 난다.
+- Polar 운영 결제 장애의 직접 원인을 확정했다. Cloud Run이 참조하는 production Product 3개는 활성 상태였지만 metadata가 모두 비어 있어 `/billing/catalog` 이 `400 {"detail":"missing plan_id metadata"}` 로 실패했다.
+- Polar SDK로 production Product 3개 metadata를 운영 계약값으로 복구했다: `single/1`, `starter/100`, `pro/200`.
+- 복구 후 `curl https://mathtohwp.vercel.app/billing/catalog` 기준 `200`과 3개 플랜 응답을 확인했고, 브라우저 `/pricing` 화면에서도 `결제 설정 점검 중` 문구 없이 구매 버튼 3개가 노출되는 것을 확인했다.
+- HS256 Supabase JWT를 생성해 인증된 `POST /billing/checkout` 를 호출했고 live checkout 세션 생성 성공과 `GET /billing/checkout/{id}` 의 `status=open`, `credits_applied=false` 를 확인했다.
+- 로컬 `02_main/.env` 의 Polar live token, webhook secret, product ID 3개를 Cloud Run 운영값으로 동기화했다.
+- `cd D:\\03_PROJECT\\05_mathOCR\\02_main && py scripts/polar_production_preflight.py` 와 `py scripts/polar_production_preflight.py --api-base-url https://mathocr-146126176673.us-central1.run.app` 를 재실행해 전체 `OK` 를 확인했다.
+- 현재 live 가격은 Polar production 기준 `single=100 KRW`, `starter=9900 KRW`, `pro=19000 KRW` 로 확인됐다. 프런트 fallback/test 상수의 `1000/19000/29000` 와는 다르지만, 이번 패스에서는 매출 복구만 우선해 metadata만 수정했고 가격 정책 변경은 보류했다.
+- 선행 테스트 변경을 실제 구현으로 흡수했다. `extractor.py`에 `NANO_BANANA_PROMPTS_DIR` 기반 자산 로더를 추가하고 프롬프트를 코드 상수 대신 파일에서 조립하도록 바꿨다.
+- Nano Banana 프롬프트 자산 디렉터리를 `app/pipeline/prompt_assets/nano_banana` 아래에 만들고 `csat_v1`, `math_general_v1` 각각에 `base`, `style`, `negative`, `kind별` 규칙 파일을 분리했다.
+- 지원 프롬프트 버전에 `math_general_v1`를 추가해 범용 수학문제 스타일 실험이 가능하도록 했다.
+- 자산 누락, 빈 파일, 읽기 실패를 `NANO_BANANA_PROMPT_ASSET_MISSING`, `NANO_BANANA_PROMPT_ASSET_EMPTY`, `NANO_BANANA_PROMPT_ASSET_READ_ERROR`로 로깅하고 `ValueError`로 올리도록 정리했다.
+- `tests/test_nano_banana_prompt.py`, `tests/test_config.py`를 확장해 새 버전 지원, 자산 누락 실패, 자산 기반 프롬프트 조합을 검증했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\02_main && pytest -q tests` 기준 `112 passed`.

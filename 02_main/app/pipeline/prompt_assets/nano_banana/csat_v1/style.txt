@@ -1,0 +1,1 @@
+Preserve labels, numbers, symbol counts, and problem-solving relationships exactly. Correct mild page tilt, scan skew, and perspective distortion only when the original composition remains intact. Remove scan noise, blur, paper texture, and accidental shading while keeping all mathematically meaningful marks.

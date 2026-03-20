@@ -6,7 +6,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import Optional
+from pathlib import Path
 
 import requests
 
@@ -22,39 +22,10 @@ NANO_BANANA_LOCATION_NOT_CONFIGURED_ERROR = "NANO_BANANA_LOCATION is not configu
 NANO_BANANA_MODEL_NOT_CONFIGURED_ERROR = "NANO_BANANA_MODEL is not configured"
 NANO_BANANA_PROJECT_ID_NOT_CONFIGURED_ERROR = "NANO_BANANA_PROJECT_ID is not configured"
 NANO_BANANA_PROMPT_VERSION_NOT_CONFIGURED_ERROR = "NANO_BANANA_PROMPT_VERSION is not configured"
-
-NANO_BANANA_BASE_PROMPTS = {
-    "csat_v1": (
-        "Convert this cropped visual into a clean Korean CSAT exam style image. "
-        "Do not change the original structure, labels, numbers, relative positions, line counts, or geometric relationships. "
-        "Use a plain white background and neat black or very dark gray linework only. "
-        "Do not add new objects, rewrite text, change the composition, crop further, zoom, rotate, decorate, texture, gradient, or add shadows."
-    )
-}
-
-NANO_BANANA_PROMPT_SUFFIX_BY_KIND = {
-    "csat_v1": {
-        "geometry": (
-            "Preserve point labels, angle markers, parallel line markers, tick marks, coordinate axes, axis ticks, graph curves, and dashed guide lines. "
-            "Minimize fills and render the figure as crisp 2D line art."
-        ),
-        "illustration": (
-            "Render it as a textbook-style monochrome illustration instead of a photo. "
-            "Keep the count and direction of people or objects, the major contours, and the internal boundaries needed to solve the problem."
-        ),
-        "generic": (
-            "Keep only the visual information needed to solve the math problem and remove decorative noise."
-        ),
-    }
-}
-
-NANO_BANANA_NEGATIVE_RULES = {
-    "csat_v1": (
-        "Do not add answer choice numbers, choice text, tables, long paragraphs, or page backgrounds. "
-        "Do not omit, misspell, or substitute labels. "
-        "Do not add watermarks, color emphasis, or background patterns."
-    )
-}
+NANO_BANANA_PROMPTS_DIR = Path(__file__).resolve().parent / "prompt_assets" / "nano_banana"
+NANO_BANANA_PROMPT_ASSET_MISSING_ERROR = "NANO_BANANA_PROMPT_ASSET_MISSING"
+NANO_BANANA_PROMPT_ASSET_EMPTY_ERROR = "NANO_BANANA_PROMPT_ASSET_EMPTY"
+NANO_BANANA_PROMPT_ASSET_READ_ERROR = "NANO_BANANA_PROMPT_ASSET_READ_ERROR"
 
 
 @dataclass(frozen=True)
@@ -161,19 +132,47 @@ def _normalize_stylizable_image_kind(kind: str | None) -> str:
     return "generic"
 
 
+def _raise_nano_banana_prompt_asset_error(error_code: str, asset_path: Path, error: Exception | None = None) -> None:
+    """프롬프트 자산 로딩 실패를 로그와 고정 에러 문자열로 남긴다."""
+    logger.error("Nano Banana prompt asset error code=%s path=%s error=%s", error_code, asset_path, error)
+    raise ValueError(f"{error_code}: {asset_path}") from error
+
+
+def _read_nano_banana_prompt_asset(asset_path: Path) -> str:
+    """프롬프트 자산 파일을 읽고 비어 있지 않은 문자열만 반환한다."""
+    if not asset_path.exists():
+        _raise_nano_banana_prompt_asset_error(NANO_BANANA_PROMPT_ASSET_MISSING_ERROR, asset_path)
+    try:
+        content = asset_path.read_text(encoding="utf-8").strip()
+    except OSError as error:
+        _raise_nano_banana_prompt_asset_error(NANO_BANANA_PROMPT_ASSET_READ_ERROR, asset_path, error)
+    if content:
+        return content
+    _raise_nano_banana_prompt_asset_error(NANO_BANANA_PROMPT_ASSET_EMPTY_ERROR, asset_path)
+
+
+def _get_nano_banana_prompt_asset_paths(version: str, kind: str) -> tuple[Path, Path, Path, Path]:
+    """버전과 kind 조합에 대응하는 프롬프트 자산 경로를 반환한다."""
+    version_dir = NANO_BANANA_PROMPTS_DIR / version
+    return (
+        version_dir / "base.txt",
+        version_dir / "style.txt",
+        version_dir / "kinds" / f"{kind}.txt",
+        version_dir / "negative.txt",
+    )
+
+
 def build_nano_banana_prompt(kind: str | None, version: str) -> str:
     """버전과 kind 조합에 맞는 Nano Banana 프롬프트를 생성한다."""
     if version not in SUPPORTED_NANO_BANANA_PROMPT_VERSIONS:
         raise ValueError(f"Unsupported Nano Banana prompt version: {version}")
 
     resolved_kind = _normalize_stylizable_image_kind(kind)
-    return " ".join(
-        [
-            NANO_BANANA_BASE_PROMPTS[version],
-            NANO_BANANA_PROMPT_SUFFIX_BY_KIND[version][resolved_kind],
-            NANO_BANANA_NEGATIVE_RULES[version],
-        ]
-    )
+    prompt_parts = [
+        _read_nano_banana_prompt_asset(asset_path)
+        for asset_path in _get_nano_banana_prompt_asset_paths(version, resolved_kind)
+    ]
+    return " ".join(prompt_parts)
 
 
 def _extract_stylizable_image(parsed: dict) -> tuple[bool, list[int] | None, str | None]:

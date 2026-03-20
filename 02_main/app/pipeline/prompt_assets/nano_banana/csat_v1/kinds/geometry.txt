@@ -1,0 +1,1 @@
+Preserve point labels, angle markers, parallel line markers, tick marks, coordinate axes, axis ticks, graph curves, and dashed guide lines. Minimize fills and render the figure as crisp 2D line art.

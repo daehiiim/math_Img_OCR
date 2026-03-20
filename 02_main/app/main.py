@@ -22,6 +22,8 @@ SCHEMA_MISMATCH_DETAIL = "배포 DB 스키마가 최신이 아닙니다."
 STORAGE_FAILURE_DETAIL = "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."
 USER_OPENAI_KEY_CONFIG_DETAIL = "사용자 OpenAI 키 설정이 완료되지 않았습니다."
 IMAGE_PIPELINE_CONFIG_DETAIL = "이미지 생성 서버 설정이 완료되지 않았습니다."
+BILLING_CONFIG_DETAIL = "서버 과금 설정이 완료되지 않았습니다."
+BILLING_PERSISTENCE_DETAIL = "서버 과금 기록 저장에 실패했습니다. 잠시 후 다시 시도하세요."
 
 
 def _get_allowed_origins() -> list[str]:
@@ -188,6 +190,8 @@ def _is_schema_mismatch_message(message: str) -> bool:
 def _map_runtime_value_error(error: ValueError) -> HTTPException | None:
     """설정 누락 성격의 ValueError를 안정적인 HTTP 에러로 변환한다."""
     normalized = str(error).lower()
+    if "supabase_service_role_key" in normalized and "billing" in normalized:
+        return HTTPException(status_code=500, detail=BILLING_CONFIG_DETAIL)
     if "openai_key_encryption_secret" in normalized:
         return HTTPException(status_code=500, detail=USER_OPENAI_KEY_CONFIG_DETAIL)
     if (
@@ -202,12 +206,25 @@ def _map_runtime_value_error(error: ValueError) -> HTTPException | None:
     return None
 
 
+def _is_billing_persistence_message(message: str) -> bool:
+    """과금 원장/잔액 저장 실패 성격의 Supabase 오류인지 판별한다."""
+    normalized = message.lower()
+    billing_targets = ("credit_ledger", "profiles")
+    billing_tokens = ("42501", "row-level security", "violates row-level security policy")
+    return any(target in normalized for target in billing_targets) and any(
+        token in normalized for token in billing_tokens
+    )
+
+
 def _raise_runtime_http_error(error: Exception) -> None:
     """런타임 인프라 예외를 사용자용 HTTP 오류로 정규화한다."""
     if isinstance(error, SupabaseApiError):
         logger.exception("Supabase runtime error: %s", error)
-        if _is_schema_mismatch_message(str(error)):
+        message = str(error)
+        if _is_schema_mismatch_message(message):
             raise HTTPException(status_code=500, detail=SCHEMA_MISMATCH_DETAIL) from error
+        if _is_billing_persistence_message(message):
+            raise HTTPException(status_code=500, detail=BILLING_PERSISTENCE_DETAIL) from error
         raise HTTPException(status_code=503, detail=STORAGE_FAILURE_DETAIL) from error
 
     if isinstance(error, ValueError):
@@ -332,12 +349,16 @@ def run_pipeline(
         )
         charge_result = {"charged_count": 0}
         if result.get("status") in ("completed", "failed", "exported"):
-            charge_result = billing_service.consume_job_action_credits(
-                current_user,
-                job_id,
-                list(result.get("executed_actions") or []),
-                processing_type=openai_key.processing_type,
-            )
+            try:
+                charge_result = billing_service.consume_job_action_credits(
+                    current_user,
+                    job_id,
+                    list(result.get("executed_actions") or []),
+                    processing_type=openai_key.processing_type,
+                )
+            except (SupabaseApiError, ValueError) as error:
+                logger.error("job run charge_persist failed job_id=%s error=%s", job_id, error)
+                raise
         return {
             **result,
             "charged_count": int(charge_result.get("charged_count") or len(charge_result.get("charged_actions") or [])),

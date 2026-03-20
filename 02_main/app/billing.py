@@ -467,6 +467,16 @@ class SupabaseBillingStore:
             api_key=self._service_role_key,
         )
 
+    def _billing_write_client(self) -> SupabaseClient:
+        """과금 쓰기 전용 service role 클라이언트를 반환한다."""
+        try:
+            return self._admin_client()
+        except ValueError as error:
+            normalized = str(error).lower()
+            if "supabase_service_role_key" in normalized:
+                raise ValueError("SUPABASE_SERVICE_ROLE_KEY is required for billing writes") from error
+            raise
+
     def _map_profile(self, row: dict) -> BillingProfile:
         """profiles row를 BillingProfile로 변환한다."""
         return BillingProfile(
@@ -744,7 +754,8 @@ class SupabaseBillingStore:
             raise ValueError("insufficient credits")
 
         new_balance = profile.credits_balance - 1
-        client.update(
+        admin_client = self._billing_write_client()
+        admin_client.update(
             "profiles",
             filters={"user_id": f"eq.{user.user_id}"},
             payload={
@@ -752,7 +763,7 @@ class SupabaseBillingStore:
                 "used_credits": profile.used_credits + 1,
             },
         )
-        client.insert(
+        admin_client.insert(
             "credit_ledger",
             {
                 "user_id": user.user_id,
@@ -762,7 +773,7 @@ class SupabaseBillingStore:
                 "reason": "ocr_success_charge",
             },
         )
-        client.update(
+        admin_client.update(
             "ocr_jobs",
             filters={"id": f"eq.{job_id}"},
             payload={
@@ -860,7 +871,8 @@ class SupabaseBillingStore:
             raise ValueError("insufficient credits")
 
         new_balance = profile.credits_balance - charged_count
-        client.update(
+        admin_client = self._billing_write_client()
+        admin_client.update(
             "profiles",
             filters={"user_id": f"eq.{user.user_id}"},
             payload={
@@ -868,7 +880,7 @@ class SupabaseBillingStore:
                 "used_credits": profile.used_credits + charged_count,
             },
         )
-        client.insert(
+        admin_client.insert(
             "credit_ledger",
             {
                 "user_id": user.user_id,
@@ -880,7 +892,7 @@ class SupabaseBillingStore:
         )
         charged_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
         for region_key in chargeable_region_keys:
-            client.update(
+            admin_client.update(
                 "ocr_job_regions",
                 filters={
                     "job_id": f"eq.{job_id}",
@@ -1029,12 +1041,13 @@ class SupabaseBillingStore:
         charged_actions: list[str] = []
         charged_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
         handled_actions = sorted({action for _, action in completed_region_actions})
+        admin_client = self._billing_write_client()
 
         for _, action in paid_region_actions:
             new_balance -= 1
             new_used_credits += 1
             charged_actions.append(action)
-            client.insert(
+            admin_client.insert(
                 "credit_ledger",
                 {
                     "user_id": user.user_id,
@@ -1046,7 +1059,7 @@ class SupabaseBillingStore:
             )
 
         if paid_region_actions:
-            client.update(
+            admin_client.update(
                 "profiles",
                 filters={"user_id": f"eq.{user.user_id}"},
                 payload={
@@ -1056,7 +1069,7 @@ class SupabaseBillingStore:
             )
 
         for region_key, action in completed_region_actions:
-            client.update(
+            admin_client.update(
                 "ocr_job_regions",
                 filters={
                     "job_id": f"eq.{job_id}",
@@ -1069,7 +1082,7 @@ class SupabaseBillingStore:
                 },
             )
 
-        client.update(
+        admin_client.update(
             "ocr_jobs",
             filters={"id": f"eq.{job_id}"},
             payload={

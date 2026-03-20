@@ -1,0 +1,1 @@
+Render it as a textbook-style monochrome illustration instead of a photo. Keep the count and direction of people or objects, the major contours, and the internal boundaries needed to solve the problem.

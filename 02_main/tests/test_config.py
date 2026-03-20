@@ -119,6 +119,18 @@ def test_get_settings_uses_default_nano_banana_prompt_version(tmp_path):
     assert settings.nano_banana_prompt_version == "csat_v1"
 
 
+def test_get_settings_accepts_math_general_nano_banana_prompt_version(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "NANO_BANANA_PROMPT_VERSION=math_general_v1",
+        encoding="utf-8",
+    )
+
+    settings = get_settings(tmp_path)
+
+    assert settings.nano_banana_prompt_version == "math_general_v1"
+
+
 def test_get_settings_rejects_unsupported_nano_banana_prompt_version(tmp_path):
     env_path = tmp_path / ".env"
     env_path.write_text(

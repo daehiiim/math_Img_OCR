@@ -1,0 +1,1 @@
+Render it as a textbook-style monochrome illustration rather than a photo. Preserve the count, direction, silhouette, and internal boundaries of people, objects, or science-style inserts whenever they are relevant to solving the problem.

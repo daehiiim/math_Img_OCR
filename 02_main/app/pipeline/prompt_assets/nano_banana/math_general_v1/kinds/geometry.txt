@@ -1,0 +1,1 @@
+Preserve labels, numbers, angle markers, parallel marks, congruence ticks, coordinate axes, axis ticks, graph curves, arrows, and dashed guide lines. Keep line intersections and relative distances stable, and render the figure as crisp 2D line art with minimal fills.

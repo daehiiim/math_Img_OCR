@@ -44,7 +44,7 @@ class AppSettings:
     app_url: str | None = None
     cors_allow_origins: tuple[str, ...] = ()
 
-SUPPORTED_NANO_BANANA_PROMPT_VERSIONS = ("csat_v1",)
+SUPPORTED_NANO_BANANA_PROMPT_VERSIONS = ("csat_v1", "math_general_v1")
 
 
 def _load_env_file(root_path: Path) -> dict[str, str]:

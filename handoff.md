@@ -1,29 +1,27 @@
 Done
-- Nano Banana provider 토글(`vertex|gemini_api`) 구현 완료
-- `GEMINI_API_KEY`/`NANO_BANANA_PROVIDER` 설정 로딩, provider별 `genai.Client(...)` 분기, API 에러 매핑 반영 완료
-- `.env.example` 및 운영 전환 문서 갱신 완료
-- 다음 AI agent용 운영 인수인계 문서 `description.md` 작성 완료
+- Polar production 상품 3개 metadata(`plan_id`, `credits`) 복구 완료
+- 운영 `/billing/catalog` 200 복구 및 `/pricing` 구매 버튼 노출 확인 완료
+- live `/billing/checkout` 세션 생성 검증 및 `02_main/.env` Polar 값 운영 기준 동기화 완료
 
 In Progress
-- 최우선 과제: 운영 Cloud Run/Secret Manager 반영과 실데이터 검증
-- 진행 상태: 코드와 백엔드 테스트는 완료됐고 운영 반영은 아직 미실행
-- 다음 단계: `NANO_BANANA_PROVIDER=gemini_api` 적용 후 실데이터 1건으로 로그와 저장 결과 확인
+- 최우선 과제: Polar 운영 실결제 1건과 webhook 적립 최종 검증
+- 진행 상태: catalog와 checkout 생성은 복구됐고 실제 카드 승인과 `credits_applied=true` 검증은 비용 발생 가능성 때문에 미실행
+- 다음 단계: 사용자 승인 후 production 결제 1건을 수행하고 `GET /billing/checkout/{id}`, `payment_events`, `credit_ledger`, `profiles.credits_balance`를 확인
 
 Next
-- Cloud Run에 새 `GEMINI_API_KEY`를 Secret Manager로 주입
-- Cloud Run에 `NANO_BANANA_PROVIDER=gemini_api` 설정
-- 실데이터 1건에서 `styled_image_url`, `styled_image_model`, 로그 `provider=gemini_api` 확인
-- 필요 시 `NANO_BANANA_PROVIDER=vertex`로 되돌려 즉시 롤백 검증
-- 기존 Polar production preflight 실패 원인(`POLAR_ACCESS_TOKEN does not match POLAR_SERVER`)은 별도 운영 점검 필요
+- Nano Banana 운영 실데이터 1건 검증
+- Polar 운영 가격 정책과 product display name(`single/starter/pro`) 정리 여부 결정
+- Cloud Run 민감정보를 Secret Manager 참조로 이관 검토
 
 Related Files
-- `D:\03_PROJECT\05_mathOCR\02_main\app\config.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\extractor.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\main.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\.env.example`
-- `D:\03_PROJECT\05_mathOCR\02_main\docs\production_nano_banana_web_rollout_ko.md`
-- `D:\03_PROJECT\05_mathOCR\description.md`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\billing.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\docs\polar_production_runbook_ko.md`
+- `D:\03_PROJECT\05_mathOCR\02_main\.env`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PricingPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PaymentPage.tsx`
 
 Last State
-- 백엔드 검증: `cd D:\03_PROJECT\05_mathOCR\02_main && pytest -q tests` -> `104 passed`
-- 문서 추가: `description.md` 작성 및 인수인계 링크 갱신
+- `curl https://mathtohwp.vercel.app/billing/catalog` -> `200` with 3 plans
+- `py scripts/polar_production_preflight.py --api-base-url https://mathocr-146126176673.us-central1.run.app` -> all `OK`
+- authenticated `POST /billing/checkout` -> checkout 생성 성공, `GET /billing/checkout/{id}` -> `status=open`, `credits_applied=false`
+- 작업트리에는 이번 작업 외 선행 변경이 유지됨: `02_main/app/{billing,config,main}.py`, `02_main/app/pipeline/extractor.py`, `02_main/tests/{test_billing,test_config,test_nano_banana_prompt}.py`, `02_main/app/pipeline/prompt_assets/`

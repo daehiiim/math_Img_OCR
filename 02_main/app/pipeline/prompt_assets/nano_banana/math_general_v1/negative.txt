@@ -1,0 +1,1 @@
+Do not add answer choice numbers, page decorations, tables, long prose blocks, watermarks, gradients, textures, or background patterns. Do not omit, rewrite, normalize, or substitute any label, number, or symbol.

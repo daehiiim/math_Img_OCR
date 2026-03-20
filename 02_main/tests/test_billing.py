@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import app.auth as auth_module
 import app.main as main_module
 from app.auth import AuthenticatedUser, require_authenticated_user
-from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway, StoredOpenAiKey, build_billing_service
+from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway, StoredOpenAiKey, SupabaseBillingStore, build_billing_service
 from app.config import AppSettings, AuthSettings, BillingSettings
 from app.main import app
 from app.supabase import SupabaseApiError
@@ -436,6 +436,44 @@ class FakeBillingStore:
         )
 
 
+class RecordingSupabaseClient:
+    """SupabaseBillingStore 호출 경로를 기록하는 테스트용 클라이언트다."""
+
+    def __init__(self, *, select_rows: dict[str, list[dict]] | None = None) -> None:
+        self._select_rows = select_rows or {}
+        self.operations: list[dict[str, object]] = []
+
+    def select(self, table: str, *, params: dict[str, object]) -> list[dict]:
+        """select 호출을 기록하고 미리 준비한 row를 반환한다."""
+        self.operations.append({"method": "select", "table": table, "params": params})
+        return [dict(row) for row in self._select_rows.get(table, [])]
+
+    def insert(self, table: str, payload: dict[str, object] | list[dict[str, object]]) -> list[dict]:
+        """insert 호출을 기록하고 payload를 그대로 돌려준다."""
+        self.operations.append({"method": "insert", "table": table, "payload": payload})
+        if isinstance(payload, list):
+            return payload
+        return [payload]
+
+    def update(
+        self,
+        table: str,
+        *,
+        filters: dict[str, object],
+        payload: dict[str, object],
+    ) -> list[dict]:
+        """update 호출을 기록하고 payload를 그대로 돌려준다."""
+        self.operations.append(
+            {
+                "method": "update",
+                "table": table,
+                "filters": filters,
+                "payload": payload,
+            }
+        )
+        return [payload]
+
+
 def make_user() -> AuthenticatedUser:
     return AuthenticatedUser(user_id="user-123", access_token="token-123")
 
@@ -777,6 +815,155 @@ def test_consume_job_region_credits_charges_exportable_regions_only_once():
     assert second["credits_balance"] == 3
     assert store.ledger_entries[-1]["reason"] == "ocr_success_charge"
     assert store.ledger_entries[-1]["delta"] == -2
+
+
+def test_supabase_billing_store_uses_admin_client_for_action_charge_writes(monkeypatch):
+    monkeypatch.setattr(
+        "app.billing.get_settings",
+        lambda root_path: AppSettings(
+            openai_api_key="sk-service-1234567890",
+            openai_key_encryption_secret="encryption-secret",
+            database_url=None,
+            auth=AuthSettings(
+                supabase_url="https://billing-test.supabase.co",
+                supabase_anon_key="anon-key",
+                supabase_jwt_secret=None,
+                supabase_storage_bucket="ocr-assets",
+                supabase_service_role_key="service-role-key",
+            ),
+            billing=BillingSettings(
+                polar_access_token=None,
+                polar_webhook_secret=None,
+                polar_server="production",
+                polar_product_single_id="prod_single",
+                polar_product_starter_id="prod_starter",
+                polar_product_pro_id="prod_pro",
+            ),
+        ),
+    )
+    store = SupabaseBillingStore(Path("."))
+    user_client = RecordingSupabaseClient(
+        select_rows={
+            "profiles": [
+                {
+                    "user_id": "user-123",
+                    "credits_balance": 5,
+                    "used_credits": 1,
+                    "openai_connected": False,
+                    "openai_key_masked": None,
+                }
+            ],
+            "ocr_jobs": [{"id": "job-123", "status": "completed", "processing_type": "service_api"}],
+            "ocr_job_regions": [
+                {
+                    "region_key": "q1",
+                    "ocr_text": "문제 1",
+                    "mathml": None,
+                    "explanation": "해설 1",
+                    "styled_image_path": "styled-1.png",
+                    "ocr_charged": False,
+                    "image_charged": False,
+                    "explanation_charged": False,
+                }
+            ],
+        }
+    )
+    admin_client = RecordingSupabaseClient()
+    monkeypatch.setattr(store, "_user_client", lambda user: user_client)
+    monkeypatch.setattr(store, "_admin_client", lambda: admin_client)
+
+    charged = store.consume_job_action_credits(
+        make_user(),
+        "job-123",
+        ["ocr", "image_stylize", "explanation"],
+        processing_type="service_api",
+    )
+
+    assert charged["charged_count"] == 3
+    assert charged["credits_balance"] == 2
+    assert {entry["method"] for entry in user_client.operations} == {"select"}
+    assert all(entry["method"] != "select" for entry in admin_client.operations)
+    assert [entry["table"] for entry in admin_client.operations if entry["method"] == "insert"] == [
+        "credit_ledger",
+        "credit_ledger",
+        "credit_ledger",
+    ]
+    assert [entry["table"] for entry in admin_client.operations if entry["method"] == "update"] == [
+        "profiles",
+        "ocr_job_regions",
+        "ocr_job_regions",
+        "ocr_job_regions",
+        "ocr_jobs",
+    ]
+
+
+def test_supabase_billing_store_uses_admin_client_for_region_charge_writes(monkeypatch):
+    monkeypatch.setattr(
+        "app.billing.get_settings",
+        lambda root_path: AppSettings(
+            openai_api_key="sk-service-1234567890",
+            openai_key_encryption_secret="encryption-secret",
+            database_url=None,
+            auth=AuthSettings(
+                supabase_url="https://billing-test.supabase.co",
+                supabase_anon_key="anon-key",
+                supabase_jwt_secret=None,
+                supabase_storage_bucket="ocr-assets",
+                supabase_service_role_key="service-role-key",
+            ),
+            billing=BillingSettings(
+                polar_access_token=None,
+                polar_webhook_secret=None,
+                polar_server="production",
+                polar_product_single_id="prod_single",
+                polar_product_starter_id="prod_starter",
+                polar_product_pro_id="prod_pro",
+            ),
+        ),
+    )
+    store = SupabaseBillingStore(Path("."))
+    user_client = RecordingSupabaseClient(
+        select_rows={
+            "profiles": [
+                {
+                    "user_id": "user-123",
+                    "credits_balance": 4,
+                    "used_credits": 0,
+                    "openai_connected": False,
+                    "openai_key_masked": None,
+                }
+            ],
+            "ocr_jobs": [{"id": "job-123", "status": "completed"}],
+            "ocr_job_regions": [
+                {
+                    "region_key": "q1",
+                    "status": "completed",
+                    "ocr_text": "문제 1",
+                    "explanation": "해설 1",
+                    "was_charged": False,
+                }
+            ],
+        }
+    )
+    admin_client = RecordingSupabaseClient()
+    monkeypatch.setattr(store, "_user_client", lambda user: user_client)
+    monkeypatch.setattr(store, "_admin_client", lambda: admin_client)
+
+    charged = store.consume_job_region_credits(
+        make_user(),
+        "job-123",
+        processing_type="service_api",
+    )
+
+    assert charged["charged_count"] == 1
+    assert charged["credits_balance"] == 3
+    assert {entry["method"] for entry in user_client.operations} == {"select"}
+    assert all(entry["method"] != "select" for entry in admin_client.operations)
+    assert [entry["table"] for entry in admin_client.operations if entry["method"] == "insert"] == ["credit_ledger"]
+    assert [entry["table"] for entry in admin_client.operations if entry["method"] == "update"] == [
+        "profiles",
+        "ocr_job_regions",
+    ]
 
 
 def test_save_openai_key_encrypts_and_updates_profile():
@@ -1265,6 +1452,150 @@ def test_run_pipeline_returns_storage_failure_detail_for_supabase_error(monkeypa
 
     assert response.status_code == 503
     assert response.json()["detail"] == "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."
+
+
+def test_run_pipeline_returns_billing_persistence_detail_for_rls_error(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    class StubBillingService:
+        """후차감 단계의 billing RLS 오류를 재현한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            """서비스 API 모드의 OpenAI key를 반환한다."""
+            assert current_user.user_id == user.user_id
+            return type(
+                "ResolvedKey",
+                (),
+                {
+                    "api_key": "sk-service-1234567890",
+                    "processing_type": "service_api",
+                },
+            )()
+
+        def ensure_job_action_credits_available(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """선차감 검증은 정상 응답으로 둔다."""
+            return {"required_credits": 2, "credits_balance": 5}
+
+        def consume_job_action_credits(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """후차감 시 billing persistence 오류를 재현한다."""
+            raise SupabaseApiError(
+                '{"code":"42501","details":null,"hint":null,"message":"new row violates row-level security policy for table \\"credit_ledger\\""}'
+            )
+
+    def fake_run_pipeline(*args, **kwargs):
+        """파이프라인 실행 자체는 성공으로 둔다."""
+        return {
+            "job_id": args[1],
+            "status": "completed",
+            "executed_actions": ["ocr", "image_stylize"],
+            "completed_count": 1,
+            "failed_count": 0,
+            "exportable_count": 1,
+        }
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post(
+        "/jobs/job-123/run",
+        json={
+            "do_ocr": True,
+            "do_image_stylize": True,
+            "do_explanation": False,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "서버 과금 기록 저장에 실패했습니다. 잠시 후 다시 시도하세요."
+
+
+def test_run_pipeline_returns_billing_config_detail_for_missing_service_role(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    class StubBillingService:
+        """후차감 단계의 service role 설정 누락을 재현한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            """서비스 API 모드의 OpenAI key를 반환한다."""
+            assert current_user.user_id == user.user_id
+            return type(
+                "ResolvedKey",
+                (),
+                {
+                    "api_key": "sk-service-1234567890",
+                    "processing_type": "service_api",
+                },
+            )()
+
+        def ensure_job_action_credits_available(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """선차감 검증은 정상 응답으로 둔다."""
+            return {"required_credits": 2, "credits_balance": 5}
+
+        def consume_job_action_credits(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+            actions: list[str],
+            *,
+            processing_type: str,
+        ) -> dict:
+            """service role 누락 설정 오류를 재현한다."""
+            raise ValueError("SUPABASE_SERVICE_ROLE_KEY is required for billing writes")
+
+    def fake_run_pipeline(*args, **kwargs):
+        """파이프라인 실행 자체는 성공으로 둔다."""
+        return {
+            "job_id": args[1],
+            "status": "completed",
+            "executed_actions": ["ocr", "image_stylize"],
+            "completed_count": 1,
+            "failed_count": 0,
+            "exportable_count": 1,
+        }
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post(
+        "/jobs/job-123/run",
+        json={
+            "do_ocr": True,
+            "do_image_stylize": True,
+            "do_explanation": False,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "서버 과금 설정이 완료되지 않았습니다."
 
 
 def test_run_pipeline_returns_user_openai_key_detail_for_missing_secret(monkeypatch):

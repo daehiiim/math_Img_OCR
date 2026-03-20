@@ -1,0 +1,1 @@
+Preserve labels, numbers, angle markers, tick marks, graph cues, arrows, brackets, and repeated marker counts exactly. Remove scan noise, blur, paper texture, and accidental shadows while keeping the visual information required to solve the problem. Prefer a faithful redraw over a prettier redraw whenever cleanup could alter meaning.

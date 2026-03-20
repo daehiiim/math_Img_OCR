@@ -1,0 +1,1 @@
+Keep only the problem-solving visual information and remove decorative noise. Preserve the original layout and the relative placement of every meaningful object, label, and boundary.
