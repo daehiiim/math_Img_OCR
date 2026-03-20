@@ -1,1 +1,1 @@
-Do not add answer choice numbers, choice text, tables, long paragraphs, or page backgrounds. Do not omit, misspell, or substitute labels. Do not add watermarks, color emphasis, or background patterns.
+Do not add answer choice numbers, problem numbers, choice text, general sentences, tables, long paragraphs, or page backgrounds. Do not omit, misspell, or substitute labels. Do not add watermarks, color emphasis, or background patterns.

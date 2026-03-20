@@ -576,7 +576,9 @@ def download_hwpx(
         return Response(
             content=content,
             media_type="application/hwp+zip",
-            headers={"Content-Disposition": f'attachment; filename="{job_id}.hwpx"'},
+            headers={
+                "Content-Disposition": "attachment; filename*=UTF-8''%EC%83%9D%EC%84%B1%EA%B2%B0%EA%B3%BC.hwpx"
+            },
         )
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")

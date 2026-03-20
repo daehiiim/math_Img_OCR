@@ -1,1 +1,1 @@
-Keep only the problem-solving visual information and remove decorative noise. Preserve the original layout and the relative placement of every meaningful object, label, and boundary.
+Keep only the problem-solving visual information and remove decorative noise. Exclude problem numbers, multiple-choice numbers, general sentences, and table layouts from the stylizable image. Preserve the original layout and the relative placement of every meaningful object, label, and boundary.

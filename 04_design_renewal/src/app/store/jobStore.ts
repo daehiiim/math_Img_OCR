@@ -245,10 +245,7 @@ export function useJobStore() {
     );
 
     const downloaded = await downloadHwpxApi(jobId);
-    const filename = downloaded.filename.toLowerCase().endsWith(".hwpx")
-      ? downloaded.filename
-      : `${jobId}.hwpx`;
-    triggerDownloadBlob(downloaded.blob, filename);
+    triggerDownloadBlob(downloaded.blob, downloaded.filename || "생성결과.hwpx");
   }, []);
 
   const deleteJob = useCallback((jobId: string) => {

@@ -251,6 +251,62 @@ describe("JobDetailPage", () => {
     expect(screen.getByText("0 크레딧")).toBeInTheDocument();
   });
 
+  it("처리 결과 설명은 문제 영역 크롭, 이미지 추출 원본, 이미지 생성 결과를 기준으로 안내한다", () => {
+    mockJob = {
+      ...mockJob,
+      status: "completed",
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "completed",
+          cropUrl: "https://signed.example/q1.crop.png",
+          imageCropUrl: "https://signed.example/q1.image_crop.png",
+          styledImageUrl: "https://signed.example/q1.styled.png",
+        },
+      ],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.queryAllByText((_, element) => {
+        const text = element?.textContent || "";
+        return (
+          text.includes("문제 영역 크롭") &&
+          text.includes("이미지 추출 원본") &&
+          text.includes("이미지 생성 결과")
+        );
+      }).length
+    ).toBeGreaterThan(0);
+  });
+
+  it("이미지 생성 옵션 설명은 Nano Banana 용어를 노출하지 않는다", () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/문제 영역에서 이미지 추출 원본과 생성 결과를 만듭니다\./i)).toBeInTheDocument();
+    expect(screen.queryByText(/Nano Banana/i)).not.toBeInTheDocument();
+  });
+
   it("실패 상태여도 내보낼 텍스트가 있으면 HWPX 내보내기 버튼을 보여준다", () => {
     mockJob = {
       ...mockJob,

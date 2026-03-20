@@ -1,1 +1,1 @@
-Preserve point labels, angle markers, parallel line markers, tick marks, coordinate axes, axis ticks, graph curves, and dashed guide lines. Minimize fills and render the figure as crisp 2D line art.
+Preserve point labels, angle markers, parallel line markers, tick marks, coordinate axes, axis ticks, graph curves, and dashed guide lines. Never promote problem numbers, multiple-choice numbers, general sentences, or table layouts into the stylizable image. Minimize fills and render the figure as crisp 2D line art.

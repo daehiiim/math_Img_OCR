@@ -224,22 +224,23 @@ def append_explanation_paragraphs(
 
 def build_explanation_paragraph(profile: ReferenceProfile, line: str, idgen: Any) -> Any:
     """해설 줄을 plain/mixed paragraph 중 하나로 만들어 반환한다."""
-    if has_math_tag(line):
+    normalized_line = normalize_export_text(line)
+    if has_math_tag(normalized_line):
         paragraph = clone_dynamic_paragraph(profile.explanation_mixed, idgen)
         run = paragraph.find("hp:run", NS)
-        fill_mixed_run(run, line, profile.mixed_text, profile.mixed_equation, idgen)
+        fill_mixed_run(run, normalized_line, profile.mixed_text, profile.mixed_equation, idgen)
         return paragraph
     paragraph = clone_dynamic_paragraph(profile.explanation_plain, idgen)
     run = paragraph.find("hp:run", NS)
-    fill_text_run(run, line)
+    fill_text_run(run, normalized_line)
     return paragraph
 
 
 def parse_problem_text(ocr_text: str) -> ParsedProblem:
     """OCR 본문에서 보기 줄을 분리하고 나머지는 stem으로 합친다."""
-    lines = [line.strip() for line in ocr_text.splitlines() if line.strip()]
-    choice_lines = [line for line in lines if any(marker in line for marker in CHOICE_MARKERS)]
-    stem_lines = [line for line in lines if line not in choice_lines]
+    lines = normalize_problem_lines(ocr_text.splitlines())
+    choice_lines = [line for line in lines if line and any(marker in line for marker in CHOICE_MARKERS)]
+    stem_lines = [line for line in lines if line and line not in choice_lines]
     choice_text = " ".join(choice_lines)
     return ParsedProblem(stem=" ".join(stem_lines).strip(), choices=parse_choices(choice_text))
 
@@ -261,11 +262,85 @@ def normalize_choice_value(raw_value: str) -> str:
     """선택지 문자열에서 단일 `<math>` wrapper를 제거한다."""
     value = raw_value.strip()
     if not has_math_tag(value):
-        return value
+        return normalize_export_text(value)
     segments = split_math_text(value)
     if len(segments) == 1 and segments[0][0]:
-        return segments[0][1]
-    return value
+        return normalize_hwp_equation_script(segments[0][1])
+    return normalize_export_text(value)
+
+
+def normalize_problem_lines(lines: list[str]) -> list[str]:
+    """첫 비어 있지 않은 줄에만 문제 번호 제거를 적용한다."""
+    normalized_lines: list[str] = []
+    stripped_first_problem_number = False
+    for line in lines:
+        should_strip_problem_number = bool(line.strip()) and not stripped_first_problem_number
+        normalized_lines.append(
+            normalize_problem_line(line, strip_problem_number=should_strip_problem_number)
+        )
+        if should_strip_problem_number:
+            stripped_first_problem_number = True
+    return normalized_lines
+
+
+def normalize_problem_line(line: str, *, strip_problem_number: bool = False) -> str:
+    """OCR 본문 줄 앞의 문제 번호를 제거하고 수식 표기를 정규화한다."""
+    normalized = normalize_export_text(line)
+    if strip_problem_number:
+        normalized = re.sub(r"^\s*\d+[.)]\s*", "", normalized)
+    return normalized.strip()
+
+
+def normalize_export_text(text: str) -> str:
+    """문서에 남는 텍스트를 HWP 친화 스크립트로 정규화한다."""
+    if not text:
+        return text
+    segments: list[str] = []
+    for is_math, part in split_math_text(text):
+        if is_math:
+            segments.append(f"<math>{normalize_hwp_equation_script(part)}</math>")
+        else:
+            segments.append(normalize_hwp_equation_script(part))
+    return "".join(segments)
+
+
+def normalize_hwp_equation_script(text: str) -> str:
+    """LaTeX 잔재를 한글 수식 편집기 호환 표기로 바꾼다."""
+    if not text:
+        return text
+    normalized = text
+    for source, target in (
+        ("\\triangle", "△"),
+        ("\\angle", "∠"),
+        ("\\circ", "°"),
+        ("\\therefore", "∴"),
+        ("\\because", "∵"),
+        ("\\parallel", "∥"),
+        ("\\times", "×"),
+        ("\\div", "÷"),
+        ("\\cdot", "·"),
+        ("\\pm", "±"),
+        ("\\mp", "∓"),
+        ("\\leq", "≤"),
+        ("\\le", "≤"),
+        ("\\geq", "≥"),
+        ("\\ge", "≥"),
+        ("\\neq", "≠"),
+        ("\\approx", "≈"),
+        ("\\equiv", "≡"),
+        ("\\infty", "∞"),
+        ("degree", "°"),
+    ):
+        normalized = normalized.replace(source, target)
+    normalized = re.sub(r"\\(?:mathrm|text|mathbf|mathit)\{([^{}]*)\}", r"\1", normalized)
+    normalized = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"\1/\2", normalized)
+    normalized = re.sub(r"\\sqrt\{([^{}]+)\}", r"√\1", normalized)
+    normalized = re.sub(r"\\overline\{([^{}]+)\}", r"\1", normalized)
+    normalized = normalized.replace("{", "").replace("}", "")
+    normalized = normalized.replace("$", "")
+    normalized = normalized.replace("`", "")
+    normalized = re.sub(r"\s{2,}", " ", normalized)
+    return normalized.strip()
 
 
 def build_choice_label(template: Any, marker: str) -> Any:
@@ -474,7 +549,7 @@ def is_explanation_plain_paragraph(paragraph: Any) -> bool:
     """해설의 plain body 문단인지 판별한다."""
     texts = "".join(paragraph.xpath(".//hp:t/text()", namespaces=NS)).strip()
     return (
-        paragraph.get("paraPrIDRef") == "4"
+        paragraph.get("paraPrIDRef") in {"2", "4"}
         and paragraph.get("styleIDRef") == "0"
         and not paragraph.findall(".//hp:equation", NS)
         and bool(texts)
@@ -485,7 +560,7 @@ def is_explanation_plain_paragraph(paragraph: Any) -> bool:
 def is_explanation_mixed_paragraph(paragraph: Any) -> bool:
     """해설의 mixed body 문단인지 판별한다."""
     return (
-        paragraph.get("paraPrIDRef") == "4"
+        paragraph.get("paraPrIDRef") in {"2", "4"}
         and paragraph.get("styleIDRef") == "0"
         and bool(paragraph.findall(".//hp:equation", NS))
     )

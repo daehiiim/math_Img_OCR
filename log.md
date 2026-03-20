@@ -53,3 +53,22 @@
 - 프런트 회귀 테스트를 추가했다: `DashboardPage.test.tsx`, `AuthLayout.test.tsx`, `StudioLayout.test.tsx`, `OpenAiConnectionPage.test.tsx`.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/DashboardPage.test.tsx src/app/components/AuthLayout.test.tsx src/app/components/StudioLayout.test.tsx src/app/components/OpenAiConnectionPage.test.tsx src/app/components/PublicHomePage.test.tsx src/app/components/NewJobPage.test.tsx src/app/components/JobDetailPage.test.tsx src/app/components/Layout.test.tsx` 기준 `17 passed`.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. Vite chunk size warning은 기존 번들 크기 경고로 유지됐다.
+- EXIF 회전 정규화와 2차 crop 패딩 회귀를 `02_main/app/pipeline/figure.py`, `02_main/app/pipeline/orchestrator.py`, `02_main/tests/test_pipeline_storage.py`에 반영했다.
+- `figure.py`에 EXIF orientation 공통 헬퍼, 정규화된 이미지 크기 판독, 보수적 bbox 확장 crop 로직을 추가했다.
+- `orchestrator.py`는 업로드 이미지 크기 판독을 정규화 헬퍼로 재사용하도록 바꿨다.
+- `test_pipeline_storage.py`에 EXIF orientation JPEG의 크기/문제 crop 정규화 테스트와 stylizable image bbox padding 테스트를 추가했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_pipeline_storage.py -q` 기준 `14 passed`.
+- HWPX 생성 품질 보정 플랜을 반영했다. `style_guide.hwpx`의 `header.xml`, `section0.xml`, `content.hpf`를 새 base로 채택하고 export metadata title과 다운로드 파일명을 모두 `생성결과.hwpx`로 고정했다.
+- `hwpx_reference_renderer.py`에 export 전용 정규화 계층을 추가해 OCR 선행 문제 번호를 제거하고 `\triangle`, `\angle`, `\frac`, `degree` 같은 LaTeX 잔재를 HWP 친화 스크립트로 변환했다.
+- `extractor.py`에는 OCR/수식/해설 공통 정규화 계층을 추가했다. OCR 본문에서는 `1.`, `12)` 같은 번호 접두사를 제거하고, 해설과 수식 마크업은 HWP Equation Script에 맞게 후처리한다.
+- Nano Banana 프롬프트 자산은 `problem numbers`, `multiple-choice numbers`, `general sentences`, `table layouts`를 이미지 대상에서 제외하도록 더 보수적으로 조정했다.
+- `figure.py`, `orchestrator.py`는 EXIF 회전을 업로드 크기 판독과 실제 crop 양쪽에 동일하게 적용하고, stylizable image 2차 crop에는 안전 패딩을 추가했다.
+- 프런트 `ResultsViewer`, `JobDetailPage`, `jobApi`, `jobStore`는 `cropUrl -> 문제 영역 크롭`, `imageCropUrl -> 이미지 추출 원본`, `styledImageUrl -> 이미지 생성 결과` 의미로 정리했고 `styledImageModel` 배지와 `Nano Banana` 문구를 제거했다.
+- 백엔드 회귀 테스트를 확장했다: `test_exporter.py`, `test_job_response_fields.py`, `test_pipeline_storage.py`, `test_extractor_normalization.py`, `test_nano_banana_prompt.py`.
+- 프런트 회귀 테스트를 확장했다: `ResultsViewer.test.tsx`, `JobDetailPage.test.tsx`, `jobApi.test.ts`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests\\test_pipeline_storage.py 02_main\\tests\\test_exporter.py 02_main\\tests\\test_job_response_fields.py 02_main\\tests\\test_nano_banana_prompt.py 02_main\\tests\\test_extractor_normalization.py -q` 기준 `51 passed`.
+- 리뷰에서 지적된 번호 제거 과잉 적용을 수정했다. OCR/ export 정규화 모두 첫 비어 있지 않은 줄에만 문제 번호 제거를 적용하고, 이후 줄의 소문항/단계 번호는 유지한다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main\\tests -q` 기준 `134 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/ResultsViewer.test.tsx src/app/components/JobDetailPage.test.tsx src/app/api/jobApi.test.ts` 기준 `20 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run` 기준 `102 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. Vite chunk size warning은 기존 번들 크기 경고로 유지됐다.

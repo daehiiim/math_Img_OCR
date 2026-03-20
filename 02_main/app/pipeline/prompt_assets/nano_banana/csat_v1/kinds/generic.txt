@@ -1,1 +1,1 @@
-Keep only the visual information needed to solve the math problem and remove decorative noise.
+Keep only the visual information needed to solve the math problem and remove decorative noise. Exclude problem numbers, multiple-choice numbers, general sentences, and table layouts from the stylizable image.

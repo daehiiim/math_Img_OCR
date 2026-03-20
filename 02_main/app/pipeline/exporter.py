@@ -219,7 +219,7 @@ def export_hwpx(root_path: Path, job: JobPipelineContext, export_dir: Path) -> P
                 context=context,
                 warnings=warnings,
             )
-            runtime_modules.update_metadata(content_hpf, f"{context.year}학년도 수학시험 문제지", "MathOCR")
+            runtime_modules.update_metadata(content_hpf, "생성결과", "MathOCR")
             _inject_images_to_manifest(content_hpf, images_info)
             _update_header_xml(header_xml_path, images_info, warnings)
             _normalize_masterpage_footer(work_dir / "Contents" / "masterpage0.xml")

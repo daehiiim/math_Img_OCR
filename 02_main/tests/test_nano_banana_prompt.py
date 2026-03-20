@@ -89,6 +89,10 @@ def test_build_nano_banana_prompt_falls_back_to_generic_when_kind_is_unknown():
 
     assert "Keep only the visual information needed to solve the math problem" in prompt
     assert "Do not add answer choice numbers" in prompt
+    assert "problem numbers" in prompt
+    assert "multiple-choice numbers" in prompt
+    assert "general sentences" in prompt
+    assert "table layouts" in prompt
 
 
 def test_build_nano_banana_prompt_supports_math_general_geometry_rules():

@@ -210,4 +210,20 @@ describe("jobApi", () => {
     expect(result.charged_count).toBe(2);
     expect(result.completed_count).toBe(2);
   });
+
+  it("uses 생성결과.hwpx when the download response does not include a filename", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(new Blob(["hwpx"]), {
+        status: 200,
+        headers: { "Content-Type": "application/hwp+zip" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { downloadHwpxApi } = await import("./jobApi");
+    const result = await downloadHwpxApi("job-6");
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/jobs/job-6/export/hwpx/download");
+    expect(result.filename).toBe("생성결과.hwpx");
+  });
 });

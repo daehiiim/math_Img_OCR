@@ -28,6 +28,36 @@ def make_png_bytes(width: int = 32, height: int = 24) -> bytes:
     return buffer.getvalue()
 
 
+def make_oriented_jpeg_bytes() -> bytes:
+    """EXIF 회전이 포함된 테스트용 JPEG 바이트를 만든다."""
+    image = Image.new("RGB", (3, 2))
+    image.putdata(
+        [
+            (255, 0, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (255, 255, 0),
+            (0, 255, 255),
+            (255, 0, 255),
+        ]
+    )
+    exif = image.getexif()
+    exif[274] = 6
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=100, subsampling=0, exif=exif.tobytes())
+    return buffer.getvalue()
+
+
+def is_green_pixel(pixel: tuple[int, int, int]) -> bool:
+    """패딩으로 포함되어야 하는 초록색 보조 픽셀을 판별한다."""
+    return pixel[1] > 200 and pixel[0] < 80 and pixel[2] < 80
+
+
+def is_yellow_pixel(pixel: tuple[int, int, int]) -> bool:
+    """회전 정규화 후 보이는 노란색 픽셀을 판별한다."""
+    return pixel[0] > 200 and pixel[1] > 200 and pixel[2] < 120
+
+
 class MemoryPipelineRepository(PipelineRepository):
     def __init__(self) -> None:
         self.jobs: dict[str, JobPipelineContext] = {}
@@ -111,6 +141,134 @@ def test_create_job_persists_source_asset_via_repository(monkeypatch):
     assert job.image_height == 24
     assert repository.assets[job.image_url] == make_png_bytes()
     assert repository.jobs[job.job_id].image_url == job.image_url
+
+
+def test_create_job_from_bytes_uses_exif_oriented_image_size(monkeypatch):
+    """업로드 이미지 크기는 EXIF 회전을 반영해서 읽어야 한다."""
+    install_memory_repository(monkeypatch)
+
+    job = orchestrator.create_job_from_bytes(make_user(), "rotated.jpg", make_oriented_jpeg_bytes())
+
+    assert job.image_width == 2
+    assert job.image_height == 3
+
+
+def test_run_pipeline_crops_exif_oriented_image_with_normalized_coordinates(monkeypatch):
+    """문제 영역 crop은 EXIF 정규화된 좌표 기준으로 잘려야 한다."""
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "rotated.jpg", make_oriented_jpeg_bytes())
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [1, 0], [1, 1], [0, 1]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "",
+            "mathml": "",
+            "has_stylizable_image": False,
+            "image_bbox": None,
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+
+    result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=False,
+        do_image_stylize=False,
+        do_explanation=False,
+    )
+
+    saved_job = orchestrator.read_job(user, job.job_id)
+    crop_path = saved_job.regions[0].figure.crop_url
+    assert result["status"] == "failed"
+    assert crop_path in repository.assets
+
+    crop_image = Image.open(BytesIO(repository.assets[crop_path]))
+    pixel = crop_image.getpixel((0, 0))
+    assert is_yellow_pixel(pixel)
+
+
+def test_run_pipeline_pads_stylizable_image_crop(monkeypatch):
+    """2차 crop은 bbox보다 넉넉하게 잘려야 한다."""
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    source_image = Image.new("RGB", (32, 24), color="white")
+    source_image.putpixel((19, 14), (0, 255, 0))
+    source_buffer = BytesIO()
+    source_image.save(source_buffer, format="PNG")
+    job = orchestrator.create_job_from_bytes(user, "sample.png", source_buffer.getvalue())
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [20, 0], [20, 20], [0, 20]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "",
+            "mathml": "",
+            "has_stylizable_image": True,
+            "image_bbox": [10, 10, 18, 18],
+            "image_kind": "geometry",
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_styled_image_with_nano_banana", lambda *args, **kwargs: make_png_bytes(4, 4))
+
+    result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=False,
+        do_image_stylize=True,
+        do_explanation=False,
+        nano_banana_model="gemini-3-pro-image-preview",
+    )
+
+    saved_job = orchestrator.read_job(user, job.job_id)
+    image_crop_path = saved_job.regions[0].figure.image_crop_url
+    assert result["status"] == "failed"
+    assert image_crop_path in repository.assets
+
+    image_crop = Image.open(BytesIO(repository.assets[image_crop_path]))
+    assert image_crop.width > 8
+    assert image_crop.height > 8
+    assert any(
+        is_green_pixel(image_crop.getpixel((x, y)))
+        for y in range(image_crop.height)
+        for x in range(image_crop.width)
+    )
 
 
 def test_save_regions_replaces_existing_regions(monkeypatch):

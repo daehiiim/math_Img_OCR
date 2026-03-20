@@ -68,27 +68,10 @@ function MathMarkupPreview({ value, emptyLabel }: MathMarkupPreviewProps) {
 }
 
 /** 이미지 카드 하나를 렌더링한다. */
-function PreviewImageCard({
-  title,
-  src,
-  alt,
-  badge,
-}: {
-  title: string;
-  src: string;
-  alt: string;
-  badge?: string;
-}) {
+function PreviewImageCard({ title, src, alt }: { title: string; src: string; alt: string }) {
   return (
     <div className="space-y-2 rounded-xl border bg-card p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[12px] font-medium text-foreground">{title}</p>
-        {badge ? (
-          <Badge variant="outline" className="text-[10px]">
-            {badge}
-          </Badge>
-        ) : null}
-      </div>
+      <p className="text-[12px] font-medium text-foreground">{title}</p>
       <div className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-lg border bg-white p-3">
         <img src={src} alt={alt} className="max-h-[240px] w-full object-contain" />
       </div>
@@ -119,9 +102,6 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
                 <CardTitle className="flex items-center gap-2 text-[14px]">
                   <div className="h-3 w-3 rounded-full bg-primary/70" />
                   {region.id}
-                  {region.styledImageModel ? (
-                    <Badge className="text-[10px]">{region.styledImageModel}</Badge>
-                  ) : null}
                 </CardTitle>
                 <Badge
                   variant={region.status === "completed" || exportable ? "secondary" : "outline"}
@@ -168,21 +148,27 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
                   </TabsContent>
 
                   <TabsContent value="image-preview" className="mt-3">
-                    {region.imageCropUrl || region.styledImageUrl ? (
-                      <div className="grid gap-3 md:grid-cols-2">
+                    {region.cropUrl || region.imageCropUrl || region.styledImageUrl ? (
+                      <div className="grid gap-3 md:grid-cols-3">
+                        {region.cropUrl ? (
+                          <PreviewImageCard
+                            title="문제 영역 크롭"
+                            src={region.cropUrl}
+                            alt={`${region.id} 문제 영역 크롭`}
+                          />
+                        ) : null}
                         {region.imageCropUrl ? (
                           <PreviewImageCard
-                            title="원본 크롭"
+                            title="이미지 추출 원본"
                             src={region.imageCropUrl}
-                            alt={`${region.id} original image`}
+                            alt={`${region.id} 이미지 추출 원본`}
                           />
                         ) : null}
                         {region.styledImageUrl ? (
                           <PreviewImageCard
-                            title="Nano Banana 결과"
+                            title="이미지 생성 결과"
                             src={region.styledImageUrl}
-                            alt={`${region.id} styled image`}
-                            badge={region.styledImageModel}
+                            alt={`${region.id} 이미지 생성 결과`}
                           />
                         ) : null}
                       </div>

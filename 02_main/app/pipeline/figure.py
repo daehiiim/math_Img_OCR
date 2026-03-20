@@ -4,12 +4,24 @@ import xml.etree.ElementTree as ET
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageColor, ImageDraw
+from PIL import Image, ImageColor, ImageDraw, ImageOps
 
 try:
     from svg.path import parse_path as parse_svg_path
 except Exception:  # pragma: no cover
     parse_svg_path = None
+
+
+def normalize_image_orientation(image: Image.Image) -> Image.Image:
+    """EXIF 회전을 반영한 RGB 이미지를 반환한다."""
+    return ImageOps.exif_transpose(image).convert("RGB")
+
+
+def read_image_size(image_bytes: bytes) -> tuple[int, int]:
+    """EXIF 회전을 반영한 이미지 크기를 읽는다."""
+    with Image.open(BytesIO(image_bytes)) as image:
+        normalized = ImageOps.exif_transpose(image)
+        return normalized.width, normalized.height
 
 
 def polygon_bbox(polygon: list[list[float]], width: int, height: int) -> tuple[int, int, int, int]:
@@ -26,9 +38,25 @@ def polygon_bbox(polygon: list[list[float]], width: int, height: int) -> tuple[i
     return left, top, right, bottom
 
 
+def _expand_bbox_with_padding(bbox: list[int], width: int, height: int) -> tuple[int, int, int, int]:
+    """선택 영역 주변을 넉넉하게 확장한 bbox를 반환한다."""
+    left, top, right, bottom = [int(value) for value in bbox]
+    left = max(0, min(left, width - 1))
+    top = max(0, min(top, height - 1))
+    right = max(left + 1, min(right, width))
+    bottom = max(top + 1, min(bottom, height))
+
+    padding = max(8, int(round(max(right - left, bottom - top) * 0.2)))
+    left = max(0, left - padding)
+    top = max(0, top - padding)
+    right = min(width, right + padding)
+    bottom = min(height, bottom + padding)
+    return left, top, right, bottom
+
+
 def crop_region_image(image_path: Path, polygon: list[list[float]], output_path: Path) -> bytes:
     with Image.open(image_path) as img:
-        img = img.convert("RGB")
+        img = normalize_image_orientation(img)
         left, top, right, bottom = polygon_bbox(polygon, img.width, img.height)
         cropped = img.crop((left, top, right, bottom))
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -39,12 +67,8 @@ def crop_region_image(image_path: Path, polygon: list[list[float]], output_path:
 def crop_image_bytes(image_bytes: bytes, bbox: list[int], output_path: Path) -> bytes:
     """메모리 이미지 바이트에서 bbox 영역만 잘라 PNG로 저장한다."""
     with Image.open(BytesIO(image_bytes)) as img:
-        img = img.convert("RGB")
-        left, top, right, bottom = [int(value) for value in bbox]
-        left = max(0, min(left, img.width - 1))
-        top = max(0, min(top, img.height - 1))
-        right = max(left + 1, min(right, img.width))
-        bottom = max(top + 1, min(bottom, img.height))
+        img = normalize_image_orientation(img)
+        left, top, right, bottom = _expand_bbox_with_padding(bbox, img.width, img.height)
         cropped = img.crop((left, top, right, bottom))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         cropped.save(output_path, format="PNG")

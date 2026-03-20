@@ -44,6 +44,7 @@ NS = {
     "hh": "http://www.hancom.co.kr/hwpml/2011/head",
 }
 REFERENCE_HWPX_PATH = Path(__file__).resolve().parents[2] / "templates" / "result_answer.hwpx"
+STYLE_GUIDE_HWPX_PATH = Path(__file__).resolve().parents[2] / "templates" / "style_guide.hwpx"
 
 
 def make_png_bytes(width: int = 32, height: int = 24) -> bytes:
@@ -155,6 +156,12 @@ def read_archive_xml(hwpx_path: Path, inner_path: str):
 def read_reference_xml(inner_path: str):
     """레퍼런스 HWPX 안 XML을 파싱해 반환한다."""
     with ZipFile(REFERENCE_HWPX_PATH, "r") as archive:
+        return etree.fromstring(archive.read(inner_path))
+
+
+def read_style_guide_xml(inner_path: str):
+    """style guide HWPX 안 XML을 파싱해 반환한다."""
+    with ZipFile(STYLE_GUIDE_HWPX_PATH, "r") as archive:
         return etree.fromstring(archive.read(inner_path))
 
 
@@ -277,14 +284,33 @@ def test_export_hwpx_uses_reference_masterpages_and_page_layout(tmp_path, monkey
 
 
 def test_export_hwpx_header_matches_result_answer_template_counts(tmp_path, monkeypatch):
-    """header 정의 개수는 result_answer와 같아야 한다."""
+    """header 정의 개수는 style guide 기준을 유지하고 호환 스타일만 추가해야 한다."""
     module = load_exporter_module()
     root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
     export_dir = tmp_path / "exports"
     hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
     generated_header = read_archive_xml(hwpx_path, "Contents/header.xml")
-    reference_header = read_reference_xml("Contents/header.xml")
-    assert count_header_defs(generated_header) == count_header_defs(reference_header)
+    reference_header = read_style_guide_xml("Contents/header.xml")
+    generated_counts = count_header_defs(generated_header)
+    reference_counts = count_header_defs(reference_header)
+    assert generated_counts[0] == reference_counts[0]
+    assert generated_counts[1] >= reference_counts[1]
+    assert generated_counts[2] == reference_counts[2]
+    assert generated_header.find(".//hh:paraPr[@id='19']", NS) is not None
+    assert generated_header.find(".//hh:paraPr[@id='21']", NS) is not None
+
+
+def test_export_hwpx_uses_fixed_title(tmp_path, monkeypatch):
+    """export된 HWPX의 제목은 생성결과로 고정되어야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
+    content_root = read_archive_xml(hwpx_path, "Contents/content.hpf")
+    title = content_root.find(".//opf:title", {"opf": "http://www.idpf.org/2007/opf/"})
+
+    assert title is not None
+    assert title.text == "생성결과"
 
 
 def test_export_hwpx_first_block_preserves_reference_controls(tmp_path, monkeypatch):
@@ -295,7 +321,7 @@ def test_export_hwpx_first_block_preserves_reference_controls(tmp_path, monkeypa
     hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
     first_para = direct_paragraphs(read_archive_xml(hwpx_path, "Contents/section0.xml"))[0]
     runs = first_para.findall("hp:run", NS)
-    assert first_para.get("paraPrIDRef") == "29"
+    assert first_para.get("paraPrIDRef") == "13"
     assert first_para.get("styleIDRef") == "1"
     assert first_para.find(".//hp:tbl", NS) is not None
     assert first_para.find(".//hp:line", NS) is not None
@@ -314,10 +340,10 @@ def test_export_hwpx_uses_reference_picture_and_choice_paragraphs(tmp_path, monk
     picture_para = paragraphs[2]
     choice_para = paragraphs[3]
     eq_scripts = choice_para.xpath(".//hp:equation/hp:script/text()", namespaces=NS)
-    assert picture_para.get("paraPrIDRef") == "34"
+    assert picture_para.get("paraPrIDRef") == "14"
     assert picture_para.get("styleIDRef") == "1"
-    assert choice_para.get("paraPrIDRef") == "11"
-    assert choice_para.get("styleIDRef") == "4"
+    assert choice_para.get("paraPrIDRef") == "7"
+    assert choice_para.get("styleIDRef") == "3"
     assert len(choice_para.findall("hp:run", NS)) == 1
     assert eq_scripts == ["1", "3/2", "9/4", "7/3", "5/2"]
 
@@ -346,7 +372,7 @@ def test_export_hwpx_explanation_mixed_line_keeps_single_run_structure(tmp_path,
     runs = mixed_para.findall("hp:run", NS)
     equations = mixed_para.findall(".//hp:equation", NS)
     texts = mixed_para.xpath(".//hp:t/text()", namespaces=NS)
-    assert mixed_para.get("paraPrIDRef") == "4"
+    assert mixed_para.get("paraPrIDRef") == "2"
     assert mixed_para.get("styleIDRef") == "0"
     assert len(runs) == 1
     assert len(equations) == 2
@@ -435,3 +461,62 @@ def test_export_hwpx_skips_empty_failed_regions_and_renumbers_items(tmp_path, mo
     assert "세 번째 문제" in section_xml
     assert "2." in section_xml
     assert "3." not in section_xml
+
+
+def test_export_hwpx_normalizes_problem_numbers_and_latex_scripts(tmp_path, monkeypatch):
+    """OCR 원문 번호와 LaTeX 잔재가 최종 HWPX에 남지 않아야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_job = JobPipelineContext(
+        job_id="job-export-3",
+        file_name="uploaded_image.png",
+        image_url="user-123/job-export-3/input/uploaded_image.png",
+        image_width=32,
+        image_height=24,
+        status="failed",
+        created_at="2026-03-18T00:00:00+00:00",
+        updated_at="2026-03-18T00:00:00+00:00",
+        regions=[
+            RegionPipelineContext(
+                context=RegionContext(
+                    id="q1",
+                    polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
+                    type="mixed",
+                    order=1,
+                ),
+                extractor=ExtractorContext(
+                    ocr_text="\n".join(
+                        [
+                            "3. △ABC에서 AB 위의 점 E와 AC 위의 점 D에 대하여",
+                            "2) 보조 조건을 확인하시오.",
+                        ]
+                    ),
+                    explanation="\n".join(
+                        [
+                            "주어진 조건에서 <math>\\triangle ABC</math> 와 <math>\\angle DAE</math> 를 확인한다.",
+                            "<math>\\frac{1}{2}</math> 와 <math>degree</math> 표기도 정규화한다.",
+                        ]
+                    ),
+                ),
+                figure=FigureContext(image_crop_url=image_relative_path.as_posix()),
+                status="completed",
+                success=True,
+            )
+        ],
+    )
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, export_job, export_dir)
+    section_root = read_archive_xml(hwpx_path, "Contents/section0.xml")
+    scripts = section_root.xpath(".//hp:script/text()", namespaces=NS)
+    section_xml = ZipFile(hwpx_path, "r").read("Contents/section0.xml").decode("utf-8")
+
+    assert "3." not in section_xml
+    assert "1." in section_xml
+    assert "2) 보조 조건을 확인하시오." in section_xml
+    assert any("△" in script and "ABC" in script for script in scripts)
+    assert any("∠" in script and "DAE" in script for script in scripts)
+    assert all("\\triangle" not in script for script in scripts)
+    assert all("\\angle" not in script for script in scripts)
+    assert all("\\frac" not in script for script in scripts)
+    assert any("°" in script for script in scripts)
+    assert all("degree" not in script for script in scripts)

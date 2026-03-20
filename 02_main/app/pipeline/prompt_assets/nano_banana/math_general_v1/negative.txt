@@ -1,1 +1,1 @@
-Do not add answer choice numbers, page decorations, tables, long prose blocks, watermarks, gradients, textures, or background patterns. Do not omit, rewrite, normalize, or substitute any label, number, or symbol.
+Do not add answer choice numbers, problem numbers, page decorations, tables, long prose blocks, general sentences, watermarks, gradients, textures, or background patterns. Do not omit, rewrite, normalize, or substitute any label, number, or symbol.

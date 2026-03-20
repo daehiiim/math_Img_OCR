@@ -390,7 +390,7 @@ export function JobDetailPage() {
                   처리 결과
                 </CardTitle>
                 <CardDescription>
-                  각 영역별 OCR 텍스트, Nano Banana 변환 이미지, 원본 크롭을 확인할 수 있습니다.
+                  각 영역별 OCR 텍스트, 문제 영역 크롭, 이미지 추출 원본, 이미지 생성 결과를 확인할 수 있습니다.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -424,7 +424,7 @@ export function JobDetailPage() {
                     id: "do-image-stylize",
                     key: "doImageStylize" as const,
                     label: "이미지 생성",
-                    description: "도형·그림을 Nano Banana 스타일 이미지로 생성합니다.",
+                    description: "문제 영역에서 이미지 추출 원본과 생성 결과를 만듭니다.",
                   },
                   {
                     id: "do-explanation",

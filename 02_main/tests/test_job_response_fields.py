@@ -1,6 +1,7 @@
 import copy
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -168,6 +169,32 @@ def test_get_job_returns_storage_failure_detail_for_supabase_error(monkeypatch):
 
     assert response.status_code == 503
     assert response.json()["detail"] == "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."
+
+
+def test_download_hwpx_uses_fixed_filename(monkeypatch):
+    user = AuthenticatedUser(user_id="user-123", access_token="token-123")
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    job_id = "job-123"
+    prepared_job = SimpleNamespace(
+        job_id=job_id,
+        hwpx_export_path=f"{user.user_id}/{job_id}/exports/{job_id}.hwpx",
+    )
+
+    monkeypatch.setattr("app.main.pipeline.read_job", lambda current_user, job_id: prepared_job)
+    monkeypatch.setattr("app.main.pipeline.download_asset_bytes", lambda current_user, storage_path: b"hwpx-bytes")
+
+    client = TestClient(app)
+    response = client.get(f"/jobs/{job_id}/export/hwpx/download")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert (
+        response.headers["content-disposition"]
+        == "attachment; filename*=UTF-8''%EC%83%9D%EC%84%B1%EA%B2%B0%EA%B3%BC.hwpx"
+    )
+    assert response.content == b"hwpx-bytes"
 
 
 def test_save_regions_returns_schema_mismatch_detail_for_supabase_error(monkeypatch):

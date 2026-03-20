@@ -4,18 +4,22 @@ import copy
 import tempfile
 import time
 from datetime import datetime, timezone
-from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable
-
-from PIL import Image
 
 from app.pipeline.extractor import (
     analyze_region_with_gpt,
     generate_explanation_with_gpt,
     generate_styled_image_with_nano_banana,
 )
-from app.pipeline.figure import crop_image_bytes, crop_region_image, normalize_svg_xml, render_svg_to_png, sanitize_svg
+from app.pipeline.figure import (
+    crop_image_bytes,
+    crop_region_image,
+    normalize_svg_xml,
+    read_image_size,
+    render_svg_to_png,
+    sanitize_svg,
+)
 from app.pipeline.repository import PipelineRepository, PipelineUserContext, build_repository_from_settings
 from app.pipeline.schema import JobPipelineContext, RegionContext, RegionPipelineContext
 
@@ -38,8 +42,7 @@ def _get_repository() -> PipelineRepository:
 def _read_image_size(content: bytes) -> tuple[int, int]:
     """업로드 이미지 바이트에서 가로세로 크기를 읽는다."""
     try:
-        with Image.open(BytesIO(content)) as image:
-            return image.width, image.height
+        return read_image_size(content)
     except Exception:
         return 0, 0
 

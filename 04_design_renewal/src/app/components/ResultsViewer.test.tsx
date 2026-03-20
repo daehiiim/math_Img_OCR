@@ -44,35 +44,52 @@ describe("ResultsViewer", () => {
 
   it("생성된 이미지가 있으면 미리보기 탭에서 노출한다", async () => {
     const region = makeRegion({
+      cropUrl: "https://signed.example/q1.crop.png?token=crop",
       imageCropUrl: "https://signed.example/q1.image_crop.png?token=orig",
       styledImageUrl: "https://signed.example/q1.styled.png?token=styled",
+      styledImageModel: "gemini-3-pro-image-preview",
     });
 
     render(<ResultsViewer regions={[region]} />);
 
     await openSvgTab();
 
-    expect(screen.getByAltText("q1 styled image")).toHaveAttribute(
+    expect(screen.getByAltText("q1 문제 영역 크롭")).toHaveAttribute(
       "src",
-      "https://signed.example/q1.styled.png?token=styled"
+      "https://signed.example/q1.crop.png?token=crop"
     );
-  });
-
-  it("원본 이미지와 생성 이미지를 함께 보여준다", async () => {
-    const region = makeRegion({
-      imageCropUrl: "https://signed.example/q1.image_crop.png?token=orig",
-      styledImageUrl: "https://signed.example/q1.styled.png?token=styled",
-    });
-
-    render(<ResultsViewer regions={[region]} />);
-
-    await openSvgTab();
-
-    expect(screen.getByAltText("q1 original image")).toHaveAttribute(
+    expect(screen.getByAltText("q1 이미지 추출 원본")).toHaveAttribute(
       "src",
       "https://signed.example/q1.image_crop.png?token=orig"
     );
-    expect(screen.getByAltText("q1 styled image")).toHaveAttribute(
+    expect(screen.getByAltText("q1 이미지 생성 결과")).toHaveAttribute(
+      "src",
+      "https://signed.example/q1.styled.png?token=styled"
+    );
+    expect(screen.queryByText("gemini-3-pro-image-preview")).not.toBeInTheDocument();
+    expect(screen.queryByText("Nano Banana 결과")).not.toBeInTheDocument();
+  });
+
+  it("문제 영역 크롭, 이미지 추출 원본, 이미지 생성 결과를 함께 보여준다", async () => {
+    const region = makeRegion({
+      cropUrl: "https://signed.example/q1.crop.png?token=crop",
+      imageCropUrl: "https://signed.example/q1.image_crop.png?token=orig",
+      styledImageUrl: "https://signed.example/q1.styled.png?token=styled",
+    });
+
+    render(<ResultsViewer regions={[region]} />);
+
+    await openSvgTab();
+
+    expect(screen.getByAltText("q1 문제 영역 크롭")).toHaveAttribute(
+      "src",
+      "https://signed.example/q1.crop.png?token=crop"
+    );
+    expect(screen.getByAltText("q1 이미지 추출 원본")).toHaveAttribute(
+      "src",
+      "https://signed.example/q1.image_crop.png?token=orig"
+    );
+    expect(screen.getByAltText("q1 이미지 생성 결과")).toHaveAttribute(
       "src",
       "https://signed.example/q1.styled.png?token=styled"
     );

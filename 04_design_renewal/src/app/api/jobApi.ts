@@ -182,11 +182,22 @@ export async function downloadHwpxApi(jobId: string): Promise<{ blob: Blob; file
     throw new Error(text || `HTTP ${response.status}`);
   }
 
+  const defaultFilename = "생성결과.hwpx";
   const contentDisposition = response.headers.get("content-disposition") || "";
   const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(contentDisposition);
-  const rawName = match?.[1] || match?.[2] || `${jobId}.hwpx`;
+  const rawName = match?.[1] || match?.[2];
+  const filename = rawName ? safeDecodeFilename(rawName, defaultFilename) : defaultFilename;
   return {
     blob: await response.blob(),
-    filename: decodeURIComponent(rawName).trim() || `${jobId}.hwpx`,
+    filename,
   };
+}
+
+/** 다운로드 파일명을 안전하게 해석한다. */
+function safeDecodeFilename(rawName: string, fallback: string): string {
+  try {
+    return decodeURIComponent(rawName).trim() || fallback;
+  } catch {
+    return rawName.trim() || fallback;
+  }
 }

@@ -26,6 +26,8 @@ NANO_BANANA_PROMPTS_DIR = Path(__file__).resolve().parent / "prompt_assets" / "n
 NANO_BANANA_PROMPT_ASSET_MISSING_ERROR = "NANO_BANANA_PROMPT_ASSET_MISSING"
 NANO_BANANA_PROMPT_ASSET_EMPTY_ERROR = "NANO_BANANA_PROMPT_ASSET_EMPTY"
 NANO_BANANA_PROMPT_ASSET_READ_ERROR = "NANO_BANANA_PROMPT_ASSET_READ_ERROR"
+MATH_TAG_PATTERN = re.compile(r"<math>(.*?)</math>", re.DOTALL)
+PROBLEM_NUMBER_PREFIX_PATTERN = re.compile(r"^\s*(?:\(?\d{1,3}[\.\)](?=\s|[^0-9]))\s*")
 
 
 @dataclass(frozen=True)
@@ -132,6 +134,138 @@ def _normalize_stylizable_image_kind(kind: str | None) -> str:
     return "generic"
 
 
+def _strip_problem_number_prefix(text: str) -> str:
+    """OCR 본문 줄 앞의 문제 번호를 제거한다."""
+    return PROBLEM_NUMBER_PREFIX_PATTERN.sub("", text, count=1)
+
+
+def _normalize_math_expression(text: str) -> str:
+    """LaTeX 비슷한 수식 표기를 HWP 수식 스크립트에 맞게 정리한다."""
+    if not text:
+        return text
+
+    bs = "\\"
+    superscript_map = str.maketrans("0123456789+-=()", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾")
+    subscript_map = str.maketrans("0123456789+-=()", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎")
+
+    normalized = text.replace(bs + "(", "")
+    normalized = normalized.replace(bs + ")", "")
+    normalized = normalized.replace(bs + "[", "")
+    normalized = normalized.replace(bs + "]", "")
+
+    overline_pattern = re.escape(bs + "overline") + r"\{([^{}]+)\}"
+    frac_pattern = re.escape(bs + "frac") + r"\{([^{}]+)\}\{([^{}]+)\}"
+    sqrt_pattern = re.escape(bs + "sqrt") + r"\{([^{}]+)\}"
+    style_pattern = re.escape(bs) + r"(?:mathrm|text|mathbf|mathit|rm|sf|tt|operatorname)\{([^{}]*)\}"
+
+    for _ in range(3):
+        updated = re.sub(overline_pattern, r"\1", normalized)
+        updated = re.sub(frac_pattern, r"\1/\2", updated)
+        updated = re.sub(sqrt_pattern, r"√\1", updated)
+        updated = re.sub(style_pattern, r"\1", updated)
+        if updated == normalized:
+            break
+        normalized = updated
+
+    replacements = [
+        (bs + "therefore", "∴"),
+        (bs + "because", "∵"),
+        (bs + "parallel", "∥"),
+        (bs + "triangle", "△"),
+        (bs + "angle", "∠"),
+        (bs + "degree", "°"),
+        (bs + "deg", "°"),
+        (bs + "times", "×"),
+        (bs + "div", "÷"),
+        (bs + "cdot", "·"),
+        (bs + "pm", "±"),
+        (bs + "mp", "∓"),
+        (bs + "leq", "≤"),
+        (bs + "le", "≤"),
+        (bs + "geq", "≥"),
+        (bs + "ge", "≥"),
+        (bs + "neq", "≠"),
+        (bs + "approx", "≈"),
+        (bs + "equiv", "≡"),
+        (bs + "infty", "∞"),
+        (bs + "alpha", "α"),
+        (bs + "beta", "β"),
+        (bs + "gamma", "γ"),
+        (bs + "theta", "θ"),
+        (bs + "pi", "π"),
+        (bs + "sum", "∑"),
+        (bs + "int", "∫"),
+        (bs + "partial", "∂"),
+        (bs + "nabla", "∇"),
+        (bs + "perp", "⊥"),
+        (bs + "sim", "∽"),
+        (bs + "circ", "°"),
+        (bs + "left", ""),
+        (bs + "right", ""),
+    ]
+    for src, dst in replacements:
+        normalized = normalized.replace(src, dst)
+
+    normalized = re.sub(r"\^\{?°\}?", "°", normalized)
+    normalized = re.sub(
+        r"\^\{([0-9+\-=()]+)\}",
+        lambda m: m.group(1).translate(superscript_map),
+        normalized,
+    )
+    normalized = re.sub(r"\^([0-9])", lambda m: m.group(1).translate(superscript_map), normalized)
+    normalized = re.sub(
+        r"_\{([0-9+\-=()]+)\}",
+        lambda m: m.group(1).translate(subscript_map),
+        normalized,
+    )
+    normalized = re.sub(r"_([0-9])", lambda m: m.group(1).translate(subscript_map), normalized)
+
+    normalized = normalized.replace("{", "").replace("}", "")
+    normalized = normalized.replace("$", "")
+    normalized = normalized.replace(bs + ",", ",")
+    normalized = normalized.replace(bs + ":", ":")
+    normalized = normalized.replace(bs + ";", ";")
+    normalized = normalized.replace(bs + "%", "%")
+    normalized = re.sub(re.escape(bs) + r"([A-Za-z]+)", r"\1", normalized)
+    normalized = re.sub(r"([△∠])\s+(?=[A-Za-z0-9가-힣(])", r"\1", normalized)
+
+    cleaned_lines: list[str] = []
+    for line in normalized.splitlines():
+        cleaned_lines.append(re.sub(r"[ \t]{2,}", " ", line).strip())
+    return "\n".join(cleaned_lines)
+
+
+def _normalize_math_markup_text(text: str, *, strip_problem_number_prefixes: bool = False) -> str:
+    """수식 태그가 섞인 텍스트를 줄 단위로 정규화한다."""
+    if not text:
+        return text
+
+    def replace_math_tag(match: re.Match[str]) -> str:
+        return f"<math>{_normalize_math_expression(match.group(1))}</math>"
+
+    normalized_lines: list[str] = []
+    stripped_first_problem_number = False
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if strip_problem_number_prefixes and line and not stripped_first_problem_number:
+            line = _strip_problem_number_prefix(line)
+            stripped_first_problem_number = True
+        line = MATH_TAG_PATTERN.sub(replace_math_tag, line)
+        line = _normalize_math_expression(line)
+        normalized_lines.append(re.sub(r"[ \t]{2,}", " ", line).strip())
+    return "\n".join(normalized_lines)
+
+
+def _normalize_ocr_text(text: str) -> str:
+    """OCR 본문은 문제 번호를 제거하고 수식 표기를 정규화한다."""
+    return _normalize_math_markup_text(text, strip_problem_number_prefixes=True)
+
+
+def _normalize_explanation_text(text: str) -> str:
+    """해설 본문은 문제 번호를 유지하고 수식 표기만 정규화한다."""
+    return _normalize_math_markup_text(text)
+
+
 def _raise_nano_banana_prompt_asset_error(error_code: str, asset_path: Path, error: Exception | None = None) -> None:
     """프롬프트 자산 로딩 실패를 로그와 고정 에러 문자열로 남긴다."""
     logger.error("Nano Banana prompt asset error code=%s path=%s error=%s", error_code, asset_path, error)
@@ -218,96 +352,8 @@ def _extract_json_object(text: str) -> dict:
 
 
 def _latex_to_unicode(text: str) -> str:
-    if not text:
-        return text
-
-    bs = "\\"
-    superscript_map = str.maketrans("0123456789+-=()", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾")
-    subscript_map = str.maketrans("0123456789+-=()", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎")
-
-    text = text.replace(bs + "(", "")
-    text = text.replace(bs + ")", "")
-    text = text.replace(bs + "[", "")
-    text = text.replace(bs + "]", "")
-
-    overline_pattern = re.escape(bs + "overline") + r"\{([^{}]+)\}"
-    frac_pattern = re.escape(bs + "frac") + r"\{([^{}]+)\}\{([^{}]+)\}"
-    sqrt_pattern = re.escape(bs + "sqrt") + r"\{([^{}]+)\}"
-    style_pattern = re.escape(bs) + r"(?:mathrm|text|mathbf|mathit)\{([^{}]*)\}"
-
-    for _ in range(3):
-        updated = re.sub(overline_pattern, r"\1", text)
-        updated = re.sub(frac_pattern, r"\1/\2", updated)
-        updated = re.sub(sqrt_pattern, r"√\1", updated)
-        updated = re.sub(style_pattern, r"\1", updated)
-        if updated == text:
-            break
-        text = updated
-
-    replacements = [
-        (bs + "therefore", "∴"),
-        (bs + "because", "∵"),
-        (bs + "parallel", "∥"),
-        (bs + "triangle", "△"),
-        (bs + "angle", "∠"),
-        (bs + "times", "×"),
-        (bs + "div", "÷"),
-        (bs + "cdot", "·"),
-        (bs + "pm", "±"),
-        (bs + "mp", "∓"),
-        (bs + "leq", "≤"),
-        (bs + "le", "≤"),
-        (bs + "geq", "≥"),
-        (bs + "ge", "≥"),
-        (bs + "neq", "≠"),
-        (bs + "approx", "≈"),
-        (bs + "equiv", "≡"),
-        (bs + "infty", "∞"),
-        (bs + "alpha", "α"),
-        (bs + "beta", "β"),
-        (bs + "gamma", "γ"),
-        (bs + "theta", "θ"),
-        (bs + "pi", "π"),
-        (bs + "sum", "∑"),
-        (bs + "int", "∫"),
-        (bs + "partial", "∂"),
-        (bs + "nabla", "∇"),
-        (bs + "perp", "⊥"),
-        (bs + "sim", "∽"),
-        (bs + "circ", "°"),
-        (bs + "left", ""),
-        (bs + "right", ""),
-    ]
-    for src, dst in replacements:
-        text = text.replace(src, dst)
-
-    text = re.sub(r"\^\{?°\}?", "°", text)
-
-    text = re.sub(
-        r"\^\{([0-9+\-=()]+)\}",
-        lambda m: m.group(1).translate(superscript_map),
-        text,
-    )
-    text = re.sub(r"\^([0-9])", lambda m: m.group(1).translate(superscript_map), text)
-    text = re.sub(
-        r"_\{([0-9+\-=()]+)\}",
-        lambda m: m.group(1).translate(subscript_map),
-        text,
-    )
-    text = re.sub(r"_([0-9])", lambda m: m.group(1).translate(subscript_map), text)
-
-    text = text.replace("{", "").replace("}", "")
-    text = text.replace("$", "")
-    text = text.replace(bs + ",", ",")
-    text = text.replace(bs + ":", ":")
-    text = text.replace(bs + ";", ";")
-    text = text.replace(bs + "%", "%")
-    text = re.sub(re.escape(bs) + r"([A-Za-z]+)", r"\1", text)
-
-    cleaned_lines: list[str] = []
-    for line in text.splitlines():
-        cleaned_lines.append(re.sub(r"[ \t]{2,}", " ", line).strip())
-    return "\n".join(cleaned_lines)
+    """기존 호환성을 위해 HWP 수식 정규화 함수를 유지한다."""
+    return _normalize_math_expression(text)
 
 
 def _read_chat_content(resp_json: dict) -> str:
@@ -449,8 +495,8 @@ Now process the image."""
 
     text_blocks = parsed.get("text_blocks") or []
     formulas = parsed.get("formulas") or []
-    ocr_text = chr(10).join([str(v).strip() for v in text_blocks if str(v).strip()])
-    mathml = chr(10).join([str(v).strip() for v in formulas if str(v).strip()])
+    ocr_text = _normalize_ocr_text(chr(10).join([str(v).strip() for v in text_blocks if str(v).strip()]))
+    mathml = _normalize_math_markup_text(chr(10).join([str(v).strip() for v in formulas if str(v).strip()]))
     has_stylizable_image, image_bbox, image_kind = _extract_stylizable_image(parsed)
 
     openai_request_id = (
@@ -518,7 +564,7 @@ def generate_explanation_with_gpt(
     if response.status_code >= 400:
         raise ValueError(f"OpenAI explain API error {response.status_code}: {response.text[:400]}")
 
-    return _read_chat_content(response.json()).strip()
+    return _normalize_explanation_text(_read_chat_content(response.json()).strip())
 
 
 def generate_styled_image_with_nano_banana(
