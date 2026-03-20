@@ -82,6 +82,8 @@ def validate_hwpx(hwpx_path: Path) -> list[str]:
         "mimetype",
         "Contents/content.hpf",
         "Contents/header.xml",
+        "Contents/masterpage0.xml",
+        "Contents/masterpage1.xml",
         "Contents/section0.xml",
     ]
 

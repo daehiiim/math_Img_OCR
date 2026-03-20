@@ -16,32 +16,37 @@ from xml.sax.saxutils import escape
 # ---------------------------------------------------------------------------
 
 STYLE = {
-    # charPr IDs
-    "CHAR_BODY": 9,          # 10pt 돋움, 문제 본문
-    "CHAR_TITLE": 7,         # 16pt bold, worksheet 제목
-    "CHAR_PROB_NUM": 8,      # 11pt bold, worksheet 문제번호
-    "CHAR_SUBTITLE": 10,     # 12pt bold, 단원명/소제목
-    "CHAR_CHOICE": 11,       # 9pt, 선택지
-    "CHAR_EXAM_TITLE": 12,   # 10pt, 시험 제목줄
-    "CHAR_SUBJECT": 13,      # 18pt bold, "수학 영역"
-    "CHAR_SESSION": 14,      # 10pt, "제 2 교시"
-    "CHAR_EXAM_NUM": 15,     # 10pt bold+italic, 시험 문제번호
-    "CHAR_POINTS": 16,       # 9pt, "[2점]"
-    "CHAR_PAGE_NUM": 17,     # 9pt, 페이지 번호
+    # charPr IDs (math_templete_example 기준)
+    "CHAR_BODY": 9,               # 문제 본문
+    "CHAR_TITLE": 17,             # 상단 연도/제목
+    "CHAR_PROB_NUM": 18,          # 문제 번호
+    "CHAR_SUBTITLE": 15,          # 해설 라벨
+    "CHAR_CHOICE": 0,             # 보기/해설 본문
+    "CHAR_EXAM_TITLE": 17,        # 상단 제목
+    "CHAR_SUBJECT": 21,           # "수학 영역"
+    "CHAR_SESSION": 20,           # 보조 헤더 문자
+    "CHAR_EXAM_NUM": 18,          # 시험 문제 번호
+    "CHAR_POINTS": 9,             # 배점/일반 본문
+    "CHAR_PAGE_NUM": 6,           # 페이지 번호
+    "CHAR_HEADER_YEAR": 17,       # 상단 연도
+    "CHAR_HEADER_SUBJECT": 21,    # 상단 과목
     # paraPr IDs
-    "PARA_TITLE": 20,        # CENTER, 제목
-    "PARA_BODY": 21,         # LEFT 150%, 문제 본문
-    "PARA_EQ": 22,           # LEFT 140%, 수식
-    "PARA_CHOICE": 23,       # LEFT 140%, 선택지
-    "PARA_EXAM_TITLE": 24,   # CENTER, 시험 제목
-    "PARA_SESSION": 25,      # LEFT 130%, 교시+과목
-    "PARA_SUBJECT": 26,      # CENTER 150%, 과목 영역 대제목
-    "PARA_HCHOICE": 27,      # LEFT 140%, 가로 선택지 (tabPr=3)
-    "PARA_SECTION_LABEL": 28, # LEFT 140%, 문항유형 라벨
-    "PARA_PAGE_NUM": 29,     # CENTER 130%, 페이지 번호
-    "PARA_HR": 30,           # 구분선
+    "PARA_TITLE": 9,              # 상단 연도
+    "PARA_BODY": 27,              # 문제 본문
+    "PARA_EQ": 11,                # 이미지/긴 수식
+    "PARA_CHOICE": 11,            # 해설/추가 문단
+    "PARA_EXAM_TITLE": 9,         # 상단 제목
+    "PARA_SESSION": 6,            # 머리말-페이지
+    "PARA_SUBJECT": 5,            # 헤드-과목
+    "PARA_HCHOICE": 10,           # 보기 스타일
+    "PARA_SECTION_LABEL": 11,     # 해설 라벨
+    "PARA_PAGE_NUM": 0,           # 페이지 번호
+    "PARA_HR": 32,                # 여백/구분
+    "PARA_HEADER_YEAR": 9,        # 상단 연도
+    "PARA_HEADER_SUBJECT": 5,     # 상단 과목
+    "PARA_SPACER": 32,            # 빈 문단
     # borderFill IDs
-    "BORDER_INVISIBLE": 2,   # 투명 테이블
+    "BORDER_INVISIBLE": 2,        # 투명 테이블
 }
 
 
@@ -80,16 +85,16 @@ SECPR_BODY = (
     '<hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" '
     'tabStop="8000" tabStopVal="4000" tabStopUnit="HWPUNIT" '
     'outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" '
-    'masterPageCnt="0">'
+    'masterPageCnt="2">'
     '<hp:grid lineGrid="0" charGrid="0" wonggojiFormat="0"/>'
     '<hp:startNum pageStartsOn="BOTH" page="0" pic="0" tbl="0" equation="0"/>'
     '<hp:visibility hideFirstHeader="0" hideFirstFooter="0" '
     'hideFirstMasterPage="0" border="SHOW_ALL" fill="SHOW_ALL" '
     'hideFirstPageNum="0" hideFirstEmptyLine="0" showLineNumber="0"/>'
     '<hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/>'
-    '<hp:pagePr landscape="WIDELY" width="59528" height="84186" gutterType="LEFT_ONLY">'
-    '<hp:margin header="4252" footer="4252" gutter="0" '
-    'left="5668" right="5668" top="4252" bottom="4252"/>'
+    '<hp:pagePr landscape="WIDELY" width="77102" height="111685" gutterType="LEFT_ONLY">'
+    '<hp:margin header="6803" footer="2551" gutter="0" '
+    'left="5385" right="5385" top="4251" bottom="7086"/>'
     '</hp:pagePr>'
     '<hp:footNotePr>'
     '<hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/>'
@@ -105,9 +110,9 @@ SECPR_BODY = (
     '<hp:numbering type="CONTINUOUS" newNum="1"/>'
     '<hp:placement place="END_OF_DOCUMENT" beneathText="0"/>'
     '</hp:endNotePr>'
-    '<hp:pageBorderFill type="BOTH" borderFillIDRef="1" textBorder="PAPER" '
+    '<hp:pageBorderFill type="BOTH" borderFillIDRef="9" textBorder="PAPER" '
     'headerInside="0" footerInside="0" fillArea="PAPER">'
-    '<hp:offset left="1417" right="1417" top="1417" bottom="1417"/>'
+    '<hp:offset left="0" right="0" top="0" bottom="0"/>'
     '</hp:pageBorderFill>'
     '<hp:pageBorderFill type="EVEN" borderFillIDRef="1" textBorder="PAPER" '
     'headerInside="0" footerInside="0" fillArea="PAPER">'
@@ -117,6 +122,8 @@ SECPR_BODY = (
     'headerInside="0" footerInside="0" fillArea="PAPER">'
     '<hp:offset left="1417" right="1417" top="1417" bottom="1417"/>'
     '</hp:pageBorderFill>'
+    '<hp:masterPage idRef="masterpage0"/>'
+    '<hp:masterPage idRef="masterpage1"/>'
     '</hp:secPr>'
 )
 
@@ -169,7 +176,7 @@ def make_text_para(idgen: IDGen, text: str, para_pr: int = 0, char_pr: int = 0) 
 
 
 def _make_equation_run(idgen: IDGen, script: str, char_pr: int = STYLE["CHAR_BODY"],
-                       base_unit: int = 1000) -> str:
+                       base_unit: int = 1100) -> str:
     """Generate an inline equation <hp:run> element (no surrounding paragraph)."""
     eqid = idgen.next_eq()
     escaped_script = escape(script)
@@ -189,7 +196,7 @@ def _make_equation_run(idgen: IDGen, script: str, char_pr: int = STYLE["CHAR_BOD
 
 
 def make_equation_para(idgen: IDGen, script: str, para_pr: int = STYLE["PARA_EQ"],
-                        char_pr: int = STYLE["CHAR_BODY"], base_unit: int = 1000) -> str:
+                        char_pr: int = STYLE["CHAR_BODY"], base_unit: int = 1100) -> str:
     """Generate a paragraph containing an equation."""
     pid = idgen.next()
     eq_run = _make_equation_run(idgen, script, char_pr, base_unit)
@@ -203,7 +210,7 @@ def make_equation_para(idgen: IDGen, script: str, para_pr: int = STYLE["PARA_EQ"
 
 def make_text_with_equation(idgen: IDGen, text_before: str, script: str,
                              text_after: str = "", para_pr: int = STYLE["PARA_BODY"],
-                             char_pr: int = STYLE["CHAR_BODY"], base_unit: int = 1000) -> str:
+                             char_pr: int = STYLE["CHAR_BODY"], base_unit: int = 1100) -> str:
     """Generate a paragraph with text and inline equation mixed."""
     pid = idgen.next()
     runs = []

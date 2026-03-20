@@ -41,3 +41,12 @@
 - optional checkout 필드가 `PydanticUndefined`일 때도 진단 dict가 `None`으로 정규화되도록 보강했고 회귀 테스트를 추가했다.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3.14 -m pytest 02_main\\tests\\test_billing.py 02_main\\tests\\test_polar_checkout_inspect.py` 기준 `44 passed`.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3.14 02_main\\scripts\\polar_checkout_inspect.py --help` 성공.
+- HWPX export 기준 템플릿을 `math_templete_example.hwpx` 기반 자산으로 승격했다. vendored runtime `templates/base`에 `masterpage0.xml`, `masterpage1.xml`, root `BinData/image1.PNG`, 갱신된 `header.xml`, `content.hpf`, `settings.xml`을 반영했다.
+- footer는 템플릿에서 정적 총페이지 문단을 제거해 현재 페이지 자동필드만 남겼다.
+- `exporter.py`를 하이브리드 템플릿 조립기로 재구성했다. 렌더 컨텍스트에서 한국 시간 기준 연도를 만들고, 기준 템플릿을 복사한 뒤 `section0.xml`만 새로 생성하도록 바꿨다.
+- `exporter.py`에 template warning collector를 추가해 비치명 경고를 구조화 로그로 남기고, manifest/masterpage/style ref 정합성 검증을 통과하지 못하면 고정 사용자 메시지로 실패시키도록 정리했다.
+- 이미지 manifest 경로를 root `BinData/` 기준으로 바꾸고, export 구조 검증 시 `Contents/masterpage0.xml`, `Contents/masterpage1.xml`도 필수 항목으로 확인하도록 강화했다.
+- `xml_primitives.py`의 `STYLE`, `SECPR_BODY`, 수식 base unit을 기준 템플릿 값으로 재매핑했다. page size, margin, `masterPageCnt=2`, `masterPage idRef`, 2단 간격이 레퍼런스와 같아진다.
+- `tests/test_exporter.py`에 masterpage 존재, page layout, 연도 치환, footer 현재 페이지만 유지, section style ref 제한 테스트를 추가했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_exporter.py -q` 기준 `9 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_exporter.py D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_pipeline_storage.py -q` 기준 `20 passed`.

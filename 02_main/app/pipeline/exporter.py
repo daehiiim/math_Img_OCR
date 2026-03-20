@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 import re
 import shutil
@@ -8,23 +9,36 @@ import sys
 import tempfile
 import uuid
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
+from zoneinfo import ZoneInfo
 
 from app.config import get_settings
 from app.pipeline.schema import JobPipelineContext
 
 ROOT = Path(__file__).resolve().parents[2]
+LOGGER = logging.getLogger(__name__)
+TEMPLATE_ERROR_MESSAGE = "문서 템플릿을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
 RUNTIME_SKILL_NAME = "hwpxskill-math"
+KOREA_TZ = ZoneInfo("Asia/Seoul")
+HWPX_NS = {
+    "hh": "http://www.hancom.co.kr/hwpml/2011/head",
+    "hp": "http://www.hancom.co.kr/hwpml/2011/paragraph",
+    "opf": "http://www.idpf.org/2007/opf/",
+}
 REQUIRED_RUNTIME_FILES = (
     Path("scripts/xml_primitives.py"),
     Path("scripts/exam_helpers.py"),
     Path("scripts/hwpx_utils.py"),
     Path("templates/base/Contents/header.xml"),
     Path("templates/base/Contents/content.hpf"),
+    Path("templates/base/Contents/masterpage0.xml"),
+    Path("templates/base/Contents/masterpage1.xml"),
     Path("templates/base/Contents/section0.xml"),
+    Path("templates/base/BinData/image1.PNG"),
     Path("templates/base/mimetype"),
 )
 RUNTIME_MODULE_NAMES = ("xml_primitives", "exam_helpers", "hwpx_utils")
@@ -57,6 +71,29 @@ class HwpxRuntimeModules:
     validate_hwpx: Any
 
 
+@dataclass(frozen=True)
+class TemplateRenderContext:
+    """템플릿 렌더링 시점의 고정 값을 보관한다."""
+
+    year: str
+
+
+@dataclass
+class QualityWarningCollector:
+    """비치명 템플릿 경고를 누적해 구조화 로그로 남긴다."""
+
+    warnings: list[tuple[str, str]] = field(default_factory=list)
+
+    def add(self, code: str, detail: str) -> None:
+        """경고 코드를 세부 정보와 함께 기록한다."""
+        self.warnings.append((code, detail))
+
+    def emit(self) -> None:
+        """누적 경고를 exporter 로그로 출력한다."""
+        for code, detail in self.warnings:
+            LOGGER.warning("hwpx_template_warning code=%s detail=%s", code, detail)
+
+
 def _get_codex_home() -> Path | None:
     """CODEX_HOME 환경변수를 Path 객체로 정규화한다."""
     raw_value = os.getenv("CODEX_HOME")
@@ -68,6 +105,11 @@ def _get_codex_home() -> Path | None:
 def _get_home_dir() -> Path:
     """현재 사용자 홈 디렉터리를 반환한다."""
     return Path.home()
+
+
+def _build_render_context() -> TemplateRenderContext:
+    """문서 템플릿에서 쓰는 런타임 값을 생성한다."""
+    return TemplateRenderContext(year=str(datetime.now(KOREA_TZ).year))
 
 
 def _iter_runtime_candidates(
@@ -155,16 +197,11 @@ def _load_hwpx_runtime_modules(scripts_dir: Path) -> HwpxRuntimeModules:
         xml_primitives = importlib.import_module("xml_primitives")
         exam_helpers = importlib.import_module("exam_helpers")
         hwpx_utils = importlib.import_module("hwpx_utils")
-    except Exception as error:
-        raise RuntimeError(
-            f"Failed to load HWPX export runtime from {scripts_dir}: {error}"
-        ) from error
     finally:
         try:
             sys.path.remove(scripts_dir_str)
         except ValueError:
             pass
-
         for module_name in RUNTIME_MODULE_NAMES:
             sys.modules.pop(module_name, None)
         for module_name, module in previous_modules.items():
@@ -188,43 +225,57 @@ def _load_hwpx_runtime_modules(scripts_dir: Path) -> HwpxRuntimeModules:
 
 
 def export_hwpx(root_path: Path, job: JobPipelineContext, export_dir: Path) -> Path:
-    """OCR 결과를 HWPX 파일로 조립하고 구조 검증까지 수행한다."""
-    runtime_paths = _resolve_hwpx_runtime(
-        app_root=ROOT,
-        configured_skill_dir=get_settings(ROOT).hwpx_skill_dir,
-    )
-    runtime_modules = _load_hwpx_runtime_modules(runtime_paths.scripts_dir)
-    export_dir.mkdir(parents=True, exist_ok=True)
-    hwpx_path = export_dir / f"{job.job_id}.hwpx"
+    """OCR 결과를 기준 템플릿에 주입해 HWPX 파일을 생성한다."""
+    context = _build_render_context()
+    warnings = QualityWarningCollector()
 
-    with tempfile.TemporaryDirectory() as tmpdir_str:
-        work_dir = Path(tmpdir_str) / "build"
-        shutil.copytree(runtime_paths.template_dir, work_dir)
-
-        section_path = work_dir / "Contents" / "section0.xml"
-        bindata_dir = work_dir / "Contents" / "BinData"
-        bindata_dir.mkdir(parents=True, exist_ok=True)
-
-        images_info = _generate_section0_xml(
-            root_path=root_path,
-            job=job,
-            output_path=section_path,
-            bindata_tgt_dir=bindata_dir,
-            runtime=runtime_modules,
+    try:
+        runtime_paths = _resolve_hwpx_runtime(
+            app_root=ROOT,
+            configured_skill_dir=get_settings(ROOT).hwpx_skill_dir,
         )
+        runtime_modules = _load_hwpx_runtime_modules(runtime_paths.scripts_dir)
+        export_dir.mkdir(parents=True, exist_ok=True)
+        hwpx_path = export_dir / f"{job.job_id}.hwpx"
 
-        content_hpf = work_dir / "Contents" / "content.hpf"
-        runtime_modules.update_metadata(content_hpf, f"MathOCR_{job.job_id}", "MathOCR")
-        _inject_images_to_manifest(content_hpf, images_info)
+        with tempfile.TemporaryDirectory() as tmpdir_str:
+            work_dir = Path(tmpdir_str) / "build"
+            shutil.copytree(runtime_paths.template_dir, work_dir)
 
-        header_xml_path = work_dir / "Contents" / "header.xml"
-        _update_header_xml(header_xml_path, images_info)
-        runtime_modules.pack_hwpx(work_dir, hwpx_path)
+            section_path = work_dir / "Contents" / "section0.xml"
+            header_xml_path = work_dir / "Contents" / "header.xml"
+            content_hpf = work_dir / "Contents" / "content.hpf"
+            bindata_dir = work_dir / "BinData"
+            bindata_dir.mkdir(parents=True, exist_ok=True)
 
-    errors = runtime_modules.validate_hwpx(hwpx_path)
-    if errors:
-        raise ValueError(f"HWPX Validation failed: {errors}")
+            images_info = _generate_section0_xml(
+                root_path=root_path,
+                job=job,
+                output_path=section_path,
+                bindata_tgt_dir=bindata_dir,
+                runtime=runtime_modules,
+                context=context,
+                warnings=warnings,
+            )
+            runtime_modules.update_metadata(
+                content_hpf,
+                f"{context.year}학년도 수학영역",
+                "MathOCR",
+            )
+            _inject_images_to_manifest(content_hpf, images_info)
+            _update_header_xml(header_xml_path, images_info, warnings)
+            _validate_template_contract(work_dir, content_hpf, header_xml_path, section_path)
+            runtime_modules.pack_hwpx(work_dir, hwpx_path)
 
+        errors = runtime_modules.validate_hwpx(hwpx_path)
+        if errors:
+            raise ValueError(f"hwpx validation failed: {errors}")
+    except Exception as error:
+        warnings.emit()
+        LOGGER.exception("hwpx export failed: %s", error)
+        raise ValueError(TEMPLATE_ERROR_MESSAGE) from error
+
+    warnings.emit()
     return hwpx_path
 
 
@@ -233,7 +284,7 @@ def _parse_math_text_to_runs(
     text: str,
     default_char_pr: int,
     runtime: HwpxRuntimeModules,
-    base_unit: int = 1000,
+    base_unit: int = 1100,
 ) -> list[str]:
     """텍스트를 <math> 태그 기준으로 분리해 HWPX run 목록으로 변환한다."""
     runs: list[str] = []
@@ -254,29 +305,47 @@ def _parse_math_text_to_runs(
     return runs
 
 
+def _build_header_paragraphs(
+    idgen: Any,
+    context: TemplateRenderContext,
+    runtime: HwpxRuntimeModules,
+) -> list[str]:
+    """상단 연도와 과목 고정 헤더 문단을 만든다."""
+    return [
+        runtime.make_text_para(
+            idgen,
+            f"{context.year}학년도 수학시험 문제지",
+            para_pr=runtime.STYLE["PARA_HEADER_YEAR"],
+            char_pr=runtime.STYLE["CHAR_HEADER_YEAR"],
+        ),
+        runtime.make_text_para(
+            idgen,
+            "수학 영역",
+            para_pr=runtime.STYLE["PARA_HEADER_SUBJECT"],
+            char_pr=runtime.STYLE["CHAR_HEADER_SUBJECT"],
+        ),
+        runtime.make_empty_para(
+            idgen,
+            para_pr=runtime.STYLE["PARA_SPACER"],
+            char_pr=0,
+        ),
+    ]
+
+
 def _generate_section0_xml(
     root_path: Path,
     job: JobPipelineContext,
     output_path: Path,
     bindata_tgt_dir: Path,
     runtime: HwpxRuntimeModules,
+    context: TemplateRenderContext,
+    warnings: QualityWarningCollector,
 ) -> list[dict[str, str]]:
     """region 목록을 순회하며 section0.xml과 BinData 정보를 생성한다."""
     images_info: list[dict[str, str]] = []
     idgen = runtime.IDGen()
-    paras: list[str] = []
-
-    paras.append(runtime.make_secpr_para(idgen, col_count=2, same_gap=2268))
-
-    title_runs = [
-        (
-            f'<hp:run charPrIDRef="{runtime.STYLE["CHAR_EXAM_TITLE"]}">'
-            f"<hp:t>수학 분석 ({job.job_id})</hp:t></hp:run>"
-        )
-    ]
-    paras.append(runtime.make_multi_run_para(idgen, title_runs, para_pr=runtime.STYLE["PARA_EXAM_TITLE"]))
-    paras.append(runtime.make_empty_para(idgen, para_pr=runtime.STYLE["PARA_HR"], char_pr=0))
-    paras.append(runtime.make_empty_para(idgen))
+    paras: list[str] = [runtime.make_secpr_para(idgen, col_count=2, same_gap=3316)]
+    paras.extend(_build_header_paragraphs(idgen, context, runtime))
 
     exportable_regions = [
         region
@@ -292,16 +361,13 @@ def _generate_section0_xml(
             or region.figure.png_rendered_url
             or region.figure.crop_url
         )
-
         if image_url:
             source_image = root_path / image_url
             if source_image.exists():
                 extension = source_image.suffix[1:].lower() or "png"
                 unique_suffix = uuid.uuid4().hex
                 bindata_filename = f"img_{region_id}_{unique_suffix}.{extension}"
-                destination_image = bindata_tgt_dir / bindata_filename
-                shutil.copy2(source_image, destination_image)
-
+                shutil.copy2(source_image, bindata_tgt_dir / bindata_filename)
                 bindata_id = f"BIN_{region_id}_{unique_suffix}"
                 images_info.append(
                     {"id": bindata_id, "filename": bindata_filename, "ext": extension}
@@ -316,7 +382,9 @@ def _generate_section0_xml(
                         char_pr=0,
                     )
                 )
-                paras.append(runtime.make_empty_para(idgen))
+                paras.append(runtime.make_empty_para(idgen, para_pr=runtime.STYLE["PARA_SPACER"]))
+            else:
+                warnings.add("missing_region_image", f"region={region_id} path={image_url}")
 
         ocr_text = (region.extractor.ocr_text or "").strip()
         if ocr_text:
@@ -325,35 +393,26 @@ def _generate_section0_xml(
                 runs: list[str] = []
                 if index == 0:
                     runs.append(
-                        f'<hp:run charPrIDRef="{runtime.STYLE["CHAR_EXAM_NUM"]}"><hp:t>{order}. </hp:t></hp:run>'
+                        f'<hp:run charPrIDRef="{runtime.STYLE["CHAR_EXAM_NUM"]}">'
+                        f"<hp:t>{order}. </hp:t></hp:run>"
                     )
-                runs.extend(
-                    _parse_math_text_to_runs(idgen, line, runtime.STYLE["CHAR_BODY"], runtime)
-                )
-                paras.append(
-                    runtime.make_multi_run_para(idgen, runs, para_pr=runtime.STYLE["PARA_BODY"])
-                )
+                runs.extend(_parse_math_text_to_runs(idgen, line, runtime.STYLE["CHAR_BODY"], runtime))
+                para_pr = runtime.STYLE["PARA_BODY"] if index == 0 else runtime.STYLE["PARA_CHOICE"]
+                paras.append(runtime.make_multi_run_para(idgen, runs, para_pr=para_pr))
 
         explanation = (region.extractor.explanation or "").strip()
         if explanation:
-            paras.append(runtime.make_empty_para(idgen))
+            paras.append(runtime.make_empty_para(idgen, para_pr=runtime.STYLE["PARA_SPACER"]))
             paras.append(
                 runtime.make_text_para(
                     idgen,
                     "[해설]",
-                    para_pr=runtime.STYLE["PARA_CHOICE"],
+                    para_pr=runtime.STYLE["PARA_SECTION_LABEL"],
                     char_pr=runtime.STYLE["CHAR_SUBTITLE"],
                 )
             )
-
-            lines = [line for line in explanation.split("\n") if line.strip()]
-            for line in lines:
-                runs = _parse_math_text_to_runs(
-                    idgen,
-                    line,
-                    runtime.STYLE["CHAR_CHOICE"],
-                    runtime,
-                )
+            for line in [line for line in explanation.split("\n") if line.strip()]:
+                runs = _parse_math_text_to_runs(idgen, line, runtime.STYLE["CHAR_CHOICE"], runtime)
                 paras.append(
                     runtime.make_multi_run_para(
                         idgen,
@@ -362,60 +421,69 @@ def _generate_section0_xml(
                     )
                 )
 
-        paras.append(runtime.make_empty_para(idgen))
-        paras.append(runtime.make_empty_para(idgen, para_pr=runtime.STYLE["PARA_HR"], char_pr=0))
-        paras.append(runtime.make_empty_para(idgen))
+        paras.append(runtime.make_empty_para(idgen, para_pr=runtime.STYLE["PARA_SPACER"]))
 
     body_xml = "\n".join(paras)
     xml_content = (
         "<?xml version='1.0' encoding='UTF-8'?>\n"
         f"<hs:sec {runtime.SEC_NAMESPACES}>\n  {body_xml}\n</hs:sec>"
     )
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(xml_content, encoding="utf-8")
     return images_info
 
 
-def _inject_images_to_manifest(content_hpf: Path, images_info: list) -> None:
-    """content.hpf manifest에 BinData 이미지를 추가한다."""
-    ET.register_namespace("opf", "http://www.idpf.org/2007/opf/")
+def _resolve_media_type(extension: str) -> str:
+    """확장자에 맞는 이미지 media-type을 계산한다."""
+    if extension in {"jpg", "jpeg"}:
+        return "image/jpeg"
+    return f"image/{extension}"
+
+
+def _inject_images_to_manifest(content_hpf: Path, images_info: list[dict[str, str]]) -> None:
+    """content.hpf manifest에 추가 BinData 이미지를 등록한다."""
+    if not images_info:
+        return
+
+    ET.register_namespace("opf", HWPX_NS["opf"])
     tree = ET.parse(str(content_hpf))
     root = tree.getroot()
-    ns = {"opf": "http://www.idpf.org/2007/opf/"}
+    manifest_el = root.find(".//opf:manifest", HWPX_NS)
+    if manifest_el is None:
+        raise ValueError("content manifest missing")
 
-    manifest_el = root.find(".//opf:manifest", ns)
-    if manifest_el is not None:
-        for img in images_info:
-            item = ET.SubElement(manifest_el, "{http://www.idpf.org/2007/opf/}item")
-            item.set("id", img["id"])
-            item.set("href", f"Contents/BinData/{img['filename']}")
-            item.set("media-type", f"image/{img['ext']}")
-            item.set("isEmbeded", "1")
+    for img in images_info:
+        item = ET.SubElement(manifest_el, "{http://www.idpf.org/2007/opf/}item")
+        item.set("id", img["id"])
+        item.set("href", f"BinData/{img['filename']}")
+        item.set("media-type", _resolve_media_type(img["ext"]))
+        item.set("isEmbeded", "1")
 
-    with open(str(content_hpf), "wb") as f:
-        tree.write(f, encoding="UTF-8", xml_declaration=True)
+    tree.write(str(content_hpf), encoding="UTF-8", xml_declaration=True)
 
 
-def _update_header_xml(header_xml_path: Path, images_info: list) -> None:
+def _update_header_xml(
+    header_xml_path: Path,
+    images_info: list[dict[str, str]],
+    warnings: QualityWarningCollector,
+) -> None:
     """header.xml의 binDataList를 실제 이미지 개수에 맞게 갱신한다."""
-    ET.register_namespace("hh", "http://www.hancom.co.kr/hwpml/2011/head")
+    if not images_info:
+        return
+
+    ET.register_namespace("hh", HWPX_NS["hh"])
     tree = ET.parse(str(header_xml_path))
     root = tree.getroot()
-    ns = {"hh": "http://www.hancom.co.kr/hwpml/2011/head"}
-    
-    bindata_list = root.find(".//hh:binDataList", ns)
+    bindata_list = root.find(".//hh:binDataList", HWPX_NS)
     if bindata_list is None:
-        reflist = root.find(".//hh:refList", ns)
-        if reflist is not None:
-            bindata_list = ET.SubElement(reflist, "{http://www.hancom.co.kr/hwpml/2011/head}binDataList")
-            bindata_list.set("itemCnt", "0")
-        else:
-            return
+        reflist = root.find(".//hh:refList", HWPX_NS)
+        if reflist is None:
+            raise ValueError("header refList missing")
+        bindata_list = ET.SubElement(reflist, "{http://www.hancom.co.kr/hwpml/2011/head}binDataList")
+        warnings.add("created_bindata_list", str(header_xml_path))
 
-    current_cnt = int(bindata_list.get("itemCnt", "0"))
+    current_cnt = len(bindata_list.findall("hh:binData", HWPX_NS))
     bindata_list.set("itemCnt", str(current_cnt + len(images_info)))
-
     for img in images_info:
         item = ET.SubElement(bindata_list, "{http://www.hancom.co.kr/hwpml/2011/head}binData")
         item.set("id", img["id"])
@@ -423,5 +491,109 @@ def _update_header_xml(header_xml_path: Path, images_info: list) -> None:
         item.set("type", "BINA")
         item.set("format", img["ext"].upper())
 
-    with open(str(header_xml_path), "wb") as f:
-        tree.write(f, encoding="UTF-8", xml_declaration=True)
+    tree.write(str(header_xml_path), encoding="UTF-8", xml_declaration=True)
+
+
+def _validate_required_manifest_entries(work_dir: Path, content_hpf: Path) -> None:
+    """manifest의 필수 항목과 실제 파일 존재를 함께 검증한다."""
+    required_hrefs = {
+        "Contents/header.xml",
+        "Contents/section0.xml",
+        "Contents/masterpage0.xml",
+        "Contents/masterpage1.xml",
+        "settings.xml",
+    }
+    tree = ET.parse(str(content_hpf))
+    manifest_items = tree.findall(".//opf:item", HWPX_NS)
+    hrefs = {item.get("href", "") for item in manifest_items}
+    missing_hrefs = sorted(required_hrefs - hrefs)
+    if missing_hrefs:
+        raise ValueError(f"manifest missing required entries: {missing_hrefs}")
+
+    missing_files = sorted(href for href in hrefs if href and not (work_dir / href).exists())
+    if missing_files:
+        raise ValueError(f"manifest references missing files: {missing_files}")
+
+
+def _validate_masterpage_contract(work_dir: Path, section_path: Path) -> None:
+    """section0.xml의 masterpage 연결과 개수를 검증한다."""
+    section_root = ET.parse(str(section_path)).getroot()
+    sec_pr = section_root.find(".//hp:secPr", HWPX_NS)
+    if sec_pr is None:
+        raise ValueError("section secPr missing")
+
+    master_pages = [node.get("idRef", "") for node in sec_pr.findall("hp:masterPage", HWPX_NS)]
+    if master_pages != ["masterpage0", "masterpage1"]:
+        raise ValueError(f"unexpected masterpage refs: {master_pages}")
+    if sec_pr.get("masterPageCnt") != str(len(master_pages)):
+        raise ValueError("masterpage count mismatch")
+
+    for masterpage in master_pages:
+        masterpage_path = work_dir / "Contents" / f"{masterpage}.xml"
+        if not masterpage_path.exists():
+            raise ValueError(f"missing masterpage file: {masterpage_path}")
+
+
+def _collect_xml_style_refs(xml_path: Path) -> tuple[set[str], set[str]]:
+    """하나의 XML 문서에서 paraPr/charPr 참조 ID를 수집한다."""
+    root = ET.parse(str(xml_path)).getroot()
+    para_refs = {
+        node.get("paraPrIDRef", "")
+        for node in root.findall(".//hp:p", HWPX_NS)
+        if node.get("paraPrIDRef")
+    }
+    char_refs = {
+        node.get("charPrIDRef", "")
+        for node in root.findall(".//hp:run", HWPX_NS)
+        if node.get("charPrIDRef")
+    }
+    return para_refs, char_refs
+
+
+def _validate_style_references(header_xml_path: Path, xml_paths: list[Path]) -> None:
+    """section/masterpage가 header.xml의 스타일 정의만 참조하는지 확인한다."""
+    header_root = ET.parse(str(header_xml_path)).getroot()
+    valid_para_ids = {
+        node.get("id", "")
+        for node in header_root.findall(".//hh:paraPr", HWPX_NS)
+        if node.get("id")
+    }
+    valid_char_ids = {
+        node.get("id", "")
+        for node in header_root.findall(".//hh:charPr", HWPX_NS)
+        if node.get("id")
+    }
+
+    used_para_ids: set[str] = set()
+    used_char_ids: set[str] = set()
+    for xml_path in xml_paths:
+        para_refs, char_refs = _collect_xml_style_refs(xml_path)
+        used_para_ids.update(para_refs)
+        used_char_ids.update(char_refs)
+
+    missing_para_ids = sorted(used_para_ids - valid_para_ids)
+    missing_char_ids = sorted(used_char_ids - valid_char_ids)
+    if missing_para_ids or missing_char_ids:
+        raise ValueError(
+            "style reference mismatch: "
+            f"para={missing_para_ids} char={missing_char_ids}"
+        )
+
+
+def _validate_template_contract(
+    work_dir: Path,
+    content_hpf: Path,
+    header_xml_path: Path,
+    section_path: Path,
+) -> None:
+    """템플릿 manifest/masterpage/style 정합성을 한 번에 검증한다."""
+    _validate_required_manifest_entries(work_dir, content_hpf)
+    _validate_masterpage_contract(work_dir, section_path)
+    _validate_style_references(
+        header_xml_path,
+        [
+            section_path,
+            work_dir / "Contents" / "masterpage0.xml",
+            work_dir / "Contents" / "masterpage1.xml",
+        ],
+    )

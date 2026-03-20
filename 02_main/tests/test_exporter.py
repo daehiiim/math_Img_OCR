@@ -6,6 +6,7 @@ from zipfile import ZipFile
 
 import pytest
 from PIL import Image
+from lxml import etree
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -21,9 +22,12 @@ REQUIRED_RUNTIME_FILES = (
     Path("scripts/xml_primitives.py"),
     Path("scripts/exam_helpers.py"),
     Path("scripts/hwpx_utils.py"),
+    Path("templates/base/BinData/image1.PNG"),
     Path("templates/base/mimetype"),
     Path("templates/base/Contents/header.xml"),
     Path("templates/base/Contents/content.hpf"),
+    Path("templates/base/Contents/masterpage0.xml"),
+    Path("templates/base/Contents/masterpage1.xml"),
     Path("templates/base/Contents/section0.xml"),
 )
 
@@ -36,6 +40,11 @@ OPTIONAL_RUNTIME_FILES = (
     Path("templates/base/Preview/PrvImage.png"),
     Path("templates/base/Preview/PrvText.txt"),
 )
+
+NS = {
+    "hp": "http://www.hancom.co.kr/hwpml/2011/paragraph",
+    "opf": "http://www.idpf.org/2007/opf/",
+}
 
 
 def make_png_bytes(width: int = 32, height: int = 24) -> bytes:
@@ -190,7 +199,134 @@ def test_export_hwpx_creates_valid_file_using_vendored_runtime(tmp_path, monkeyp
         assert "Contents/content.hpf" in names
         assert "Contents/header.xml" in names
         assert "Contents/section0.xml" in names
-        assert any(name.startswith("Contents/BinData/img_q1_") for name in names)
+        assert any(name.startswith("BinData/img_q1_") for name in names)
+
+
+def test_export_hwpx_uses_reference_masterpages_and_page_layout(tmp_path, monkeypatch):
+    """레퍼런스 템플릿의 masterpage와 조판 규칙을 유지해야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "02_main"
+    copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+    monkeypatch.setattr(module, "ROOT", app_root)
+    monkeypatch.setattr(module, "_get_codex_home", lambda: tmp_path / "missing-codex-home")
+    monkeypatch.setattr(module, "_get_home_dir", lambda: tmp_path / "missing-home")
+
+    root_path = tmp_path / "runtime"
+    image_relative_path = Path("assets/q1.png")
+    image_path = root_path / image_relative_path
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(make_png_bytes())
+
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+
+    with ZipFile(hwpx_path, "r") as archive:
+        names = archive.namelist()
+        assert "Contents/masterpage0.xml" in names
+        assert "Contents/masterpage1.xml" in names
+
+        section_root = etree.fromstring(archive.read("Contents/section0.xml"))
+        sec_pr = section_root.find(".//hp:secPr", NS)
+        assert sec_pr is not None
+        assert sec_pr.get("masterPageCnt") == "2"
+
+        page_pr = sec_pr.find("hp:pagePr", NS)
+        assert page_pr is not None
+        assert page_pr.get("width") == "77102"
+        assert page_pr.get("height") == "111685"
+
+        margin = page_pr.find("hp:margin", NS)
+        assert margin is not None
+        assert margin.get("header") == "6803"
+        assert margin.get("footer") == "2551"
+
+        master_pages = sec_pr.findall("hp:masterPage", NS)
+        assert [node.get("idRef") for node in master_pages] == ["masterpage0", "masterpage1"]
+
+        col_pr = section_root.find(".//hp:colPr", NS)
+        assert col_pr is not None
+        assert col_pr.get("colCount") == "2"
+        assert col_pr.get("sameGap") == "3316"
+
+
+def test_export_hwpx_renders_current_year_and_current_page_only_footer(tmp_path, monkeypatch):
+    """상단 연도는 런타임 값으로 바꾸고 footer는 현재 페이지 자동필드만 남겨야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "02_main"
+    copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+    monkeypatch.setattr(module, "ROOT", app_root)
+    monkeypatch.setattr(module, "_get_codex_home", lambda: tmp_path / "missing-codex-home")
+    monkeypatch.setattr(module, "_get_home_dir", lambda: tmp_path / "missing-home")
+    monkeypatch.setattr(
+        module,
+        "_build_render_context",
+        lambda: module.TemplateRenderContext(year="2031"),
+    )
+
+    root_path = tmp_path / "runtime"
+    image_relative_path = Path("assets/q1.png")
+    image_path = root_path / image_relative_path
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(make_png_bytes())
+
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+
+    with ZipFile(hwpx_path, "r") as archive:
+        section_xml = archive.read("Contents/section0.xml").decode("utf-8")
+        masterpage0_xml = archive.read("Contents/masterpage0.xml").decode("utf-8")
+        masterpage1_xml = archive.read("Contents/masterpage1.xml").decode("utf-8")
+
+    assert "2031학년도 수학시험 문제지" in section_xml
+    assert 'numType="PAGE"' in masterpage0_xml
+    assert 'numType="PAGE"' in masterpage1_xml
+    assert ">20<" not in masterpage0_xml
+    assert ">20<" not in masterpage1_xml
+
+
+def test_export_hwpx_section_uses_only_header_defined_style_refs(tmp_path, monkeypatch):
+    """생성된 본문은 레퍼런스 header.xml에 정의된 style ref만 사용해야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "02_main"
+    copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+    monkeypatch.setattr(module, "ROOT", app_root)
+    monkeypatch.setattr(module, "_get_codex_home", lambda: tmp_path / "missing-codex-home")
+    monkeypatch.setattr(module, "_get_home_dir", lambda: tmp_path / "missing-home")
+
+    root_path = tmp_path / "runtime"
+    image_relative_path = Path("assets/q1.png")
+    image_path = root_path / image_relative_path
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(make_png_bytes())
+
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+
+    with ZipFile(hwpx_path, "r") as archive:
+        header_root = etree.fromstring(archive.read("Contents/header.xml"))
+        section_root = etree.fromstring(archive.read("Contents/section0.xml"))
+
+    valid_para_ids = {
+        node.get("id")
+        for node in header_root.findall(".//hh:paraPr", {"hh": "http://www.hancom.co.kr/hwpml/2011/head"})
+    }
+    valid_char_ids = {
+        node.get("id")
+        for node in header_root.findall(".//hh:charPr", {"hh": "http://www.hancom.co.kr/hwpml/2011/head"})
+    }
+    used_para_ids = {
+        node.get("paraPrIDRef")
+        for node in section_root.findall(".//hp:p", NS)
+        if node.get("paraPrIDRef")
+    }
+    used_char_ids = {
+        node.get("charPrIDRef")
+        for node in section_root.findall(".//hp:run", NS)
+        if node.get("charPrIDRef")
+    }
+
+    assert used_para_ids <= valid_para_ids
+    assert used_char_ids <= valid_char_ids
 
 
 def test_export_hwpx_skips_empty_failed_regions_and_renumbers_items(tmp_path, monkeypatch):
