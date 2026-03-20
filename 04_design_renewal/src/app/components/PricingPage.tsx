@@ -9,6 +9,7 @@ import {
   formatBillingUnitPrice,
   normalizeBillingCurrency,
 } from "../lib/billingCurrency";
+import { cloneDefaultBillingCatalog } from "../lib/billingCatalog";
 import { isLocalUiMockEnabled } from "../lib/localUiMock";
 
 type PlanId = "single" | "starter" | "pro";
@@ -25,11 +26,7 @@ interface PlanCard extends BillingPlanResponse, PlanDecoration {
   perImageLabel: string;
 }
 
-const fallbackCatalog: BillingPlanResponse[] = [
-  { plan_id: "single", title: "Single", amount: 1000, currency: "krw", credits: 1 },
-  { plan_id: "starter", title: "Starter", amount: 19000, currency: "krw", credits: 100 },
-  { plan_id: "pro", title: "Pro", amount: 29000, currency: "krw", credits: 200 },
-];
+const fallbackCatalog: BillingPlanResponse[] = cloneDefaultBillingCatalog();
 
 const planDecorations: Record<PlanId, PlanDecoration> = {
   single: {

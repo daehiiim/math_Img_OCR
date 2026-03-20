@@ -1,4 +1,5 @@
 import { createDefaultProfile, readStoredProfile, type StoredProfile } from "./authStorage";
+import { DEFAULT_BILLING_CATALOG } from "./billingCatalog";
 
 export type MockPaymentOutcome = "success" | "cancel" | "fail";
 
@@ -14,11 +15,7 @@ const MOCK_USER_EMAIL = "local-ui-mock@example.com";
 export const LOCAL_UI_MOCK_AUTH_ERROR_MESSAGE =
   "로컬 UI mock 모드를 켜거나 Supabase 인증 환경값을 설정해주세요.";
 
-export const LOCAL_UI_MOCK_BILLING_CATALOG = [
-  { plan_id: "single", title: "Single", amount: 1000, currency: "krw", credits: 1 },
-  { plan_id: "starter", title: "Starter", amount: 19000, currency: "krw", credits: 100 },
-  { plan_id: "pro", title: "Pro", amount: 29000, currency: "krw", credits: 200 },
-] as const;
+export const LOCAL_UI_MOCK_BILLING_CATALOG = DEFAULT_BILLING_CATALOG;
 
 // 로컬 UI mock 모드 활성 여부를 env 기준으로 판별한다.
 export function isLocalUiMockEnabled(): boolean {

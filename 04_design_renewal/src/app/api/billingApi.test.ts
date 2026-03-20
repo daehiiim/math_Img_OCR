@@ -206,9 +206,9 @@ describe("billingApi", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(plans).toEqual([
-      { plan_id: "single", title: "Single", amount: 1000, currency: "krw", credits: 1 },
-      { plan_id: "starter", title: "Starter", amount: 19000, currency: "krw", credits: 100 },
-      { plan_id: "pro", title: "Pro", amount: 29000, currency: "krw", credits: 200 },
+      { plan_id: "single", title: "Single", amount: 100, currency: "krw", credits: 1 },
+      { plan_id: "starter", title: "Starter", amount: 9900, currency: "krw", credits: 100 },
+      { plan_id: "pro", title: "Pro", amount: 19000, currency: "krw", credits: 200 },
     ]);
   });
 

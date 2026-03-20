@@ -19,6 +19,7 @@ import {
   type BillingPlanResponse,
 } from "../api/billingApi";
 import { useAuth } from "../context/AuthContext";
+import { cloneDefaultBillingCatalog } from "../lib/billingCatalog";
 import { formatBillingAmount, normalizeBillingCurrency } from "../lib/billingCurrency";
 import { applyLocalUiMockCheckoutCredits, isLocalUiMockEnabled } from "../lib/localUiMock";
 import { buildPublicAppUrl } from "../lib/publicAppUrl";
@@ -73,11 +74,7 @@ const paymentMethods = [
   },
 ];
 
-const fallbackCatalog: BillingPlanResponse[] = [
-  { plan_id: "single", title: "Single", amount: 1000, currency: "krw", credits: 1 },
-  { plan_id: "starter", title: "Starter", amount: 19000, currency: "krw", credits: 100 },
-  { plan_id: "pro", title: "Pro", amount: 29000, currency: "krw", credits: 200 },
-];
+const fallbackCatalog: BillingPlanResponse[] = cloneDefaultBillingCatalog();
 
 const terminalFailureStatuses = new Set(["canceled", "cancelled", "expired", "failed"]);
 

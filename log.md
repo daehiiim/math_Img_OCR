@@ -22,6 +22,11 @@
 - 로컬 `02_main/.env` 의 Polar live token, webhook secret, product ID 3개를 Cloud Run 운영값으로 동기화했다.
 - `cd D:\\03_PROJECT\\05_mathOCR\\02_main && py scripts/polar_production_preflight.py` 와 `py scripts/polar_production_preflight.py --api-base-url https://mathocr-146126176673.us-central1.run.app` 를 재실행해 전체 `OK` 를 확인했다.
 - 현재 live 가격은 Polar production 기준 `single=100 KRW`, `starter=9900 KRW`, `pro=19000 KRW` 로 확인됐다. 프런트 fallback/test 상수의 `1000/19000/29000` 와는 다르지만, 이번 패스에서는 매출 복구만 우선해 metadata만 수정했고 가격 정책 변경은 보류했다.
+- 사용자 결정에 따라 대안 1을 적용했다. Polar live 가격은 유지하고 프런트 fallback/local mock/test 상수를 `100/9900/19000 KRW` 로 정렬했다.
+- 프런트 중복 카탈로그를 줄이기 위해 `04_design_renewal/src/app/lib/billingCatalog.ts` 를 추가하고 `PricingPage.tsx`, `PaymentPage.tsx`, `localUiMock.ts` 가 같은 기본 카탈로그를 재사용하도록 정리했다.
+- 프런트 테스트 기대값도 live 가격 기준으로 갱신했다: `billingApi.test.ts`, `PricingPage.test.tsx`, `PaymentPage.test.tsx`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm test -- billingApi.test.ts PaymentPage.test.tsx PricingPage.test.tsx` 기준 `27 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. Vite chunk size warning은 기존 번들 크기 이슈로 유지됐다.
 - 선행 테스트 변경을 실제 구현으로 흡수했다. `extractor.py`에 `NANO_BANANA_PROMPTS_DIR` 기반 자산 로더를 추가하고 프롬프트를 코드 상수 대신 파일에서 조립하도록 바꿨다.
 - Nano Banana 프롬프트 자산 디렉터리를 `app/pipeline/prompt_assets/nano_banana` 아래에 만들고 `csat_v1`, `math_general_v1` 각각에 `base`, `style`, `negative`, `kind별` 규칙 파일을 분리했다.
 - 지원 프롬프트 버전에 `math_general_v1`를 추가해 범용 수학문제 스타일 실험이 가능하도록 했다.

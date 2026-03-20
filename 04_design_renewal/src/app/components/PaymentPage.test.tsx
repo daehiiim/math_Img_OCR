@@ -47,9 +47,9 @@ describe("PaymentPage", () => {
     createCheckoutSessionApiMock.mockReset();
     createCustomerPortalApiMock.mockReset();
     getBillingCatalogApiMock.mockResolvedValue([
-      { plan_id: "single", title: "Single", amount: 1000, currency: "krw", credits: 1 },
-      { plan_id: "starter", title: "Starter", amount: 19000, currency: "krw", credits: 100 },
-      { plan_id: "pro", title: "Pro", amount: 29000, currency: "krw", credits: 200 },
+      { plan_id: "single", title: "Single", amount: 100, currency: "krw", credits: 1 },
+      { plan_id: "starter", title: "Starter", amount: 9900, currency: "krw", credits: 100 },
+      { plan_id: "pro", title: "Pro", amount: 19000, currency: "krw", credits: 200 },
     ]);
     getCheckoutSessionStatusApiMock.mockReset();
     delete (globalThis as { __MATH_OCR_PUBLIC_APP_URL__?: string }).__MATH_OCR_PUBLIC_APP_URL__;
@@ -64,7 +64,7 @@ describe("PaymentPage", () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText("₩19,000")).toBeInTheDocument();
+    expect(await screen.findByText("₩9,900")).toBeInTheDocument();
     expect(screen.getByText("Polar checkout으로 안전하게 결제됩니다.")).toBeInTheDocument();
     expect(screen.getByText("실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.")).toBeInTheDocument();
   });
@@ -81,7 +81,7 @@ describe("PaymentPage", () => {
     );
 
     expect(await screen.findByText("결제 설정 점검 중")).toBeInTheDocument();
-    expect(screen.queryByText("₩19,000")).not.toBeInTheDocument();
+    expect(screen.queryByText("₩9,900")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /설정 점검 중/i })).toBeDisabled();
   });
 
@@ -97,7 +97,7 @@ describe("PaymentPage", () => {
     );
 
     expect(await screen.findByText("결제 설정 점검 중")).toBeInTheDocument();
-    expect(screen.queryByText("₩19,000")).not.toBeInTheDocument();
+    expect(screen.queryByText("₩9,900")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /설정 점검 중/i })).toBeDisabled();
   });
 
@@ -115,7 +115,7 @@ describe("PaymentPage", () => {
       </MemoryRouter>
     );
 
-    await screen.findByText("₩19,000");
+    await screen.findByText("₩9,900");
     await user.click(screen.getByRole("button", { name: /지금 결제/i }));
 
     await waitFor(() =>
