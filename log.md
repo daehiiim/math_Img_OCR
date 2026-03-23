@@ -246,6 +246,20 @@
   - `npx vite preview --host 127.0.0.1 --port 5173` 기준 데스크톱 `1440px`에서 비디오 재생/낮은 opacity 확인, 모바일 `390px`에서 비디오 미마운트 확인
 - 이번 변경은 프런트 정적 자산 범위다. 백엔드 API, Cloud Run, 타입 계약 변경은 없다.
 
+## 2026-03-23 15:05 KST
+
+- 사용자 피드백 기준으로 히어로 타임랩스가 체감상 거의 보이지 않는 문제를 재조사했다.
+- root cause는 비디오 미마운트가 아니라 과도한 억제 조합이었다. 실제로 `video.currentTime`은 증가했고 `paused=false`, `readyState=4`였지만 `opacity=0.13`, `brightness=0.32`, 강한 dark overlay 때문에 검은 배경에 흡수되고 있었다.
+- [theme.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css)에서 히어로 미디어 톤을 재조정했다.
+  - video: `opacity 0.36`, `mix-blend-mode: screen`, `brightness 0.78`, `contrast 1.18`
+  - poster: `opacity 0.14`, `brightness 0.42`
+  - overlay: 상단/중앙 dark gradient를 소폭 완화
+  - mobile poster opacity도 `0.1`로 더 낮춰 모바일 정적 배경 인상은 유지
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+  - `http://127.0.0.1:5173/` Playwright 확인 기준 데스크톱 히어로에서 별 타임랩스 흔적이 이전보다 명확히 드러나고, 헤드라인 대비는 유지됨
+
 ## 2026-03-23 14:52 KST
 
 - `/new` 작업 생성 화면에서 업로드 미리보기 카드를 제거하고, 파일 정보와 교체 액션을 [NewJobPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx)의 영역 지정 헤더로 이동했다.

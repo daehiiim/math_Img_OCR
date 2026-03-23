@@ -372,9 +372,6 @@ export function NewJobPage() {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-1">
                     <CardTitle className="text-[15px]">영역 지정</CardTitle>
-                    <p className="text-[13px] text-muted-foreground">
-                      업로드 원본을 크게 보면서 바로 문제 영역을 그릴 수 있도록 미리보기 카드를 제거했습니다.
-                    </p>
                   </div>
                   <Button
                     variant="outline"

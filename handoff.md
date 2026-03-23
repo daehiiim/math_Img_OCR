@@ -6,7 +6,7 @@ Done
 
 In Progress
 - 최우선 과제: 공개 홈 히어로 타임랩스의 실서비스 QA 및 농도 미세조정
-- 진행 상태: 데스크톱 `min-width: 768px` + `prefers-reduced-motion: no-preference`에서만 비디오가 재생되고, 모바일에서는 poster만 유지된다.
+- 진행 상태: 데스크톱 `min-width: 768px` + `prefers-reduced-motion: no-preference`에서만 비디오가 재생되고, `screen` blend 기반 가시성 조정을 반영했다. 모바일에서는 poster만 유지된다.
 - 다음 단계: 운영 브라우저에서 실제 첫 인상과 CTA 가독성을 다시 확인하고 필요 시 opacity/filter만 미세조정한다.
 
 Next
@@ -26,6 +26,7 @@ Related Files
 
 Last State
 - 프런트 히어로 배경은 장식 전용이며 비디오 실패/자동재생 차단 시 사용자 메시지 없이 poster + 기존 블랙 배경으로 폴백한다.
+- 2026-03-23 15:05 KST 기준 비디오는 정상 재생되며, visibility 이슈는 CSS 톤 조정으로 완화했다.
 - `/new` 화면은 업로드 미리보기 대신 큰 영역 지정 캔버스와 파일 교체 버튼을 노출한다.
 - 백엔드 API 계약과 DB migration 파일 자체는 바꾸지 않았고, 미배포 migration 상태에서도 새 Markdown 컬럼을 생략해 구스키마로 동작한다.
 - 배포 환경 변수 변경은 없지만, 이번 수정 반영에는 백엔드 서비스 재배포가 필요하다.
