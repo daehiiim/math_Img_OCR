@@ -379,3 +379,13 @@
   - `py -3 -m pytest 02_main/tests/test_hwpforge_json_builder.py -q` -> `5 passed`
   - `py -3 -m pytest 02_main/tests/test_hwpforge_json_builder.py 02_main/tests/test_exporter.py -q` -> `32 passed`
 - 실제 `HWPX_EXPORT_ENGINE=hwpforge` 강제 E2E는 저장소 안에 HwpForge MCP 런타임이 없어 이 세션에서 실행하지 못했다. 백엔드 코드 변경만 있으므로 배포 환경 변수 변경은 없지만, 실제 반영에는 백엔드 재배포가 필요하다.
+
+## 2026-03-23 16:49 KST
+
+- 공개 홈 히어로 비디오 재생 계약을 사용자 요청대로 뒤집었다. [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 에서 `matchMedia` 기반 `viewport-blocked`, `reduced-motion`, `media-query-unsupported` 분기를 제거해 `prefers-reduced-motion` 및 뷰포트와 무관하게 비디오가 항상 렌더되도록 바꿨다.
+- 같은 파일의 루프 구간도 밝은 후반부 `4.8s -> 5.7s` 에서 어두운 초반부 `0.3s -> 4.3s` 로 옮겼다. `loadedmetadata` 시점과 `timeupdate` 재설정 모두 같은 다크 구간 계약을 사용한다.
+- [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx) 는 TDD로 먼저 수정했다. 모바일 환경, 감속 모드 환경, 다크 루프 시작/재루프 시간을 새 계약으로 고정했고, 기존 구현에서 실패를 확인한 뒤 통과시켰다.
+- 이번 변경의 설계와 실행 계획은 [2026-03-23-home-hero-video-dark-loop-design.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-03-23-home-hero-video-dark-loop-design.md), [2026-03-23-home-hero-video-dark-loop-plan.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-03-23-home-hero-video-dark-loop-plan.md) 에 기록했다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
+- 이번 변경은 프런트 범위라 백엔드 API, Cloud Run, 환경 변수 변경은 없다.

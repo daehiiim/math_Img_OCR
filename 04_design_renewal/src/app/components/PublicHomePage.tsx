@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useState, type CSSProperties, type SyntheticEvent } from "react";
+import { useState, type CSSProperties, type SyntheticEvent } from "react";
 import { useNavigate } from "react-router";
 
 import heroTimelapseMp4 from "@/assets/home/hero-timelapse.mp4";
@@ -34,26 +34,14 @@ type LandingCardPanelProps = {
   index: number;
 };
 
-type HeroMediaAvailability = {
-  fallbackReason: HeroMediaFallbackReason | null;
-  shouldRenderVideo: boolean;
-  userMessage: null;
-};
-
-type HeroMediaFallbackReason =
-  | "viewport-blocked"
-  | "reduced-motion"
-  | "media-query-unsupported"
-  | "video-unavailable";
-
 const heroWordRows = [
   ["수학", "수식을", "HWPX로,"],
   ["완벽한", "감각으로."],
 ];
 
 const heroVideoPlaybackRate = 1.35;
-const heroVideoStartSeconds = 4.8;
-const heroVideoLoopResetSeconds = 5.7;
+const heroVideoStartSeconds = 0.3;
+const heroVideoLoopResetSeconds = 4.3;
 const heroMediaVisualTokens = {
   "--hero-media-position": "32% center",
   "--hero-poster-opacity": "0.46",
@@ -63,13 +51,6 @@ const heroMediaVisualTokens = {
   "--hero-overlay-background":
     "linear-gradient(180deg, rgba(1, 3, 4, 0.48) 0%, rgba(1, 3, 4, 0.16) 38%, rgba(0, 0, 0, 0.66) 100%), radial-gradient(circle at top center, rgba(255, 255, 255, 0.05) 0%, transparent 34%)",
 } as CSSProperties;
-
-const heroMediaFallbackPolicy: Record<HeroMediaFallbackReason, { fallbackReason: HeroMediaFallbackReason; userMessage: null }> = {
-  "media-query-unsupported": { fallbackReason: "media-query-unsupported", userMessage: null },
-  "reduced-motion": { fallbackReason: "reduced-motion", userMessage: null },
-  "video-unavailable": { fallbackReason: "video-unavailable", userMessage: null },
-  "viewport-blocked": { fallbackReason: "viewport-blocked", userMessage: null },
-};
 
 const middleFeatureImage =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuAUbOoVIra_wGGc0Y8fJTDtAOB9SyewR6KJw8YY4wtSdtUGyuuGDuHn189WHLiEKF0DQOAKabwg3dkUTBnFrJZYXKEIZix6MT8pS9aRoEV3kxHqe70hAuaDfhyhVrdfdJ_R-bRa1DE976ej6IJMY4DON08gdbhmeJF3c-jZauCXcfQmB6N96Vz72LIXZ06_8Ad64iZLdDHBRFCnLuPgjyhpateoHa88_Flu2s7X43bR07VocdjO98rKU8l5LxursfAiKrO8pWbVjLE";
@@ -108,65 +89,6 @@ function getRevealMotion(delay = 0, distance = 24) {
   } as const;
 }
 
-/** 구형 브라우저까지 포함해 미디어 쿼리 변경 리스너를 연결한다. */
-function subscribeMediaQuery(queryList: MediaQueryList, onChange: () => void) {
-  if ("addEventListener" in queryList) {
-    queryList.addEventListener("change", onChange);
-    return () => queryList.removeEventListener("change", onChange);
-  }
-
-  queryList.addListener(onChange);
-  return () => queryList.removeListener(onChange);
-}
-
-/** 현재 장치 조건에서 히어로 비디오를 노출할 수 있는지 계산한다. */
-function getHeroMediaAvailability(): HeroMediaAvailability {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return { shouldRenderVideo: false, ...heroMediaFallbackPolicy["media-query-unsupported"] };
-  }
-
-  if (!window.matchMedia("(min-width: 768px)").matches) {
-    return { shouldRenderVideo: false, ...heroMediaFallbackPolicy["viewport-blocked"] };
-  }
-
-  if (!window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
-    return { shouldRenderVideo: false, ...heroMediaFallbackPolicy["reduced-motion"] };
-  }
-
-  return { shouldRenderVideo: true, fallbackReason: null, userMessage: null };
-}
-
-/** 히어로 배경 비디오의 노출 조건을 클라이언트에서만 동기화한다. */
-function useHeroMediaAvailability() {
-  const [availability, setAvailability] = useState<HeroMediaAvailability>({
-    shouldRenderVideo: false,
-    fallbackReason: null,
-    userMessage: null,
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      setAvailability(getHeroMediaAvailability());
-      return undefined;
-    }
-
-    const desktopQuery = window.matchMedia("(min-width: 768px)");
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: no-preference)");
-    const syncAvailability = () => setAvailability(getHeroMediaAvailability());
-
-    syncAvailability();
-    const unsubscribeDesktop = subscribeMediaQuery(desktopQuery, syncAvailability);
-    const unsubscribeMotion = subscribeMediaQuery(motionQuery, syncAvailability);
-
-    return () => {
-      unsubscribeDesktop();
-      unsubscribeMotion();
-    };
-  }, []);
-
-  return availability;
-}
-
 /** 헤더와 하단 CTA에서 공통으로 쓰는 버튼 그룹을 렌더링한다. */
 function ActionButtons({ alignCenter = false, onPricing, onTry }: ActionButtonsProps) {
   const wrapperClassName = alignCenter ? "justify-center" : "justify-center md:justify-start";
@@ -185,22 +107,13 @@ function ActionButtons({ alignCenter = false, onPricing, onTry }: ActionButtonsP
 
 /** 히어로 섹션 전용 배경 포스터와 조건부 비디오 레이어를 렌더링한다. */
 function HeroBackgroundMedia() {
-  const availability = useHeroMediaAvailability();
   const [hasVideoError, setHasVideoError] = useState(false);
-
-  useEffect(() => {
-    if (availability.shouldRenderVideo) {
-      setHasVideoError(false);
-    }
-  }, [availability.shouldRenderVideo]);
-
-  const fallbackReason = hasVideoError ? "video-unavailable" : availability.fallbackReason;
-  const shouldRenderVideo = availability.shouldRenderVideo && !hasVideoError;
+  const fallbackReason = hasVideoError ? "video-unavailable" : null;
 
   return (
     <div className="public-home-hero-media" aria-hidden="true" data-hero-media-fallback={fallbackReason ?? undefined} style={heroMediaVisualTokens}>
       <div className="public-home-hero-poster" style={{ backgroundImage: `url(${heroTimelapsePoster})` }} />
-      {shouldRenderVideo ? (
+      {!hasVideoError ? (
         <video
           autoPlay
           muted

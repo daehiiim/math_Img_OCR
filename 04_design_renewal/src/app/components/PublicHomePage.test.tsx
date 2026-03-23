@@ -102,7 +102,7 @@ describe("PublicHomePage", () => {
     expect(screen.queryByAltText("출력 형식")).not.toBeInTheDocument();
   });
 
-  it("데스크톱이며 감속 모드가 아니면 히어로 장식 비디오를 렌더링한다", async () => {
+  it("히어로 장식 비디오는 환경과 무관하게 렌더되고 어두운 구간만 반복한다", async () => {
     const { container } = render(
       <MemoryRouter>
         <PublicHomePage />
@@ -135,16 +135,16 @@ describe("PublicHomePage", () => {
 
     fireEvent.loadedMetadata(heroVideo);
 
-    expect(heroVideo.currentTime).toBeCloseTo(4.8);
+    expect(heroVideo.currentTime).toBeCloseTo(0.3);
     expect(heroVideo.playbackRate).toBeCloseTo(1.35);
 
-    heroVideo.currentTime = 5.8;
+    heroVideo.currentTime = 4.4;
     fireEvent.timeUpdate(heroVideo);
 
-    expect(heroVideo.currentTime).toBeCloseTo(4.8);
+    expect(heroVideo.currentTime).toBeCloseTo(0.3);
   });
 
-  it("모바일 환경에서는 히어로 장식 비디오를 렌더링하지 않는다", () => {
+  it("모바일 환경에서도 히어로 장식 비디오를 계속 렌더링한다", () => {
     mockHeroMediaEnvironment({ allowMotion: true, isDesktop: false });
 
     const { container } = render(
@@ -153,10 +153,10 @@ describe("PublicHomePage", () => {
       </MemoryRouter>
     );
 
-    expect(container.querySelector("video")).not.toBeInTheDocument();
+    expect(container.querySelector("video")).toBeInTheDocument();
   });
 
-  it("감속 모드에서는 히어로 장식 비디오를 렌더링하지 않는다", () => {
+  it("감속 모드여도 히어로 장식 비디오를 계속 렌더링한다", () => {
     mockHeroMediaEnvironment({ allowMotion: false, isDesktop: true });
 
     const { container } = render(
@@ -165,7 +165,7 @@ describe("PublicHomePage", () => {
       </MemoryRouter>
     );
 
-    expect(container.querySelector("video")).not.toBeInTheDocument();
+    expect(container.querySelector("video")).toBeInTheDocument();
   });
 
   it("히어로와 하단 CTA가 기존 목적지로 이동한다", async () => {
