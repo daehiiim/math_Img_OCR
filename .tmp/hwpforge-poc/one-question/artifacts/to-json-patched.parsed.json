@@ -1,0 +1,12 @@
+{
+  "data": {
+    "output_path": "D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\one-question\\section0.patched.json",
+    "size_bytes": 52262,
+    "section_only": true
+  },
+  "summary": "Exported to D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\one-question\\section0.patched.json (52262 bytes, section only)",
+  "next": [
+    "Edit the JSON and use hwpforge_patch to apply changes",
+    "Use hwpforge_inspect to understand structure first"
+  ]
+}

@@ -9,6 +9,8 @@ services:
       - "8000:8000"
     env_file:
       - ./.env
+    environment:
+      HWPX_EXPORT_ENGINE: auto
     volumes:
       - ./runtime:/app/runtime
       - ../hwpx_generator:/app/hwpx_generator:ro

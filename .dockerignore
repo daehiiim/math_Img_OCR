@@ -12,6 +12,8 @@ runtime/
 02_main/specs/
 02_main/assets/
 02_main/templates/
+!02_main/templates/hwpx/
+!02_main/templates/hwpx/hwpforge_generated_canonical_sample.json
 02_main/debug_extract/
 02_main/runtime/
 02_main/*.md

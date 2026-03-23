@@ -25,6 +25,9 @@ export interface Region {
   ocrText?: string;
   explanation?: string;
   mathml?: string;
+  problemMarkdown?: string;
+  explanationMarkdown?: string;
+  markdownVersion?: string;
   cropUrl?: string;
   imageCropUrl?: string;
   styledImageUrl?: string;
@@ -118,6 +121,9 @@ export function useJobStore() {
                 ocrText: undefined,
                 explanation: undefined,
                 mathml: undefined,
+                problemMarkdown: undefined,
+                explanationMarkdown: undefined,
+                markdownVersion: undefined,
                 cropUrl: undefined,
                 imageCropUrl: undefined,
                 styledImageUrl: undefined,
@@ -228,24 +234,38 @@ export function useJobStore() {
   }, []);
 
   const exportHwpx = useCallback(async (jobId: string) => {
-    const result = await exportHwpxApi(jobId);
-    const hwpxPath = resolveRuntimePath(result.download_url) ?? result.download_url;
+    try {
+      const result = await exportHwpxApi(jobId);
+      const hwpxPath = resolveRuntimePath(result.download_url) ?? result.download_url;
+      const downloaded = await downloadHwpxApi(jobId);
 
-    setJobs((prev) =>
-      prev.map((job) =>
-        job.id === jobId
-          ? {
-              ...job,
-              status: "exported",
-              hwpxPath,
-              lastError: undefined,
-            }
-          : job
-      )
-    );
-
-    const downloaded = await downloadHwpxApi(jobId);
-    triggerDownloadBlob(downloaded.blob, downloaded.filename || "생성결과.hwpx");
+      triggerDownloadBlob(downloaded.blob, downloaded.filename || "생성결과.hwpx");
+      setJobs((prev) =>
+        prev.map((job) =>
+          job.id === jobId
+            ? {
+                ...job,
+                status: "exported",
+                hwpxPath,
+                lastError: undefined,
+              }
+            : job
+        )
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "HWPX 내보내기에 실패했습니다.";
+      setJobs((prev) =>
+        prev.map((job) =>
+          job.id === jobId
+            ? {
+                ...job,
+                lastError: message,
+              }
+            : job
+        )
+      );
+      throw error;
+    }
   }, []);
 
   const deleteJob = useCallback((jobId: string) => {

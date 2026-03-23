@@ -16,6 +16,7 @@
 - Vercel production 환경에서는 `VITE_API_BASE_URL`을 비워 두고 same-origin 프록시 계약을 유지한다.
 - Cloud Run 환경에서는 `APP_URL=https://mathtohwp.vercel.app`를 반드시 설정한다.
 - Cloud Run에서 `CORS_ALLOW_ORIGINS`를 비우면 백엔드는 `APP_URL` 1개만 허용한다.
+- Cloud Run 이미지 기본값은 `HWPX_EXPORT_ENGINE=auto`이며, direct HwpForge writer 실패 시 roundtrip/legacy fallback으로 내려간다.
 - 백엔드 커스텀 도메인은 v1 범위에서 도입하지 않는다.
 - Supabase Free pause와 Cloud Run cold start는 현재 운영 제약으로 수용한다.
 
@@ -45,7 +46,9 @@
 - `POLAR_PRODUCT_SINGLE_ID`
 - `POLAR_PRODUCT_STARTER_ID`
 - `POLAR_PRODUCT_PRO_ID`
+- `HWPX_EXPORT_ENGINE=auto`
 - 필요 시 `CORS_ALLOW_ORIGINS=https://mathtohwp.vercel.app`
+- 일반적인 Cloud Run 배포에서는 `HWPFORGE_MCP_PATH`를 따로 넣지 않는다. 루트 `Dockerfile`이 `/app/vendor/hwpforge-mcp` 번들을 함께 포함한다.
 
 ### Supabase
 
@@ -68,11 +71,13 @@
 4. Cloud Run 새 배포 후 `run.app` 주소가 바뀌었으면 `04_design_renewal/vercel.json` rewrite 대상을 갱신한다.
 5. Vercel production 환경에 `APP_URL`을 반영하고 재배포한다.
 6. `/pricing`, `/payment/starter`, `/jobs` 흐름을 same-origin 경로 기준으로 검증한다.
+7. `POST /jobs/{job_id}/export/hwpx` 와 다운로드까지 확인해 direct HwpForge writer가 웹 경로에서 500 없이 끝나는지 본다.
 
 ## 5. 검증 체크리스트
 
 - `docker build -t mathocr-api .`
 - `docker run --rm -p 8000:8000 --env-file 02_main/.env mathocr-api`
+- `docker run --rm mathocr-api python -c "from app.pipeline.hwpforge_roundtrip import resolve_hwpforge_runtime; print(resolve_hwpforge_runtime())"` 로 vendored HwpForge runtime 인식 확인
 - `GET /billing/catalog`이 운영 상품과 통화를 반환하는지 확인
 - Supabase OAuth 로그인 후 프런트 세션과 백엔드 `Authorization` 헤더 전달 확인
 - Polar checkout 성공 후 `payment_events`, `credit_ledger`, `profiles.credits_balance` 반영 확인

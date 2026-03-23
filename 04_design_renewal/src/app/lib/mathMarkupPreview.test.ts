@@ -38,4 +38,16 @@ describe("parseMathMarkupPreview", () => {
       ],
     ]);
   });
+
+  it("Markdown 달러 수식도 같은 방식으로 분리한다", () => {
+    expect(parseMathMarkupPreview("문제는 $x+1$ 이고 해설은 $$AB$$ 이다")).toEqual([
+      [
+        { kind: "text", value: "문제는 " },
+        { kind: "formula", value: "x+1" },
+        { kind: "text", value: " 이고 해설은 " },
+        { kind: "formula", value: "AB" },
+        { kind: "text", value: " 이다" },
+      ],
+    ]);
+  });
 });

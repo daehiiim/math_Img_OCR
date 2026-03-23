@@ -1,0 +1,1782 @@
+{
+  "document": {
+    "sections": [
+      {
+        "paragraphs": [
+          {
+            "runs": [
+              {
+                "content": {
+                  "Table": {
+                    "rows": [
+                      {
+                        "cells": [
+                          {
+                            "paragraphs": [
+                              {
+                                "runs": [
+                                  {
+                                    "content": {
+                                      "Text": "2026학년도 수학시험 "
+                                    },
+                                    "char_shape_id": 7
+                                  },
+                                  {
+                                    "content": {
+                                      "Text": "문"
+                                    },
+                                    "char_shape_id": 9
+                                  },
+                                  {
+                                    "content": {
+                                      "Text": "제"
+                                    },
+                                    "char_shape_id": 8
+                                  },
+                                  {
+                                    "content": {
+                                      "Text": "지"
+                                    },
+                                    "char_shape_id": 7
+                                  }
+                                ],
+                                "para_shape_id": 4,
+                                "column_break": false,
+                                "page_break": false,
+                                "style_id": 4
+                              },
+                              {
+                                "runs": [
+                                  {
+                                    "content": {
+                                      "Text": "수학 영역"
+                                    },
+                                    "char_shape_id": 3
+                                  }
+                                ],
+                                "para_shape_id": 1,
+                                "column_break": false,
+                                "page_break": false,
+                                "style_id": 6
+                              }
+                            ],
+                            "col_span": 1,
+                            "row_span": 1,
+                            "width": 66699,
+                            "height": 10629,
+                            "background": null,
+                            "border_fill_id": 4,
+                            "margin": {
+                              "left": 510,
+                              "right": 510,
+                              "top": 141,
+                              "bottom": 141
+                            },
+                            "vertical_align": "top"
+                          }
+                        ],
+                        "height": 10629,
+                        "is_header": false
+                      }
+                    ],
+                    "width": 66699,
+                    "caption": null,
+                    "page_break": "cell",
+                    "repeat_header": true,
+                    "border_fill_id": 3
+                  }
+                },
+                "char_shape_id": 4
+              },
+              {
+                "content": {
+                  "Control": {
+                    "TextBox": {
+                      "paragraphs": [
+                        {
+                          "runs": [
+                            {
+                              "content": {
+                                "Control": {
+                                  "Field": {
+                                    "field_type": "PageNum",
+                                    "hint_text": null,
+                                    "help_text": null
+                                  }
+                                }
+                              },
+                              "char_shape_id": 1
+                            }
+                          ],
+                          "para_shape_id": 3,
+                          "column_break": false,
+                          "page_break": false,
+                          "style_id": 5
+                        }
+                      ],
+                      "width": 4252,
+                      "height": 4252,
+                      "horz_offset": 5203,
+                      "vert_offset": 5853,
+                      "caption": null,
+                      "style": {
+                        "line_color": 0,
+                        "fill_color": null,
+                        "line_width": 33,
+                        "line_style": "None",
+                        "rotation": null,
+                        "flip": null,
+                        "head_arrow": null,
+                        "tail_arrow": null,
+                        "fill": null,
+                        "drop_cap_style": "None"
+                      }
+                    }
+                  }
+                },
+                "char_shape_id": 4
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Line": {
+                      "start": {
+                        "x": 0,
+                        "y": 0
+                      },
+                      "end": {
+                        "x": 100,
+                        "y": 100
+                      },
+                      "width": 1,
+                      "height": 87874,
+                      "horz_offset": 105,
+                      "vert_offset": 16842,
+                      "caption": null,
+                      "style": {
+                        "line_color": 0,
+                        "fill_color": null,
+                        "line_width": 100,
+                        "line_style": "Solid",
+                        "rotation": null,
+                        "flip": null,
+                        "head_arrow": null,
+                        "tail_arrow": null,
+                        "fill": null,
+                        "drop_cap_style": "None"
+                      }
+                    }
+                  }
+                },
+                "char_shape_id": 4
+              },
+              {
+                "content": {
+                  "Text": "1."
+                },
+                "char_shape_id": 6
+              },
+              {
+                "content": {
+                  "Text": "△ABC에서 AB 위의 점 E와 AC 위의 점 D에 대하여 ∠ABC = ∠ADE이고, AB = 14cm, AE = 6cm, AD = 8cm, DC = x(cm)일 때, x의 값은? [4점]"
+                },
+                "char_shape_id": 4
+              }
+            ],
+            "para_shape_id": 6,
+            "column_break": false,
+            "page_break": false,
+            "style_id": 1
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Text": ""
+                },
+                "char_shape_id": 0
+              }
+            ],
+            "para_shape_id": 6,
+            "column_break": false,
+            "page_break": false,
+            "style_id": 1
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Image": {
+                    "path": "BinData/image1",
+                    "width": 25347,
+                    "height": 11746,
+                    "format": {
+                      "Unknown": "image1"
+                    },
+                    "caption": null,
+                    "placement": {
+                      "text_wrap": "TopAndBottom",
+                      "text_flow": "BothSides",
+                      "treat_as_char": true,
+                      "flow_with_text": true,
+                      "allow_overlap": false,
+                      "vert_rel_to": "Para",
+                      "horz_rel_to": "Column",
+                      "vert_offset": 0,
+                      "horz_offset": 0
+                    }
+                  }
+                },
+                "char_shape_id": 4
+              }
+            ],
+            "para_shape_id": 7,
+            "column_break": false,
+            "page_break": false,
+            "style_id": 1
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Text": "① "
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Text": "\t② "
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Text": "\t③ "
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Text": "\t④ "
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Text": "\t⑤ "
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "1",
+                      "width": 525,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "3/2",
+                      "width": 1575,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "9/4",
+                      "width": 1575,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "7/3",
+                      "width": 1575,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 0
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "5/2",
+                      "width": 1575,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 0
+              }
+            ],
+            "para_shape_id": 5,
+            "column_break": false,
+            "page_break": false,
+            "style_id": 3
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Text": ""
+                },
+                "char_shape_id": 0
+              }
+            ],
+            "para_shape_id": 5,
+            "column_break": false,
+            "page_break": false,
+            "style_id": 3
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Text": "[해설]"
+                },
+                "char_shape_id": 5
+              }
+            ],
+            "para_shape_id": 0,
+            "column_break": false,
+            "page_break": false
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Text": ""
+                },
+                "char_shape_id": 0
+              }
+            ],
+            "para_shape_id": 0,
+            "column_break": false,
+            "page_break": false
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Text": "주어진 조건에서 E는 AB 위, D는 AC 위에 있으므로"
+                },
+                "char_shape_id": 5
+              }
+            ],
+            "para_shape_id": 0,
+            "column_break": false,
+            "page_break": false
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Text": "이다. 또한"
+                },
+                "char_shape_id": 5
+              },
+              {
+                "content": {
+                  "Text": "이므로"
+                },
+                "char_shape_id": 5
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "ANGLE BAC= ANGLE DAE",
+                      "width": 8386,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 5
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "ANGLE ABC= ANGLE ADE",
+                      "width": 8386,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 5
+              }
+            ],
+            "para_shape_id": 0,
+            "column_break": false,
+            "page_break": false
+          },
+          {
+            "runs": [
+              {
+                "content": {
+                  "Text": "삼각형"
+                },
+                "char_shape_id": 5
+              },
+              {
+                "content": {
+                  "Text": "와 삼각형"
+                },
+                "char_shape_id": 5
+              },
+              {
+                "content": {
+                  "Text": "는 서로 닮음이다."
+                },
+                "char_shape_id": 5
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "ABC",
+                      "width": 2325,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 5
+              },
+              {
+                "content": {
+                  "Control": {
+                    "Equation": {
+                      "script": "ADE",
+                      "width": 2400,
+                      "height": 1125,
+                      "base_line": 85,
+                      "text_color": 0,
+                      "font": "HYhwpEQ"
+                    }
+                  }
+                },
+                "char_shape_id": 5
+              }
+            ],
+            "para_shape_id": 0,
+            "column_break": false,
+            "page_break": false
+          }
+        ],
+        "page_settings": {
+          "width": 77102,
+          "height": 111685,
+          "margin_left": 5385,
+          "margin_right": 5385,
+          "margin_top": 4251,
+          "margin_bottom": 4251,
+          "header_margin": 6803,
+          "footer_margin": 2551,
+          "gutter_type": "LeftOnly",
+          "mirror_margins": false,
+          "landscape": false
+        },
+        "column_settings": {
+          "column_type": "Newspaper",
+          "layout_mode": "Left",
+          "columns": [
+            {
+              "width": 0,
+              "gap": 3316
+            },
+            {
+              "width": 0,
+              "gap": 0
+            }
+          ]
+        },
+        "visibility": {
+          "hide_first_header": false,
+          "hide_first_footer": false,
+          "hide_first_master_page": false,
+          "hide_first_page_num": false,
+          "hide_first_empty_line": false,
+          "show_line_number": false,
+          "border": "ShowAll",
+          "fill": "ShowAll"
+        },
+        "line_number_shape": {
+          "restart_type": 0,
+          "count_by": 0,
+          "distance": 0,
+          "start_number": 0
+        },
+        "page_border_fills": [
+          {
+            "apply_type": "BOTH",
+            "border_fill_id": 5,
+            "text_border": "PAPER",
+            "header_inside": false,
+            "footer_inside": false,
+            "fill_area": "PAPER",
+            "offset": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "apply_type": "EVEN",
+            "border_fill_id": 1,
+            "text_border": "PAPER",
+            "header_inside": false,
+            "footer_inside": false,
+            "fill_area": "PAPER",
+            "offset": [
+              1417,
+              1417,
+              1417,
+              1417
+            ]
+          },
+          {
+            "apply_type": "ODD",
+            "border_fill_id": 1,
+            "text_border": "PAPER",
+            "header_inside": false,
+            "footer_inside": false,
+            "fill_area": "PAPER",
+            "offset": [
+              1417,
+              1417,
+              1417,
+              1417
+            ]
+          }
+        ],
+        "master_pages": [
+          {
+            "apply_page_type": "Both",
+            "paragraphs": [
+              {
+                "runs": [],
+                "para_shape_id": 0,
+                "column_break": false,
+                "page_break": false
+              },
+              {
+                "runs": [],
+                "para_shape_id": 1,
+                "column_break": false,
+                "page_break": false
+              },
+              {
+                "runs": [],
+                "para_shape_id": 6,
+                "column_break": false,
+                "page_break": false
+              }
+            ]
+          },
+          {
+            "apply_page_type": "Both",
+            "paragraphs": [
+              {
+                "runs": [],
+                "para_shape_id": 0,
+                "column_break": false,
+                "page_break": false
+              },
+              {
+                "runs": [],
+                "para_shape_id": 1,
+                "column_break": false,
+                "page_break": false
+              },
+              {
+                "runs": [],
+                "para_shape_id": 6,
+                "column_break": false,
+                "page_break": false
+              }
+            ]
+          }
+        ],
+        "begin_num": {
+          "page": 0,
+          "footnote": 1,
+          "endnote": 1,
+          "pic": 0,
+          "tbl": 0,
+          "equation": 0
+        },
+        "text_direction": "Horizontal"
+      }
+    ],
+    "metadata": {
+      "title": null,
+      "author": null,
+      "subject": null,
+      "keywords": [],
+      "created": null,
+      "modified": null
+    }
+  },
+  "styles": {
+    "style_set": "Modern",
+    "fonts": [
+      {
+        "id": 0,
+        "face_name": "신명 견명조",
+        "lang": "HANGUL"
+      },
+      {
+        "id": 1,
+        "face_name": "신명 디나루",
+        "lang": "HANGUL"
+      },
+      {
+        "id": 2,
+        "face_name": "신명 신그래픽",
+        "lang": "HANGUL"
+      },
+      {
+        "id": 3,
+        "face_name": "신명 중명조",
+        "lang": "HANGUL"
+      },
+      {
+        "id": 0,
+        "face_name": "신명 견명조",
+        "lang": "LATIN"
+      },
+      {
+        "id": 1,
+        "face_name": "신명 디나루",
+        "lang": "LATIN"
+      },
+      {
+        "id": 2,
+        "face_name": "신명 신그래픽",
+        "lang": "LATIN"
+      },
+      {
+        "id": 3,
+        "face_name": "신명 중명조",
+        "lang": "LATIN"
+      },
+      {
+        "id": 4,
+        "face_name": "한양견명조",
+        "lang": "LATIN"
+      },
+      {
+        "id": 5,
+        "face_name": "한양신명조",
+        "lang": "LATIN"
+      },
+      {
+        "id": 0,
+        "face_name": "신명 견명조",
+        "lang": "HANJA"
+      },
+      {
+        "id": 1,
+        "face_name": "신명 중고딕",
+        "lang": "HANJA"
+      },
+      {
+        "id": 2,
+        "face_name": "신명 중명조",
+        "lang": "HANJA"
+      },
+      {
+        "id": 0,
+        "face_name": "신명 견명조",
+        "lang": "JAPANESE"
+      },
+      {
+        "id": 1,
+        "face_name": "신명 신명조",
+        "lang": "JAPANESE"
+      },
+      {
+        "id": 2,
+        "face_name": "신명 중고딕",
+        "lang": "JAPANESE"
+      },
+      {
+        "id": 0,
+        "face_name": "한양신명조",
+        "lang": "OTHER"
+      },
+      {
+        "id": 0,
+        "face_name": "신명 견명조",
+        "lang": "SYMBOL"
+      },
+      {
+        "id": 1,
+        "face_name": "한양신명조",
+        "lang": "SYMBOL"
+      },
+      {
+        "id": 2,
+        "face_name": "한양중고딕",
+        "lang": "SYMBOL"
+      },
+      {
+        "id": 0,
+        "face_name": "명조",
+        "lang": "USER"
+      }
+    ],
+    "char_shapes": [
+      {
+        "font_ref": {
+          "hangul": 3,
+          "latin": 5,
+          "hanja": 2,
+          "japanese": 1,
+          "other": 0,
+          "symbol": 1,
+          "user": 0
+        },
+        "height": 1150,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 95,
+        "spacing": -5,
+        "rel_sz": 100,
+        "char_offset": 0,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      },
+      {
+        "font_ref": {
+          "hangul": 0,
+          "latin": 0,
+          "hanja": 0,
+          "japanese": 0,
+          "other": 0,
+          "symbol": 0,
+          "user": 0
+        },
+        "height": 3300,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 90,
+        "spacing": 0,
+        "rel_sz": 100,
+        "char_offset": 0,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      },
+      {
+        "font_ref": {
+          "hangul": 1,
+          "latin": 1,
+          "hanja": 1,
+          "japanese": 2,
+          "other": 0,
+          "symbol": 2,
+          "user": 0
+        },
+        "height": 2100,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 85,
+        "spacing": -5,
+        "rel_sz": 100,
+        "char_offset": 15,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      },
+      {
+        "font_ref": {
+          "hangul": 2,
+          "latin": 2,
+          "hanja": 1,
+          "japanese": 2,
+          "other": 0,
+          "symbol": 2,
+          "user": 0
+        },
+        "height": 4000,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": true,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 90,
+        "spacing": 0,
+        "rel_sz": 100,
+        "char_offset": 10,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      },
+      {
+        "font_ref": {
+          "hangul": 3,
+          "latin": 5,
+          "hanja": 2,
+          "japanese": 1,
+          "other": 0,
+          "symbol": 1,
+          "user": 0
+        },
+        "height": 1150,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 95,
+        "spacing": -4,
+        "rel_sz": 100,
+        "char_offset": 0,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      },
+      {
+        "font_ref": {
+          "hangul": 3,
+          "latin": 3,
+          "hanja": 2,
+          "japanese": 1,
+          "other": 0,
+          "symbol": 1,
+          "user": 0
+        },
+        "height": 1150,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 95,
+        "spacing": -10,
+        "rel_sz": 100,
+        "char_offset": 0,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      },
+      {
+        "font_ref": {
+          "hangul": 3,
+          "latin": 4,
+          "hanja": 2,
+          "japanese": 1,
+          "other": 0,
+          "symbol": 1,
+          "user": 0
+        },
+        "height": 1350,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 95,
+        "spacing": -5,
+        "rel_sz": 100,
+        "char_offset": 5,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": 6
+      },
+      {
+        "font_ref": {
+          "hangul": 1,
+          "latin": 1,
+          "hanja": 1,
+          "japanese": 2,
+          "other": 0,
+          "symbol": 2,
+          "user": 0
+        },
+        "height": 2100,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 85,
+        "spacing": -5,
+        "rel_sz": 100,
+        "char_offset": 21,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      },
+      {
+        "font_ref": {
+          "hangul": 1,
+          "latin": 1,
+          "hanja": 1,
+          "japanese": 2,
+          "other": 0,
+          "symbol": 2,
+          "user": 0
+        },
+        "height": 2100,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 85,
+        "spacing": -1,
+        "rel_sz": 100,
+        "char_offset": 21,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      },
+      {
+        "font_ref": {
+          "hangul": 1,
+          "latin": 1,
+          "hanja": 1,
+          "japanese": 2,
+          "other": 0,
+          "symbol": 2,
+          "user": 0
+        },
+        "height": 2100,
+        "text_color": 0,
+        "shade_color": null,
+        "bold": false,
+        "italic": false,
+        "underline_type": "None",
+        "underline_color": null,
+        "strikeout_shape": "None",
+        "strikeout_color": null,
+        "vertical_position": "Normal",
+        "outline_type": "None",
+        "shadow_type": "None",
+        "emboss_type": "None",
+        "engrave_type": "None",
+        "emphasis": "None",
+        "ratio": 85,
+        "spacing": 0,
+        "rel_sz": 100,
+        "char_offset": 21,
+        "use_kerning": false,
+        "use_font_space": false,
+        "border_fill_id": null
+      }
+    ],
+    "para_shapes": [
+      {
+        "alignment": "Justify",
+        "margin_left": 0,
+        "margin_right": 0,
+        "indent": 0,
+        "spacing_before": 0,
+        "spacing_after": 0,
+        "line_spacing": 160,
+        "line_spacing_type": "Percentage",
+        "break_type": "None",
+        "keep_with_next": false,
+        "keep_lines_together": false,
+        "widow_orphan": true,
+        "break_latin_word": "KeepWord",
+        "break_non_latin_word": "KeepWord",
+        "border_fill_id": null,
+        "heading_type": "None",
+        "heading_id_ref": 0,
+        "heading_level": 0,
+        "checked": false,
+        "tab_pr_id_ref": 0,
+        "condense": 0
+      },
+      {
+        "alignment": "Center",
+        "margin_left": 0,
+        "margin_right": 0,
+        "indent": 0,
+        "spacing_before": 0,
+        "spacing_after": 0,
+        "line_spacing": 180,
+        "line_spacing_type": "Percentage",
+        "break_type": "None",
+        "keep_with_next": false,
+        "keep_lines_together": false,
+        "widow_orphan": true,
+        "break_latin_word": "KeepWord",
+        "break_non_latin_word": "BreakWord",
+        "border_fill_id": null,
+        "heading_type": "None",
+        "heading_id_ref": 0,
+        "heading_level": 0,
+        "checked": false,
+        "tab_pr_id_ref": 0,
+        "condense": 0
+      },
+      {
+        "alignment": "Justify",
+        "margin_left": 0,
+        "margin_right": 0,
+        "indent": 0,
+        "spacing_before": 0,
+        "spacing_after": 0,
+        "line_spacing": 165,
+        "line_spacing_type": "Percentage",
+        "break_type": "None",
+        "keep_with_next": false,
+        "keep_lines_together": false,
+        "widow_orphan": true,
+        "break_latin_word": "KeepWord",
+        "break_non_latin_word": "KeepWord",
+        "border_fill_id": null,
+        "heading_type": "None",
+        "heading_id_ref": 0,
+        "heading_level": 0,
+        "checked": false,
+        "tab_pr_id_ref": 1,
+        "condense": 0
+      },
+      {
+        "alignment": "Right",
+        "margin_left": 0,
+        "margin_right": 0,
+        "indent": 0,
+        "spacing_before": 0,
+        "spacing_after": 0,
+        "line_spacing": 165,
+        "line_spacing_type": "Percentage",
+        "break_type": "None",
+        "keep_with_next": false,
+        "keep_lines_together": false,
+        "widow_orphan": true,
+        "break_latin_word": "KeepWord",
+        "break_non_latin_word": "BreakWord",
+        "border_fill_id": null,
+        "heading_type": "None",
+        "heading_id_ref": 0,
+        "heading_level": 0,
+        "checked": false,
+        "tab_pr_id_ref": 1,
+        "condense": 0
+      },
+      {
+        "alignment": "Center",
+        "margin_left": 0,
+        "margin_right": 0,
+        "indent": 0,
+        "spacing_before": 0,
+        "spacing_after": 0,
+        "line_spacing": 180,
+        "line_spacing_type": "Percentage",
+        "break_type": "None",
+        "keep_with_next": false,
+        "keep_lines_together": false,
+        "widow_orphan": true,
+        "break_latin_word": "KeepWord",
+        "break_non_latin_word": "BreakWord",
+        "border_fill_id": null,
+        "heading_type": "None",
+        "heading_id_ref": 0,
+        "heading_level": 0,
+        "checked": false,
+        "tab_pr_id_ref": 0,
+        "condense": 0
+      },
+      {
+        "alignment": "Justify",
+        "margin_left": 2200,
+        "margin_right": 0,
+        "indent": -2260,
+        "spacing_before": 0,
+        "spacing_after": 0,
+        "line_spacing": 165,
+        "line_spacing_type": "Percentage",
+        "break_type": "None",
+        "keep_with_next": false,
+        "keep_lines_together": false,
+        "widow_orphan": true,
+        "break_latin_word": "KeepWord",
+        "break_non_latin_word": "KeepWord",
+        "border_fill_id": null,
+        "heading_type": "None",
+        "heading_id_ref": 0,
+        "heading_level": 0,
+        "checked": false,
+        "tab_pr_id_ref": 2,
+        "condense": 20
+      },
+      {
+        "alignment": "Left",
+        "margin_left": 0,
+        "margin_right": 0,
+        "indent": -3340,
+        "spacing_before": 0,
+        "spacing_after": 2200,
+        "line_spacing": 165,
+        "line_spacing_type": "Percentage",
+        "break_type": "None",
+        "keep_with_next": false,
+        "keep_lines_together": false,
+        "widow_orphan": true,
+        "break_latin_word": "KeepWord",
+        "break_non_latin_word": "BreakWord",
+        "border_fill_id": null,
+        "heading_type": "None",
+        "heading_id_ref": 0,
+        "heading_level": 0,
+        "checked": false,
+        "tab_pr_id_ref": 3,
+        "condense": 20
+      },
+      {
+        "alignment": "Center",
+        "margin_left": 0,
+        "margin_right": 0,
+        "indent": -3340,
+        "spacing_before": 0,
+        "spacing_after": 2200,
+        "line_spacing": 165,
+        "line_spacing_type": "Percentage",
+        "break_type": "None",
+        "keep_with_next": false,
+        "keep_lines_together": false,
+        "widow_orphan": true,
+        "break_latin_word": "KeepWord",
+        "break_non_latin_word": "BreakWord",
+        "border_fill_id": null,
+        "heading_type": "None",
+        "heading_id_ref": 0,
+        "heading_level": 0,
+        "checked": false,
+        "tab_pr_id_ref": 3,
+        "condense": 20
+      }
+    ],
+    "styles": [
+      {
+        "id": 0,
+        "style_type": "PARA",
+        "name": "바탕글",
+        "eng_name": "Normal",
+        "para_pr_id_ref": 0,
+        "char_pr_id_ref": 5,
+        "next_style_id_ref": 0,
+        "lang_id": 1042,
+        "lock_form": 0
+      },
+      {
+        "id": 1,
+        "style_type": "PARA",
+        "name": "문제내용",
+        "eng_name": "",
+        "para_pr_id_ref": 6,
+        "char_pr_id_ref": 4,
+        "next_style_id_ref": 1,
+        "lang_id": 1042,
+        "lock_form": 0
+      },
+      {
+        "id": 2,
+        "style_type": "CHAR",
+        "name": "문제 번호",
+        "eng_name": "",
+        "para_pr_id_ref": 0,
+        "char_pr_id_ref": 6,
+        "next_style_id_ref": 5,
+        "lang_id": 1042,
+        "lock_form": 0
+      },
+      {
+        "id": 3,
+        "style_type": "PARA",
+        "name": "객관식 번호",
+        "eng_name": "",
+        "para_pr_id_ref": 5,
+        "char_pr_id_ref": 0,
+        "next_style_id_ref": 3,
+        "lang_id": 1042,
+        "lock_form": 0
+      },
+      {
+        "id": 4,
+        "style_type": "PARA",
+        "name": "소제목",
+        "eng_name": "",
+        "para_pr_id_ref": 4,
+        "char_pr_id_ref": 2,
+        "next_style_id_ref": 4,
+        "lang_id": 1042,
+        "lock_form": 0
+      },
+      {
+        "id": 5,
+        "style_type": "PARA",
+        "name": "번호",
+        "eng_name": "",
+        "para_pr_id_ref": 2,
+        "char_pr_id_ref": 1,
+        "next_style_id_ref": 5,
+        "lang_id": 1042,
+        "lock_form": 0
+      },
+      {
+        "id": 6,
+        "style_type": "PARA",
+        "name": "대제목",
+        "eng_name": "",
+        "para_pr_id_ref": 1,
+        "char_pr_id_ref": 3,
+        "next_style_id_ref": 6,
+        "lang_id": 1042,
+        "lock_form": 0
+      }
+    ],
+    "border_fills": [
+      {
+        "id": 1,
+        "three_d": false,
+        "shadow": false,
+        "center_line": "NONE",
+        "left": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "right": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "top": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "bottom": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "diagonal": {
+          "line_type": "SOLID",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "slash_type": "NONE",
+        "back_slash_type": "NONE",
+        "slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "back_slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "fill": null,
+        "fill_hatch_style": null,
+        "gradient_fill": null,
+        "image_fill": null
+      },
+      {
+        "id": 2,
+        "three_d": false,
+        "shadow": false,
+        "center_line": "NONE",
+        "left": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "right": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "top": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "bottom": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "diagonal": {
+          "line_type": "SOLID",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "slash_type": "NONE",
+        "back_slash_type": "NONE",
+        "slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "back_slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "fill": {
+          "WinBrush": {
+            "face_color": "none",
+            "hatch_color": "#FF000000",
+            "alpha": "0"
+          }
+        },
+        "fill_hatch_style": null,
+        "gradient_fill": null,
+        "image_fill": null
+      },
+      {
+        "id": 3,
+        "three_d": false,
+        "shadow": false,
+        "center_line": "NONE",
+        "left": {
+          "line_type": "SOLID",
+          "width": "0.12 mm",
+          "color": "#000000"
+        },
+        "right": {
+          "line_type": "SOLID",
+          "width": "0.12 mm",
+          "color": "#000000"
+        },
+        "top": {
+          "line_type": "SOLID",
+          "width": "0.12 mm",
+          "color": "#000000"
+        },
+        "bottom": {
+          "line_type": "SOLID",
+          "width": "0.12 mm",
+          "color": "#000000"
+        },
+        "diagonal": {
+          "line_type": "SOLID",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "slash_type": "NONE",
+        "back_slash_type": "NONE",
+        "slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "back_slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "fill": null,
+        "fill_hatch_style": null,
+        "gradient_fill": null,
+        "image_fill": null
+      },
+      {
+        "id": 4,
+        "three_d": false,
+        "shadow": false,
+        "center_line": "NONE",
+        "left": {
+          "line_type": "NONE",
+          "width": "0.12 mm",
+          "color": "#000000"
+        },
+        "right": {
+          "line_type": "NONE",
+          "width": "0.12 mm",
+          "color": "#000000"
+        },
+        "top": {
+          "line_type": "NONE",
+          "width": "0.12 mm",
+          "color": "#000000"
+        },
+        "bottom": {
+          "line_type": "SOLID",
+          "width": "0.4 mm",
+          "color": "#000000"
+        },
+        "diagonal": {
+          "line_type": "SOLID",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "slash_type": "NONE",
+        "back_slash_type": "NONE",
+        "slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "back_slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "fill": null,
+        "fill_hatch_style": null,
+        "gradient_fill": null,
+        "image_fill": null
+      },
+      {
+        "id": 5,
+        "three_d": false,
+        "shadow": false,
+        "center_line": "NONE",
+        "left": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#2525E8"
+        },
+        "right": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#2525E8"
+        },
+        "top": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#2525E8"
+        },
+        "bottom": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#2525E8"
+        },
+        "diagonal": {
+          "line_type": "SOLID",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "slash_type": "NONE",
+        "back_slash_type": "NONE",
+        "slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "back_slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "fill": null,
+        "fill_hatch_style": null,
+        "gradient_fill": null,
+        "image_fill": null
+      },
+      {
+        "id": 6,
+        "three_d": false,
+        "shadow": false,
+        "center_line": "NONE",
+        "left": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "right": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "top": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "bottom": {
+          "line_type": "NONE",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "diagonal": {
+          "line_type": "SOLID",
+          "width": "0.1 mm",
+          "color": "#000000"
+        },
+        "slash_type": "NONE",
+        "back_slash_type": "NONE",
+        "slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "back_slash": {
+          "border_type": "NONE",
+          "crooked": false,
+          "is_counter": false
+        },
+        "fill": {
+          "WinBrush": {
+            "face_color": "none",
+            "hatch_color": "#FFFFFF",
+            "alpha": "0"
+          }
+        },
+        "fill_hatch_style": null,
+        "gradient_fill": null,
+        "image_fill": null
+      }
+    ],
+    "numberings": [
+      {
+        "id": 1,
+        "start": 0,
+        "levels": [
+          {
+            "start": 1,
+            "level": 1,
+            "num_format": "Digit",
+            "text": "^1.",
+            "checkable": false
+          },
+          {
+            "start": 1,
+            "level": 2,
+            "num_format": "HangulSyllable",
+            "text": "^2.",
+            "checkable": false
+          },
+          {
+            "start": 1,
+            "level": 3,
+            "num_format": "Digit",
+            "text": "^3)",
+            "checkable": false
+          },
+          {
+            "start": 1,
+            "level": 4,
+            "num_format": "HangulSyllable",
+            "text": "^4)",
+            "checkable": false
+          },
+          {
+            "start": 1,
+            "level": 5,
+            "num_format": "Digit",
+            "text": "(^5)",
+            "checkable": false
+          },
+          {
+            "start": 1,
+            "level": 6,
+            "num_format": "HangulSyllable",
+            "text": "(^6)",
+            "checkable": false
+          },
+          {
+            "start": 1,
+            "level": 7,
+            "num_format": "CircledDigit",
+            "text": "^7",
+            "checkable": true
+          },
+          {
+            "start": 1,
+            "level": 8,
+            "num_format": "Digit",
+            "text": "",
+            "checkable": false
+          },
+          {
+            "start": 1,
+            "level": 9,
+            "num_format": "Digit",
+            "text": "",
+            "checkable": false
+          },
+          {
+            "start": 1,
+            "level": 10,
+            "num_format": "Digit",
+            "text": "",
+            "checkable": false
+          }
+        ]
+      }
+    ],
+    "bullets": [],
+    "tabs": [
+      {
+        "id": 0,
+        "auto_tab_left": false,
+        "auto_tab_right": false
+      },
+      {
+        "id": 1,
+        "auto_tab_left": true,
+        "auto_tab_right": false
+      },
+      {
+        "id": 2,
+        "auto_tab_left": false,
+        "auto_tab_right": false,
+        "stops": [
+          {
+            "position": 7256,
+            "align": "Left",
+            "leader": "NONE"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "auto_tab_left": false,
+        "auto_tab_right": true,
+        "stops": [
+          {
+            "position": 1700,
+            "align": "Left",
+            "leader": "NONE"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,288 +1,230 @@
-import { ArrowRight } from "lucide-react";
 import { motion } from "motion/react";
+import type { CSSProperties } from "react";
 import { useNavigate } from "react-router";
 
-import { useAuth } from "../context/AuthContext";
+import homeOcrResultImage from "@/assets/home/home-ocr-result.png";
+import homeSourceProblemImage from "@/assets/home/home-source-problem.png";
+
+import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { Button } from "./ui/button";
 
-type UsageItem = {
-  label: string;
-  body: string;
-};
-
-type LandingBand = {
-  step: string;
+type LandingCard = {
+  badge: string;
   title: string;
-  body: string;
-  artifactLabel: string;
-  artifactNote: string;
-  accentClassName: string;
+  description: string;
+  imageAlt: string;
+  imageSrc: string;
 };
 
-const usageItems: UsageItem[] = [
-  {
-    label: "OCR·해설은 본인 OpenAI API key로 처리",
-    body: "문항 인식과 해설 생성은 본인 키로 돌리고, 서비스는 작업 흐름만 정돈합니다.",
-  },
-  {
-    label: "이미지 생성은 충전한 크레딧으로 진행",
-    body: "로그인 후 크레딧을 연결하면 이미지 생성과 전체 자동 처리를 바로 이어갈 수 있습니다.",
-  },
-];
-
-const landingBands: LandingBand[] = [
-  {
-    step: "01",
-    title: "사진을 올리면 정리됩니다.",
-    body: "시험지, 프린트물, 풀이를 올리면 문항과 해설, 이미지가 한 흐름으로 정돈됩니다.",
-    artifactLabel: "Source Sheet",
-    artifactNote: "Photo to structure",
-    accentClassName: "from-black/10 via-black/0 to-transparent",
-  },
-  {
-    step: "02",
-    title: "결과를 보고 다듬습니다.",
-    body: "자동으로 정리된 결과를 검토하고, 필요한 부분만 짧게 수정해 문서 톤을 맞춥니다.",
-    artifactLabel: "Review Pass",
-    artifactNote: "Quiet adjustments",
-    accentClassName: "from-black/0 via-black/10 to-transparent",
-  },
-  {
-    step: "03",
-    title: "끝은 한글 문서입니다.",
-    body: "마지막에는 HWPX로 내보내어 바로 배포할 수 있는 결과물로 마무리합니다.",
-    artifactLabel: "HWPX Output",
-    artifactNote: "Ready to hand off",
-    accentClassName: "from-transparent via-black/10 to-black/0",
-  },
-];
-
-type HomeHeaderProps = {
-  accountLabel: string;
-  onAccount: () => void;
-  onHome: () => void;
-};
-
-/** 공개 홈 상단의 조용한 네비게이션을 렌더링한다. */
-function HomeHeader({ accountLabel, onAccount, onHome }: HomeHeaderProps) {
-  return (
-    <header className="sticky top-0 z-20 border-b border-[var(--landing-border)] bg-[color:rgba(244,239,230,0.84)] backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
-        <button onClick={onHome} className="flex items-center gap-3 text-left">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--landing-border-strong)] text-[11px] uppercase tracking-[0.3em] text-[var(--landing-ink)]">
-            M
-          </div>
-          <div className="space-y-1">
-            <p className="landing-heading text-[21px] font-semibold leading-none tracking-[-0.035em] text-[var(--landing-ink)]">MATH OCR</p>
-            <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--landing-ink-soft)]">Image to HWPX</p>
-          </div>
-        </button>
-
-        <Button
-          variant="outline"
-          onClick={onAccount}
-          className="h-10 rounded-full border-[var(--landing-border)] bg-transparent px-4 text-[13px] font-medium text-[var(--landing-ink)] shadow-none hover:bg-black/[0.03]"
-        >
-          {accountLabel}
-        </Button>
-      </div>
-    </header>
-  );
-}
-
-type HeroSectionProps = {
-  onNewJob: () => void;
+type ActionButtonsProps = {
+  alignCenter?: boolean;
   onPricing: () => void;
+  onTry: () => void;
 };
 
-/** 공개 홈 첫 화면의 핵심 카피와 CTA를 렌더링한다. */
-function HeroSection({ onNewJob, onPricing }: HeroSectionProps) {
+type LandingCardImageProps = {
+  card: LandingCard;
+};
+
+type LandingCardPanelProps = {
+  card: LandingCard;
+  index: number;
+};
+
+const heroWordRows = [
+  ["수학", "수식을", "HWPX로,"],
+  ["완벽한", "감각으로."],
+];
+
+const middleFeatureImage =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuAUbOoVIra_wGGc0Y8fJTDtAOB9SyewR6KJw8YY4wtSdtUGyuuGDuHn189WHLiEKF0DQOAKabwg3dkUTBnFrJZYXKEIZix6MT8pS9aRoEV3kxHqe70hAuaDfhyhVrdfdJ_R-bRa1DE976ej6IJMY4DON08gdbhmeJF3c-jZauCXcfQmB6N96Vz72LIXZ06_8Ad64iZLdDHBRFCnLuPgjyhpateoHa88_Flu2s7X43bR07VocdjO98rKU8l5LxursfAiKrO8pWbVjLE";
+
+const landingCards: LandingCard[] = [
+  {
+    badge: "원본 사진",
+    title: "사진을 올리세요",
+    description:
+      "어떤 필기나 복잡한 인쇄물이라도 원본의 의도를 완벽하게 파악합니다. 수학적 구조를 이해하는 인공지능이 텍스트 이상의 의미를 읽어냅니다.",
+    imageAlt: "원본 이미지",
+    imageSrc: homeSourceProblemImage,
+  },
+  {
+    badge: "출력 결과",
+    title: "결과를 확인하세요",
+    description:
+      "복잡한 적분이나 분수 등 수식 형태를 hwpx 형식으로 즉각 변환하여 한글에서 편집 가능한 상태로 제공합니다.",
+    imageAlt: "OCR 결과",
+    imageSrc: homeOcrResultImage,
+  },
+];
+
+const primaryButtonClassName =
+  "h-12 rounded-full bg-white px-7 text-[13px] font-semibold tracking-[0.16em] text-black hover:bg-neutral-200";
+
+const secondaryButtonClassName =
+  "h-12 rounded-full border border-[var(--home-border-strong)] bg-transparent px-7 text-[13px] font-semibold text-white hover:bg-white hover:text-black";
+
+/** 모션 컴포넌트에 공통으로 사용할 진입 애니메이션 속성을 만든다. */
+function getRevealMotion(delay = 0, distance = 24) {
+  return {
+    initial: { opacity: 0, y: distance },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.85, delay, ease: [0.16, 1, 0.3, 1] },
+  } as const;
+}
+
+/** 헤더와 하단 CTA에서 공통으로 쓰는 버튼 그룹을 렌더링한다. */
+function ActionButtons({ alignCenter = false, onPricing, onTry }: ActionButtonsProps) {
+  const wrapperClassName = alignCenter ? "justify-center" : "justify-center md:justify-start";
+
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55 }}
-      className="pt-8 lg:pt-14"
-    >
-      <p className="text-[11px] uppercase tracking-[0.34em] text-[var(--landing-ink-soft)]">Editorial OCR Flow</p>
-      <h1 className="mt-7 max-w-5xl landing-heading landing-tracking-display text-[clamp(2.7rem,11vw,6.1rem)] font-semibold leading-[0.92] text-[var(--landing-ink)]">
-        문제 사진이 곧,{" "}
-        <span className="block">한글 문서가 됩니다.</span>
-      </h1>
-      <p className="mt-8 max-w-2xl text-[16px] leading-7 text-[var(--landing-ink-muted)] sm:text-[18px]">
-        <span className="block">로그인 없이 첫 작업을 시작하고,</span>
-        <span className="block">사진에서 HWPX까지 한 흐름으로 이어갑니다.</span>
-      </p>
-      <div className="mt-10 flex flex-wrap gap-3">
-        <Button
-          onClick={onNewJob}
-          className="h-11 rounded-full bg-[var(--landing-ink)] px-5 text-[13px] font-medium text-[var(--landing-background)] hover:bg-black"
-        >
-          새 작업 시작
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onPricing}
-          className="h-11 rounded-full border-[var(--landing-border)] bg-transparent px-5 text-[13px] font-medium text-[var(--landing-ink)] shadow-none hover:bg-black/[0.03]"
-        >
-          가격 보기
-        </Button>
-      </div>
-    </motion.section>
+    <div className={`flex flex-col gap-4 sm:flex-row ${wrapperClassName}`}>
+      <Button onClick={onTry} className={primaryButtonClassName}>
+        사용해보기
+      </Button>
+      <Button variant="outline" onClick={onPricing} className={secondaryButtonClassName}>
+        가격 보기
+      </Button>
+    </div>
   );
 }
 
-/** 공개 홈의 추상적 문서 오브제를 렌더링한다. */
-function HeroArtifact() {
+/** 풀스크린 히어로 섹션과 대표 CTA를 렌더링한다. */
+function HeroSection({ onPricing, onTry }: ActionButtonsProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55, delay: 0.08 }}
-      className="relative overflow-hidden rounded-[34px] border border-[var(--landing-border)] bg-[linear-gradient(145deg,rgba(255,255,255,0.78),rgba(255,255,255,0.46))] p-7"
-    >
-      <div className="absolute inset-x-8 top-7 h-px bg-[var(--landing-border)]" />
-      <div className="absolute -right-10 top-14 h-44 w-44 rounded-full border border-[var(--landing-border)]" />
-      <div className="absolute left-12 top-16 h-52 w-40 rounded-[26px] border border-[var(--landing-border)] bg-[rgba(255,255,255,0.58)]" />
-      <div className="absolute right-8 top-24 h-48 w-40 rounded-[30px] border border-[var(--landing-border)] bg-[rgba(20,17,13,0.04)]" />
-      <div className="relative flex min-h-[280px] flex-col justify-between">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-[var(--landing-ink-soft)]">Quiet Object</p>
-          <p className="mt-5 landing-heading text-[52px] font-semibold leading-none tracking-[-0.05em] text-[var(--landing-ink)]">OCR</p>
-          <p className="mt-2 text-[13px] leading-6 text-[var(--landing-ink-muted)]">Photo in. Structure first.</p>
-        </div>
-        <div className="ml-auto w-full max-w-[220px] rounded-[26px] border border-[var(--landing-border)] bg-[rgba(255,255,255,0.62)] p-5">
-          <p className="landing-heading text-[39px] font-semibold leading-none tracking-[-0.05em] text-[var(--landing-ink)]">HWPX</p>
-          <p className="mt-2 text-[12px] uppercase tracking-[0.22em] text-[var(--landing-ink-soft)]">Document Out</p>
-        </div>
-      </div>
-    </motion.div>
+    <section className="relative flex min-h-screen items-center justify-center px-6 py-20 text-center">
+      <div className="glow-bg left-1/2 top-10 h-[34rem] w-[34rem] -translate-x-1/2" />
+      <motion.div {...getRevealMotion(0.05, 18)} className="reveal relative mx-auto flex max-w-6xl flex-col items-center gap-12">
+        <h1 className="hero-title text-[clamp(3.2rem,11vw,9rem)] font-black leading-[0.94] text-[var(--home-ink)]">
+          {heroWordRows.map((wordRow, rowIndex) => (
+            <span key={wordRow.join("-")} className="block">
+              {wordRow.map((word, wordIndex) => (
+                <span
+                  key={word}
+                  className="hero-word mr-[0.18em] inline-block last:mr-0"
+                  style={{ "--word-delay": `${0.18 + rowIndex * 0.24 + wordIndex * 0.1}s` } as CSSProperties}
+                >
+                  {word}
+                </span>
+              ))}
+            </span>
+          ))}
+        </h1>
+        <ActionButtons onTry={onTry} onPricing={onPricing} alignCenter />
+      </motion.div>
+    </section>
   );
 }
 
-/** 공개 홈의 사용 방식을 세로 정보 블록으로 요약한다. */
-function UsagePanel() {
+/** 중앙 하이라이트 섹션에 외부 대표 이미지를 안전하게 배치한다. */
+function MainFeatureSection() {
   return (
-    <section className="rounded-[34px] border border-[var(--landing-border)] bg-[rgba(255,255,255,0.54)] p-6">
-      <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--landing-ink-soft)]">사용 방식</p>
-      <div className="mt-6 divide-y divide-[var(--landing-border)]">
-        {usageItems.map((item, index) => (
-          <div key={item.label} className="grid gap-3 py-4 sm:grid-cols-[54px_1fr]">
-            <p className="landing-heading text-[27px] font-semibold leading-none tracking-[-0.04em] text-[var(--landing-ink)]">{`0${index + 1}`}</p>
-            <div className="space-y-2">
-              <p className="text-[15px] leading-6 text-[var(--landing-ink)]">{item.label}</p>
-              <p className="text-[13px] leading-6 text-[var(--landing-ink-muted)]">{item.body}</p>
+    <section className="w-full px-6 pb-28">
+      <motion.div {...getRevealMotion(0.05)} className="cosmos-card reveal mx-auto max-w-[1800px] overflow-hidden rounded-[42px] border border-[var(--home-border)] bg-[rgba(7,10,12,0.92)]">
+        <div className="glow-bg left-1/2 top-1/2 h-[30rem] w-[30rem] -translate-x-1/2 -translate-y-1/2" />
+        <div className="relative overflow-hidden border-y border-white/10">
+          <ImageWithFallback
+            alt="디지털 작업 공간"
+            src={middleFeatureImage}
+            className="h-[420px] w-full object-cover opacity-40 grayscale contrast-125"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/48 px-8 text-center">
+            <div className="max-w-3xl space-y-8">
+              <h2 className="text-[clamp(2.2rem,5vw,4.5rem)] font-black leading-[1.04] tracking-[-0.05em] text-white">
+                수학문제 직접 타이핑하느라
+                <span className="block">힘들지 않았나요?</span>
+              </h2>
+              <p className="text-sm font-medium leading-8 tracking-[0.08em] text-neutral-300 md:text-base">사진만 찍으면 바로 출력가능한 한글파일로 변환해줍니다.</p>
             </div>
           </div>
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+/** 카드 이미지를 원본 비율이 유지되도록 안전하게 렌더링한다. */
+function LandingCardImage({ card }: LandingCardImageProps) {
+  const imageClassName = "h-80 w-full object-contain p-4 opacity-90 transition-opacity duration-500 group-hover:opacity-100";
+
+  return <img alt={card.imageAlt} src={card.imageSrc} className={imageClassName} />;
+}
+
+/** 랜딩 카드 한 장의 이미지와 설명을 렌더링한다. */
+function LandingCardPanel({ card, index }: LandingCardPanelProps) {
+  return (
+    <motion.article {...getRevealMotion(0.08 + index * 0.08)} className="cosmos-card reveal rounded-[32px] border border-[var(--home-border)] bg-[var(--home-surface)] p-4 sm:p-5">
+      <div className="group relative overflow-hidden rounded-[26px] border border-[var(--home-border)] bg-black/70">
+        <div className="glow-bg" />
+        <LandingCardImage card={card} />
+        <span className="absolute left-5 top-5 rounded-full border border-white/12 bg-black/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70 backdrop-blur">{card.badge}</span>
+      </div>
+      <div className="mt-6 space-y-4 px-1 pb-1">
+        <h3 className="text-[1.65rem] font-black leading-[1.08] tracking-[-0.05em] text-[var(--home-ink)]">{card.title}</h3>
+        <p className="text-sm leading-7 text-[var(--home-ink-muted)]">{card.description}</p>
+      </div>
+    </motion.article>
+  );
+}
+
+/** 세 장의 핵심 카드로 업로드부터 결과 확인까지의 흐름을 보여준다. */
+function LandingCardsSection() {
+  return (
+    <section className="mx-auto max-w-[1400px] px-6 pb-32">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 xl:gap-10">
+        {landingCards.map((card, index) => (
+          <LandingCardPanel key={card.title} card={card} index={index} />
         ))}
       </div>
     </section>
   );
 }
 
-/** 공개 홈의 보조 하이라이트 메시지를 렌더링한다. */
-function HighlightPanel() {
+/** 하단 전환 섹션에서 동일한 CTA를 다시 노출한다. */
+function ClosingSection({ onPricing, onTry }: ActionButtonsProps) {
   return (
-    <section className="rounded-[34px] border border-[var(--landing-border-strong)] bg-[var(--landing-ink)] p-6 text-[var(--landing-background)]">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-white/45">출력 감각</p>
-      <h2 className="mt-5 landing-heading landing-tracking-title text-[31px] font-semibold leading-[1.05]">
-        붙여넣기보다,{" "}
-        <span className="block">문서에 가깝게.</span>
-      </h2>
-      <p className="mt-4 text-[14px] leading-7 text-white/68">
-        캡처를 옮겨 붙인 결과가 아니라, 바로 전달 가능한 문서의 결을 남기도록 화면을 정리합니다.
-      </p>
+    <section className="relative border-t border-[var(--home-border)] px-6 py-32 text-center">
+      <div className="glow-bg left-1/2 top-1/2 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2" />
+      <motion.div {...getRevealMotion(0.05)} className="reveal relative mx-auto flex max-w-5xl flex-col items-center gap-8">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.72em] text-[var(--home-ink-soft)]">사진만 찍으면 끝이니까</span>
+        <h2 className="text-[clamp(2.6rem,6vw,5.8rem)] font-black leading-[1.02] tracking-[-0.05em] text-[var(--home-ink)]">
+          당신의 작업 방식을
+          <span className="block">혁신할 준비가 되셨나요?</span>
+        </h2>
+        <ActionButtons onTry={onTry} onPricing={onPricing} alignCenter />
+      </motion.div>
     </section>
   );
 }
 
-type BandArtifactProps = Pick<LandingBand, "accentClassName" | "artifactLabel" | "artifactNote">;
-
-/** 정보 밴드 안의 종이형 시각 요소를 렌더링한다. */
-function BandArtifact({ accentClassName, artifactLabel, artifactNote }: BandArtifactProps) {
+/** 공개 홈 마지막 영역에 서비스명과 안내 문구를 배치한다. */
+function HomeFooter() {
   return (
-    <div className="relative min-h-[220px] overflow-hidden rounded-[30px] border border-[var(--landing-border)] bg-[rgba(255,255,255,0.56)]">
-      <div className={`absolute inset-0 bg-[linear-gradient(135deg,var(--tw-gradient-stops))] ${accentClassName}`} />
-      <div className="absolute left-6 top-6 h-32 w-24 rounded-[20px] border border-[var(--landing-border)] bg-[rgba(255,255,255,0.7)]" />
-      <div className="absolute right-6 top-12 h-36 w-28 rounded-[24px] border border-[var(--landing-border)] bg-[rgba(255,255,255,0.44)]" />
-      <div className="absolute bottom-6 left-6 right-6 rounded-[22px] border border-[var(--landing-border)] bg-[rgba(20,17,13,0.04)] p-5">
-        <p className="landing-heading text-[30px] font-semibold leading-none tracking-[-0.045em] text-[var(--landing-ink)]">{artifactLabel}</p>
-        <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-[var(--landing-ink-soft)]">{artifactNote}</p>
-      </div>
-    </div>
+    <footer className="border-t border-[var(--home-border)] px-6 py-14">
+      <motion.div {...getRevealMotion(0.05, 12)} className="reveal mx-auto flex max-w-[1800px] flex-col gap-6 text-[var(--home-ink-soft)] md:flex-row md:items-center md:justify-between">
+        <p className="text-sm font-semibold uppercase tracking-[0.34em] text-[var(--home-ink)]">Math OCR</p>
+        <div className="flex flex-wrap gap-x-10 gap-y-3 text-[11px] font-medium uppercase tracking-[0.28em]">
+          <span>개인정보 처리방침</span>
+          <span>이용약관</span>
+        </div>
+      </motion.div>
+    </footer>
   );
 }
 
-type LandingBandCardProps = {
-  band: LandingBand;
-  index: number;
-};
-
-/** 공개 홈의 단계별 정보 밴드를 렌더링한다. */
-function LandingBandCard({ band, index }: LandingBandCardProps) {
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay: 0.14 + index * 0.08 }}
-      className="grid gap-8 rounded-[36px] border border-[var(--landing-border)] bg-[rgba(255,255,255,0.58)] p-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center lg:p-10"
-    >
-      <div>
-        <p className="text-[12px] uppercase tracking-[0.28em] text-[var(--landing-ink-soft)]">{`Step ${band.step}`}</p>
-        <h3 className="mt-4 landing-heading landing-tracking-title text-[clamp(2rem,4vw,3.5rem)] font-semibold leading-[1.02] text-[var(--landing-ink)]">
-          {band.title}
-        </h3>
-        <p className="mt-5 max-w-xl text-[15px] leading-7 text-[var(--landing-ink-muted)]">{band.body}</p>
-      </div>
-      <BandArtifact
-        accentClassName={band.accentClassName}
-        artifactLabel={band.artifactLabel}
-        artifactNote={band.artifactNote}
-      />
-    </motion.article>
-  );
-}
-
-/** 공개 홈의 전체 랜딩 구조를 조합한다. */
+/** 공개 홈 랜딩 페이지 전체를 다크 풀스크린 구조로 조합한다. */
 export function PublicHomePage() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const accountLabel = isAuthenticated ? "내 작업실" : "로그인";
-  const accountTarget = isAuthenticated ? "/workspace" : "/login";
 
   return (
-    <div className="min-h-screen bg-[var(--landing-background)] text-[var(--landing-ink)]">
-      <HomeHeader accountLabel={accountLabel} onAccount={() => navigate(accountTarget)} onHome={() => navigate("/")} />
-      <main className="mx-auto flex max-w-7xl flex-col gap-14 px-5 pb-16 lg:px-8 lg:pb-24">
-        <section className="grid gap-10 border-b border-[var(--landing-border)] pb-16 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:gap-14 lg:pb-20">
-          <HeroSection onNewJob={() => navigate("/new")} onPricing={() => navigate("/pricing")} />
-          <div className="grid gap-4 lg:pt-16">
-            <HeroArtifact />
-            <UsagePanel />
-            <HighlightPanel />
-          </div>
-        </section>
-
-        <section className="space-y-6">
-          <div className="flex flex-col gap-4 border-b border-[var(--landing-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--landing-ink-soft)]">How It Moves</p>
-              <h2 className="mt-4 max-w-3xl landing-heading landing-tracking-title text-[clamp(2.2rem,5vw,4.2rem)] font-semibold leading-[1.02] text-[var(--landing-ink)]">
-                길게 설명하지 않아도{" "}
-                <span className="block">흐름은 분명합니다.</span>
-              </h2>
-            </div>
-            <p className="max-w-md text-[14px] leading-7 text-[var(--landing-ink-muted)]">
-              업로드, 검토, HWPX 출력까지 공개 홈에서 보여주는 흐름만 더 조용하고 크게 드러냅니다.
-            </p>
-          </div>
-
-          {landingBands.map((band, index) => (
-            <LandingBandCard key={band.step} band={band} index={index} />
-          ))}
-        </section>
+    <div className="public-home-page min-h-screen overflow-hidden bg-[var(--home-background)] text-[var(--home-ink)] selection:bg-white selection:text-black">
+      <main className="relative">
+        <HeroSection onTry={() => navigate("/new")} onPricing={() => navigate("/pricing")} />
+        <MainFeatureSection />
+        <LandingCardsSection />
+        <ClosingSection onTry={() => navigate("/new")} onPricing={() => navigate("/pricing")} />
       </main>
+      <HomeFooter />
     </div>
   );
 }

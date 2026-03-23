@@ -1,0 +1,254 @@
+{
+  "tools": [
+    {
+      "name": "hwpforge_convert",
+      "description": "Convert Markdown to a Korean HWPX document (KS X 6101 standard). Supports GFM tables, images, headings, and Korean typography. Returns the output file path and document summary.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "ConvertRequest",
+        "description": "Request parameters for `hwpforge_convert`.",
+        "type": "object",
+        "properties": {
+          "markdown": {
+            "description": "Markdown file path or inline content.",
+            "type": "string"
+          },
+          "is_file": {
+            "description": "Whether `markdown` is a file path (true) or inline content (false). Default: true.",
+            "type": "boolean",
+            "default": true
+          },
+          "output_path": {
+            "description": "Output HWPX file path. Must end with `.hwpx`.",
+            "type": "string"
+          },
+          "preset": {
+            "description": "Style preset name. Default: \"default\".",
+            "type": "string",
+            "default": "default"
+          }
+        },
+        "required": [
+          "markdown",
+          "output_path"
+        ]
+      }
+    },
+    {
+      "name": "hwpforge_from_json",
+      "description": "Create an HWPX document directly from a JSON structure (ExportedDocument schema). Use when building documents programmatically without Markdown. Get the schema from hwpforge_to_json output. For large documents, prefer hwpforge_to_json + hwpforge_patch workflow with file paths instead of inline JSON.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "FromJsonRequest",
+        "description": "Request parameters for `hwpforge_from_json`.",
+        "type": "object",
+        "properties": {
+          "structure": {
+            "description": "JSON string matching the ExportedDocument schema.\nUse hwpforge_to_json output as a reference for the structure.",
+            "type": "string"
+          },
+          "output_path": {
+            "description": "Output HWPX file path. Must end with `.hwpx`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "structure",
+          "output_path"
+        ]
+      }
+    },
+    {
+      "name": "hwpforge_inspect",
+      "description": "Inspect an HWPX document structure. Returns section count, paragraph counts, tables, images, charts, headers, footers, and page numbers per section.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "InspectRequest",
+        "description": "Request parameters for `hwpforge_inspect`.",
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "description": "Path to the HWPX file to inspect.",
+            "type": "string"
+          },
+          "styles": {
+            "description": "Reserved for future use. When true, will include style details. Currently ignored.",
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    {
+      "name": "hwpforge_patch",
+      "description": "Replace a section in an existing HWPX file with edited JSON data. Preserves images and styles from the base file. Use after hwpforge_to_json for surgical edits.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "PatchRequest",
+        "description": "Request parameters for `hwpforge_patch`.",
+        "type": "object",
+        "properties": {
+          "base_path": {
+            "description": "Path to the base HWPX file.",
+            "type": "string"
+          },
+          "section": {
+            "description": "Section index to replace (0-based).",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "section_json_path": {
+            "description": "Path to the JSON file containing the replacement section.",
+            "type": "string"
+          },
+          "output_path": {
+            "description": "Output HWPX file path.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_path",
+          "section",
+          "section_json_path",
+          "output_path"
+        ]
+      }
+    },
+    {
+      "name": "hwpforge_restyle",
+      "description": "Apply a different style template (preset) to an existing HWPX document. Replaces fonts and paragraph styles while preserving document content and structure. Use hwpforge_templates to discover available presets.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "RestyleRequest",
+        "description": "Request parameters for `hwpforge_restyle`.",
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "description": "Path to the source HWPX file.",
+            "type": "string"
+          },
+          "preset": {
+            "description": "Style preset name to apply. Use hwpforge_templates to see available presets.",
+            "type": "string"
+          },
+          "output_path": {
+            "description": "Output HWPX file path. Must end with `.hwpx`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_path",
+          "preset",
+          "output_path"
+        ]
+      }
+    },
+    {
+      "name": "hwpforge_templates",
+      "description": "List available style presets (templates) for HWPX document generation. Returns preset names, descriptions, fonts, and page sizes. Call before hwpforge_convert to choose a preset.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "TemplatesRequest",
+        "description": "Request parameters for `hwpforge_templates`.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Filter by preset name. Omit to list all presets.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        }
+      }
+    },
+    {
+      "name": "hwpforge_to_json",
+      "description": "Export HWPX to JSON for editing. Use section parameter (0-based) to extract a single section for token efficiency. Returns JSON inline or writes to file.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "ToJsonRequest",
+        "description": "Request parameters for `hwpforge_to_json`.",
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "description": "Path to the HWPX file to export.",
+            "type": "string"
+          },
+          "section": {
+            "description": "Extract only a specific section (0-based index). Omit for full document.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "output_path": {
+            "description": "Output JSON file path. If omitted, returns JSON inline.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    {
+      "name": "hwpforge_to_md",
+      "description": "Convert an HWPX document to Markdown. Extracts text, headings, tables, and images from the HWPX file. Returns the path to the generated Markdown file and any extracted image files.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "ToMdRequest",
+        "description": "Request parameters for `hwpforge_to_md`.",
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "description": "Path to the HWPX file to convert.",
+            "type": "string"
+          },
+          "output_dir": {
+            "description": "Output directory for the generated Markdown and image files.\nDefaults to the same directory as the input file.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    {
+      "name": "hwpforge_validate",
+      "description": "Validate an HWPX file structure and integrity. Returns validation status, section/paragraph counts, and any issues found. Use to verify files before editing or after generation.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "ValidateRequest",
+        "description": "Request parameters for `hwpforge_validate`.",
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "description": "Path to the HWPX file to validate.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    }
+  ]
+}

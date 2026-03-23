@@ -15,6 +15,12 @@ from zoneinfo import ZoneInfo
 from lxml import etree
 
 from app.config import get_settings
+from app.pipeline.hwpforge_roundtrip import (
+    HwpForgeRoundtripError,
+    build_section_via_hwpforge,
+    inspect_and_validate_hwpx_via_hwpforge,
+    roundtrip_section_via_hwpforge,
+)
 from app.pipeline.hwpx_reference_renderer import render_section_from_reference
 from app.pipeline.schema import JobPipelineContext
 
@@ -225,13 +231,17 @@ def _load_hwpx_runtime_modules(scripts_dir: Path) -> HwpxRuntimeModules:
 
 
 def _resolve_canonical_template_path(app_root: Path = ROOT) -> Path:
-    """repo templates 아래 canonical style guide 경로를 반환한다."""
-    canonical_path = app_root.parent / "templates" / CANONICAL_TEMPLATE_NAME
-    if canonical_path.exists():
-        return canonical_path
+    """로컬 저장소와 컨테이너 번들을 모두 고려해 canonical template를 찾는다."""
+    candidates = [
+        app_root.parent / "templates" / CANONICAL_TEMPLATE_NAME,
+        app_root / "templates" / CANONICAL_TEMPLATE_NAME,
+    ]
+    for canonical_path in dict.fromkeys(candidates):
+        if canonical_path.exists():
+            return canonical_path
     raise HwpxTemplateError(
         TEMPLATE_CANONICAL_MISSING_CODE,
-        f"canonical template missing: {canonical_path}",
+        "canonical template missing: " + "; ".join(str(path) for path in candidates),
     )
 
 
@@ -271,54 +281,186 @@ def export_hwpx(root_path: Path, job: JobPipelineContext, export_dir: Path) -> P
     context = _build_render_context()
     warnings = QualityWarningCollector()
     try:
-        runtime_paths = _resolve_hwpx_runtime(
-            app_root=ROOT,
-            configured_skill_dir=get_settings(ROOT).hwpx_skill_dir,
-        )
+        settings = get_settings(ROOT)
+        runtime_paths = _resolve_hwpx_runtime(app_root=ROOT, configured_skill_dir=settings.hwpx_skill_dir)
         canonical_template_path = _resolve_canonical_template_path(ROOT)
         runtime_modules = _load_hwpx_runtime_modules(runtime_paths.scripts_dir)
         export_dir.mkdir(parents=True, exist_ok=True)
         hwpx_path = export_dir / f"{job.job_id}.hwpx"
+        used_hwpforge = False
+        export_engine = getattr(settings, "hwpx_export_engine", "auto")
+        configured_runtime_path = getattr(settings, "hwpforge_mcp_path", None)
         with tempfile.TemporaryDirectory() as tmpdir_str:
-            work_dir = Path(tmpdir_str) / "build"
-            _extract_canonical_template(canonical_template_path, work_dir)
-            section_path = work_dir / "Contents" / "section0.xml"
-            header_xml_path = work_dir / "Contents" / "header.xml"
-            content_hpf = work_dir / "Contents" / "content.hpf"
-            bindata_dir = work_dir / "BinData"
-            bindata_dir.mkdir(parents=True, exist_ok=True)
-            images_info = render_section_from_reference(
-                section_path=section_path,
-                root_path=root_path,
-                job=job,
-                bindata_dir=bindata_dir,
-                runtime=runtime_modules,
-                context=context,
-                warnings=warnings,
-            )
-            runtime_modules.update_metadata(content_hpf, "생성결과", "MathOCR")
-            _inject_images_to_manifest(content_hpf, images_info)
-            _update_header_xml(header_xml_path, images_info)
-            _normalize_masterpage_footer(work_dir / "Contents" / "masterpage0.xml")
-            _normalize_masterpage_footer(work_dir / "Contents" / "masterpage1.xml")
-            _validate_template_contract(
-                work_dir,
-                content_hpf,
-                header_xml_path,
-                section_path,
-                canonical_template_path,
-            )
+            work_dir: Path | None = None
+            if export_engine != "legacy":
+                direct_work_dir = Path(tmpdir_str) / "build-direct"
+                try:
+                    _prepare_direct_hwpforge_bundle(
+                        root_path=root_path,
+                        job=job,
+                        work_dir=direct_work_dir,
+                        runtime_modules=runtime_modules,
+                        context=context,
+                        canonical_template_path=canonical_template_path,
+                        configured_runtime_path=configured_runtime_path,
+                        warnings=warnings,
+                    )
+                    work_dir = direct_work_dir
+                    used_hwpforge = True
+                except Exception as error:
+                    if export_engine == "hwpforge":
+                        raise
+                    warnings.add(
+                        getattr(error, "code", "HWPFORGE_SECTION_BUILD_FAILED"),
+                        f"fallback=legacy detail={error}",
+                    )
+            if work_dir is None:
+                work_dir = Path(tmpdir_str) / "build-legacy"
+                _prepare_export_bundle(
+                    root_path=root_path,
+                    job=job,
+                    work_dir=work_dir,
+                    runtime_modules=runtime_modules,
+                    context=context,
+                    canonical_template_path=canonical_template_path,
+                    warnings=warnings,
+                )
             runtime_modules.pack_hwpx(work_dir, hwpx_path)
         errors = runtime_modules.validate_hwpx(hwpx_path)
         if errors:
             raise ValueError(f"hwpx validation failed: {errors}")
+        if used_hwpforge:
+            inspect_and_validate_hwpx_via_hwpforge(hwpx_path, configured_runtime_path)
     except Exception as error:
         warnings.emit()
-        error_code = error.code if isinstance(error, HwpxTemplateError) else "HWPX_EXPORT_FAILED"
+        error_code = getattr(error, "code", "HWPX_EXPORT_FAILED")
         LOGGER.exception("hwpx export failed code=%s detail=%s", error_code, error)
         raise ValueError(TEMPLATE_ERROR_MESSAGE) from error
     warnings.emit()
     return hwpx_path
+
+
+def _prepare_export_bundle(
+    root_path: Path,
+    job: JobPipelineContext,
+    work_dir: Path,
+    runtime_modules: HwpxRuntimeModules,
+    context: TemplateRenderContext,
+    canonical_template_path: Path,
+    warnings: QualityWarningCollector,
+) -> tuple[Path, Path, Path]:
+    """canonical bundle을 풀고 현재 legacy renderer로 baseline section을 만든다."""
+    _extract_canonical_template(canonical_template_path, work_dir)
+    section_path, header_xml_path, content_hpf, bindata_dir = _resolve_bundle_paths(work_dir)
+    images_info = render_section_from_reference(
+        section_path=section_path,
+        root_path=root_path,
+        job=job,
+        bindata_dir=bindata_dir,
+        runtime=runtime_modules,
+        context=context,
+        warnings=warnings,
+    )
+    _apply_bundle_common_updates(work_dir, content_hpf, header_xml_path, images_info, runtime_modules)
+    _validate_template_contract(work_dir, content_hpf, header_xml_path, section_path, canonical_template_path)
+    return section_path, header_xml_path, content_hpf
+
+
+def _prepare_direct_hwpforge_bundle(
+    root_path: Path,
+    job: JobPipelineContext,
+    work_dir: Path,
+    runtime_modules: HwpxRuntimeModules,
+    context: TemplateRenderContext,
+    canonical_template_path: Path,
+    configured_runtime_path: str | None,
+    warnings: QualityWarningCollector,
+) -> tuple[Path, Path, Path]:
+    """canonical bundle에 direct HwpForge writer가 만든 section을 주입한다."""
+    _extract_canonical_template(canonical_template_path, work_dir)
+    section_path, header_xml_path, content_hpf, bindata_dir = _resolve_bundle_paths(work_dir)
+    direct_section_path, images_info = build_section_via_hwpforge(
+        root_path=root_path,
+        job=job,
+        bindata_dir=bindata_dir,
+        output_dir=work_dir,
+        year=context.year,
+        warnings=warnings,
+        runtime_path=configured_runtime_path,
+        app_root=ROOT,
+    )
+    section_path.write_bytes(direct_section_path.read_bytes())
+    _apply_bundle_common_updates(work_dir, content_hpf, header_xml_path, images_info, runtime_modules)
+    _validate_template_contract(work_dir, content_hpf, header_xml_path, section_path, canonical_template_path)
+    return section_path, header_xml_path, content_hpf
+
+
+def _resolve_bundle_paths(work_dir: Path) -> tuple[Path, Path, Path, Path]:
+    """작업 디렉터리 안 canonical bundle 핵심 경로를 반환한다."""
+    bindata_dir = work_dir / "BinData"
+    bindata_dir.mkdir(parents=True, exist_ok=True)
+    return (
+        work_dir / "Contents" / "section0.xml",
+        work_dir / "Contents" / "header.xml",
+        work_dir / "Contents" / "content.hpf",
+        bindata_dir,
+    )
+
+
+def _apply_bundle_common_updates(
+    work_dir: Path,
+    content_hpf: Path,
+    header_xml_path: Path,
+    images_info: list[dict[str, str]],
+    runtime_modules: HwpxRuntimeModules,
+) -> None:
+    """legacy/direct 공통으로 필요한 manifest, header, footer 갱신을 적용한다."""
+    runtime_modules.update_metadata(content_hpf, "생성결과", "MathOCR")
+    _inject_images_to_manifest(content_hpf, images_info)
+    _update_header_xml(header_xml_path, images_info)
+    _normalize_masterpage_footer(work_dir / "Contents" / "masterpage0.xml")
+    _normalize_masterpage_footer(work_dir / "Contents" / "masterpage1.xml")
+
+
+def _apply_hwpforge_section_roundtrip(
+    work_dir: Path,
+    section_path: Path,
+    header_xml_path: Path,
+    content_hpf: Path,
+    canonical_template_path: Path,
+    runtime_modules: HwpxRuntimeModules,
+    export_engine: str,
+    configured_runtime_path: str | None,
+    warnings: QualityWarningCollector,
+) -> bool:
+    """legacy section 위에 HwpForge roundtrip fallback을 적용한다."""
+    if export_engine == "legacy":
+        return False
+    original_section_bytes = section_path.read_bytes()
+    baseline_hwpx_path = work_dir.parent / "baseline.hwpx"
+    runtime_modules.pack_hwpx(work_dir, baseline_hwpx_path)
+    try:
+        helper_output_dir = work_dir.parent / "hwpforge-roundtrip"
+        helper_section_path = roundtrip_section_via_hwpforge(
+            baseline_hwpx_path,
+            helper_output_dir,
+            configured_runtime_path,
+        )
+        section_path.write_bytes(helper_section_path.read_bytes())
+        _validate_template_contract(
+            work_dir,
+            content_hpf,
+            header_xml_path,
+            section_path,
+            canonical_template_path,
+        )
+        return True
+    except (HwpForgeRoundtripError, HwpxTemplateError) as error:
+        section_path.write_bytes(original_section_bytes)
+        if export_engine == "hwpforge":
+            raise
+        warnings.add(getattr(error, "code", "HWPFORGE_SECTION_BUILD_FAILED"), f"fallback=legacy detail={error}")
+        return False
 
 
 def _resolve_media_type(extension: str) -> str:

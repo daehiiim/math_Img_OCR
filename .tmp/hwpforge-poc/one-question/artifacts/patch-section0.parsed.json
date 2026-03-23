@@ -1,0 +1,12 @@
+{
+  "data": {
+    "output_path": "D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\one-question\\patched.hwpx",
+    "patched_section": 0,
+    "sections": 1,
+    "size_bytes": 32175
+  },
+  "summary": "Patched section 0 → D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\one-question\\patched.hwpx (32175 bytes, 1 sections)",
+  "next": [
+    "Use hwpforge_inspect to verify the patched output"
+  ]
+}

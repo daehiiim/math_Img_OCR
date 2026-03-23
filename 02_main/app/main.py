@@ -75,6 +75,9 @@ class RegionResult(BaseModel):
     ocr_text: str | None = None
     explanation: str | None = None
     mathml: str | None = None
+    problem_markdown: str | None = None
+    explanation_markdown: str | None = None
+    markdown_version: str | None = None
     svg_url: str | None = None
     crop_url: str | None = None
     image_crop_url: str | None = None
@@ -180,6 +183,9 @@ def _is_schema_mismatch_message(message: str) -> bool:
         "ocr_charged",
         "image_charged",
         "explanation_charged",
+        "problem_markdown",
+        "explanation_markdown",
+        "markdown_version",
         "image_crop_path",
         "styled_image_path",
         "styled_image_model",
@@ -254,6 +260,9 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
                 ocr_text=region.extractor.ocr_text,
                 explanation=region.extractor.explanation,
                 mathml=region.extractor.mathml,
+                problem_markdown=region.extractor.problem_markdown,
+                explanation_markdown=region.extractor.explanation_markdown,
+                markdown_version=region.extractor.markdown_version,
                 svg_url=_signed_asset_url(current_user, region.figure.svg_url),
                 crop_url=_signed_asset_url(current_user, region.figure.crop_url),
                 image_crop_url=_signed_asset_url(current_user, region.figure.image_crop_url),

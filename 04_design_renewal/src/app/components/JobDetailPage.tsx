@@ -52,7 +52,12 @@ function isResultVisible(status: JobStatus): boolean {
 
 /** 문제 또는 해설 텍스트가 있으면 내보내기 가능 영역으로 본다. */
 function isExportableRegion(region: Region): boolean {
-  return Boolean(region.ocrText?.trim() || region.explanation?.trim());
+  return Boolean(
+    region.problemMarkdown?.trim() ||
+      region.explanationMarkdown?.trim() ||
+      region.ocrText?.trim() ||
+      region.explanation?.trim()
+  );
 }
 
 export function JobDetailPage() {

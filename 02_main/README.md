@@ -15,6 +15,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - 레거시 `apiKey.env` fallback은 더 이상 사용하지 않는다. 런타임 설정은 `02_main/.env` 또는 OS 환경변수에서만 읽는다.
 - 브라우저 인증이나 결제 복귀 흐름까지 확인하려면 `.env`에 `APP_URL=https://mathtohwp.vercel.app` 또는 허용할 프런트 도메인을 함께 설정해야 한다.
 - HWPX export는 기본적으로 `02_main/vendor/hwpxskill-math` 번들을 사용한다. 다른 로컬 경로를 써야 하면 `HWPX_SKILL_DIR`로 override 한다.
+- 로컬에서 `uvicorn`만 직접 띄우는 경우 HwpForge 런타임이 없으면 export가 실패할 수 있다. 이때는 `HWPX_EXPORT_ENGINE=legacy`로 내리거나 `docker compose` 경로를 사용한다.
 
 ### Docker
 ```bash
@@ -23,6 +24,7 @@ docker compose up --build
 
 - Swagger: `http://localhost:8000/docs`
 - CORS 기본 허용은 더 이상 localhost가 아니다. `CORS_ALLOW_ORIGINS`가 없으면 `APP_URL` 1개만 허용한다.
+- 두 개의 compose 파일은 모두 `HWPX_EXPORT_ENGINE=auto`를 다시 주입하므로, `.env` 값이 `legacy`여도 컨테이너 안에서는 HwpForge direct writer를 우선 검증한다.
 
 ## 필수 환경변수
 
@@ -44,6 +46,8 @@ docker compose up --build
 - `NANO_BANANA_PROMPT_VERSION` (기본값 `csat_v1`, 현재 지원값도 `csat_v1` 하나다)
 - `CORS_ALLOW_ORIGINS` (`https://a.example.com,https://b.example.com` 형식)
 - `HWPX_SKILL_DIR` (기본값 비움. 특수한 로컬 skill 경로를 강제로 우선 사용해야 할 때만 설정)
+- `HWPX_EXPORT_ENGINE` (기본값 `auto`, 지원값 `legacy | auto | hwpforge`)
+- `HWPFORGE_MCP_PATH` (기본값 비움. HwpForge MCP 실행 파일 또는 `.js` wrapper 절대 경로)
 
 ## 배포 전 스키마 점검
 
@@ -58,7 +62,16 @@ docker compose up --build
 - 기본값은 `02_main/vendor/hwpxskill-math` 이다.
 - override가 필요하면 `.env` 또는 OS 환경변수에 `HWPX_SKILL_DIR` 을 설정한다.
 - fallback 순서는 `HWPX_SKILL_DIR` -> `02_main/vendor/hwpxskill-math` -> `CODEX_HOME/skills/hwpxskill-math` -> `~/.codex/skills/hwpxskill-math` 이다.
+- canonical template 탐색 순서는 로컬 저장소 기준 `../templates/style_guide.hwpx` -> 컨테이너 번들 기준 `02_main/templates/style_guide.hwpx` 이다.
+- Docker/Cloud Run 이미지에는 `style_guide.hwpx` 가 반드시 포함돼야 하며, 현재 Dockerfile은 이를 `/app/templates/style_guide.hwpx` 로 함께 복사한다.
+- direct writer용 template JSON은 `02_main/templates/hwpx/hwpforge_generated_canonical_sample.json` 자산을 사용한다.
 - runtime 탐색이 모두 실패하면 에러 메시지에 `checked:` 와 `missing:` 이 함께 포함되어 어떤 경로를 확인했고 어떤 파일이 없었는지 그대로 노출한다.
+- 애플리케이션 코드 fallback 기본값은 `legacy`지만, 현재 Docker/Cloud Run 이미지와 `.env.example`은 `HWPX_EXPORT_ENGINE=auto`를 기본으로 사용한다.
+- `HWPX_EXPORT_ENGINE=auto` 또는 `hwpforge`를 켜면 direct export IR -> HwpForge writer로 `section0.xml` 생성을 먼저 시도한다.
+- direct writer가 실패하면 `auto`에서는 legacy renderer와 roundtrip/legacy fallback으로 계속 내보내고, `hwpforge`에서는 HwpForge roundtrip fallback까지 시도한다.
+- HwpForge engine은 최종 패키지에도 `inspect + validate`를 다시 수행한다.
+- HwpForge runtime 탐색 순서는 `HWPFORGE_MCP_PATH` -> `02_main/vendor/hwpforge-mcp/node_modules/@hwpforge/...` -> 로컬 `.tmp/hwpforge-poc/*/node_modules/@hwpforge/...` 이다.
+- 현재 Docker/Cloud Run 이미지와 `02_main/Dockerfile`은 Node 런타임과 HwpForge MCP 번들을 함께 포함하도록 맞춰져 있다. 컨테이너 기본값에서는 별도 `HWPFORGE_MCP_PATH` 없이도 동작해야 한다.
 
 ## 인증 규칙
 

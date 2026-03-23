@@ -173,6 +173,14 @@ components:
                 enum: [pending, running, completed, failed]
               ocr_text:
                 type: string
+              problem_markdown:
+                type: string
+              explanation:
+                type: string
+              explanation_markdown:
+                type: string
+              markdown_version:
+                type: string
               svg_url:
                 type: string
               crop_url:

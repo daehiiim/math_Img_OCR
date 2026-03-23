@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"data\": {\n    \"output_path\": \"D:\\\\03_PROJECT\\\\05_mathOCR\\\\.tmp\\\\hwpforge-poc\\\\text-variant-geo\\\\patched.hwpx\",\n    \"patched_section\": 0,\n    \"sections\": 1,\n    \"size_bytes\": 32301\n  },\n  \"summary\": \"Patched section 0 → D:\\\\03_PROJECT\\\\05_mathOCR\\\\.tmp\\\\hwpforge-poc\\\\text-variant-geo\\\\patched.hwpx (32301 bytes, 1 sections)\",\n  \"next\": [\n    \"Use hwpforge_inspect to verify the patched output\"\n  ]\n}"
+    }
+  ],
+  "isError": false
+}

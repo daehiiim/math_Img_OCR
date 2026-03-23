@@ -1,0 +1,134 @@
+[
+  {
+    "index": 0,
+    "path": "paragraphs[0].runs[0].table.rows[0].cells[0].paragraphs[0].runs[0].text",
+    "original_text": "2026학년도 수학시험 ",
+    "has_inline_markup": false
+  },
+  {
+    "index": 1,
+    "path": "paragraphs[0].runs[0].table.rows[0].cells[0].paragraphs[0].runs[1].text",
+    "original_text": "문",
+    "has_inline_markup": false
+  },
+  {
+    "index": 2,
+    "path": "paragraphs[0].runs[0].table.rows[0].cells[0].paragraphs[0].runs[2].text",
+    "original_text": "제",
+    "has_inline_markup": false
+  },
+  {
+    "index": 3,
+    "path": "paragraphs[0].runs[0].table.rows[0].cells[0].paragraphs[0].runs[3].text",
+    "original_text": "지",
+    "has_inline_markup": false
+  },
+  {
+    "index": 4,
+    "path": "paragraphs[0].runs[0].table.rows[0].cells[0].paragraphs[1].runs[0].text",
+    "original_text": "수학 영역",
+    "has_inline_markup": false
+  },
+  {
+    "index": 5,
+    "path": "paragraphs[0].runs[3].text",
+    "original_text": "1.",
+    "has_inline_markup": false
+  },
+  {
+    "index": 6,
+    "path": "paragraphs[0].runs[4].text",
+    "original_text": "△ABC에서 AB 위의 점 E와 AC 위의 점 D에 대하여 ∠ABC = ∠ADE이고, AB = 14cm, AE = 6cm, AD = 8cm, DC = x(cm)일 때, x의 값은? [4점]",
+    "has_inline_markup": false
+  },
+  {
+    "index": 7,
+    "path": "paragraphs[1].runs[0].text",
+    "original_text": "",
+    "has_inline_markup": false
+  },
+  {
+    "index": 8,
+    "path": "paragraphs[3].runs[0].text",
+    "original_text": "① ",
+    "has_inline_markup": false
+  },
+  {
+    "index": 9,
+    "path": "paragraphs[3].runs[1].text",
+    "original_text": "\t② ",
+    "has_inline_markup": true
+  },
+  {
+    "index": 10,
+    "path": "paragraphs[3].runs[2].text",
+    "original_text": "\t③ ",
+    "has_inline_markup": true
+  },
+  {
+    "index": 11,
+    "path": "paragraphs[3].runs[3].text",
+    "original_text": "\t④ ",
+    "has_inline_markup": true
+  },
+  {
+    "index": 12,
+    "path": "paragraphs[3].runs[4].text",
+    "original_text": "\t⑤ ",
+    "has_inline_markup": true
+  },
+  {
+    "index": 13,
+    "path": "paragraphs[4].runs[0].text",
+    "original_text": "",
+    "has_inline_markup": false
+  },
+  {
+    "index": 14,
+    "path": "paragraphs[5].runs[0].text",
+    "original_text": "[해설]",
+    "has_inline_markup": false
+  },
+  {
+    "index": 15,
+    "path": "paragraphs[6].runs[0].text",
+    "original_text": "",
+    "has_inline_markup": false
+  },
+  {
+    "index": 16,
+    "path": "paragraphs[7].runs[0].text",
+    "original_text": "주어진 조건에서 E는 AB 위, D는 AC 위에 있으므로",
+    "has_inline_markup": false
+  },
+  {
+    "index": 17,
+    "path": "paragraphs[8].runs[0].text",
+    "original_text": "이다. 또한",
+    "has_inline_markup": false
+  },
+  {
+    "index": 18,
+    "path": "paragraphs[8].runs[1].text",
+    "original_text": "이므로",
+    "has_inline_markup": false
+  },
+  {
+    "index": 19,
+    "path": "paragraphs[9].runs[0].text",
+    "original_text": "삼각형",
+    "has_inline_markup": false
+  },
+  {
+    "index": 20,
+    "path": "paragraphs[9].runs[1].text",
+    "original_text": "와 삼각형",
+    "has_inline_markup": false
+  },
+  {
+    "index": 21,
+    "path": "paragraphs[9].runs[2].text",
+    "original_text": "는 서로 닮음이다.",
+    "has_inline_markup": false
+  }
+]

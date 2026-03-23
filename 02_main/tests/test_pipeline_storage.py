@@ -471,6 +471,56 @@ def test_run_pipeline_uses_user_api_key_and_persists_processing_type(monkeypatch
     assert saved_job.processing_type == "user_api_key"
 
 
+def test_run_pipeline_persists_markdown_outputs(monkeypatch):
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes())
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [8, 0], [8, 8], [0, 8]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "문제 본문 <math>x+1</math>",
+            "mathml": "<math>x+1</math>",
+            "has_stylizable_image": False,
+            "image_bbox": None,
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "해설 본문 <math>AB</math>")
+
+    orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=True,
+        do_image_stylize=False,
+        do_explanation=True,
+    )
+    saved_job = orchestrator.read_job(user, job.job_id)
+    saved_region = saved_job.regions[0]
+
+    assert saved_region.extractor.problem_markdown == "문제 본문 $x+1$"
+    assert saved_region.extractor.explanation_markdown == "해설 본문 $AB$"
+    assert saved_region.extractor.markdown_version == "mathocr_markdown_bridge_v1"
+
+
 def test_run_pipeline_saves_styled_image_when_detector_finds_visual(monkeypatch):
     repository = install_memory_repository(monkeypatch)
     user = make_user()

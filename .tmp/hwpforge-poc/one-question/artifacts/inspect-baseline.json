@@ -1,0 +1,30 @@
+{
+  "data": {
+    "metadata": {
+      "title": "",
+      "author": ""
+    },
+    "sections": 1,
+    "total_paragraphs": 10,
+    "total_tables": 1,
+    "total_images": 1,
+    "total_charts": 0,
+    "section_details": [
+      {
+        "index": 0,
+        "paragraphs": 10,
+        "tables": 1,
+        "images": 1,
+        "charts": 0,
+        "has_header": false,
+        "has_footer": false,
+        "has_page_number": false
+      }
+    ]
+  },
+  "summary": "1 sections, 10 paragraphs, 1 tables, 1 images, 0 charts",
+  "next": [
+    "Use hwpforge_to_json to export for editing",
+    "Use hwpforge_convert to create new documents"
+  ]
+}

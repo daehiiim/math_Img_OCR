@@ -105,3 +105,126 @@
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` 기준 `4 passed`.
 - 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. Vite chunk size warning은 기존 번들 크기 경고로 유지됐다.
 - 수동 확인: 로컬 dev 서버에서 공개 홈을 데스크톱 `1440px`와 모바일 `390px` 폭으로 확인했고, 헤드라인 줄바꿈과 CTA 노출이 sans 방향에서 안정적으로 보였다.
+- hwpforge 0.5.0 조사 보고서를 추가했다: 02_main/docs/hwpforge_analysis_report_ko.md. 결론은 전면 교체보다 inspect/validate/to-md/to-json 중심의 Rust sidecar 도입이 현실적이며, 현재 Python canonical-template exporter는 유지하는 방향이 적합하다는 것이다.
+- `templates/generated-canonical-sample.hwpx` 기준으로 HwpForge preserving patch 1문항 PoC를 실행했다. 작업 산출물은 `D:\03_PROJECT\05_mathOCR\.tmp\hwpforge-poc\one-question` 아래에만 두었고, `@hwpforge/mcp@0.5.0` MCP 경로로 `inspect -> to_json(section 0) -> patch -> inspect -> to_json(section 0)`를 자동화했다.
+- Windows에서는 `.cmd` 직접 spawn이 막혀 `npx` 호출 대신 로컬 npm 설치 후 `node node_modules/@hwpforge/mcp/bin/hwpforge-mcp.js`로 MCP 서버를 띄우는 우회가 필요했다. HwpForge 서버는 `Content-Length` 프레이밍이 아니라 줄 단위 JSON 스트림을 기대한다는 점도 확인했다.
+- PoC 검증 결과는 PASS였다. `Contents/section0.xml`만 변경됐고 `Contents/header.xml`, `Contents/masterpage0.xml`, `Contents/masterpage1.xml`, `Contents/content.hpf`, `settings.xml`, `version.xml`은 byte-for-byte 동일했다. `binaryItemIDRef=image1`, equation count 9, `paraPrIDRef` 13, `charPrIDRef` 19, `styleIDRef` 13도 유지됐고 첫 문항 번호 scaffold `1.` 역시 보존됐다.
+- 추가 실험으로 `text-variant-geo` 샘플을 생성했다. HwpForge preserving patch로 문제 본문과 해설 문구를 새 기하 문항으로 바꿨고, `verification-report.json` 기준 다시 PASS였다. 최종 검토 파일은 `templates/hwpforge-text-variant-geo.hwpx`다.
+- 같은 조건에서 equation script까지 바꾸는 `equation-variant` 실험도 수행했지만, HwpForge는 `preserving patch currently supports text-only section edits; structural change detected` 오류로 거부했다. 현재 버전에서는 수식 변경이 text-only patch 범위를 넘어선다는 점을 확인했다.
+- 원본 샘플과 HwpForge text variant의 이미지 크기를 비교한 결과 `width=25347`, `height=11746`으로 완전히 동일했고, 차이는 `0 HWP unit`, `0.0%`였다.
+- 사용자가 즉시 열어볼 수 있도록 추가 검토 파일을 `templates/` 아래에 복사했다: `hwpforge-poc-one-question.hwpx`, `hwpforge-text-variant-geo.hwpx`.
+- HwpForge 한계를 보완하기 위해 `section0.xml`만 직접 교체하는 template-preserved equation variant도 별도로 만들었다. 결과 파일은 `templates/template-preserved-equation-variant.hwpx`이며, 문제 문구와 equation script가 모두 바뀐 상태다.
+- 별도 검증으로 HwpForge `from_json` 생성 경로를 사용해 equation script 생성 여부를 확인했다. 작업 폴더는 `D:\03_PROJECT\05_mathOCR\.tmp\hwpforge-poc\from-json-equation`이고, full-document JSON을 편집해 `hwpforge_from_json`으로 새 HWPX를 만들었다.
+- 생성 결과 [hwpforge-generated-equation-example.hwpx](/D:/03_PROJECT/05_mathOCR/templates/hwpforge-generated-equation-example.hwpx)에서 `2`, `5 over 3`, `11 over 4`, `8 over 3`, `7 over 2`, `ANGLE QPR= ANGLE SRT`, `ANGLE PQR= ANGLE STR`, `PQR`, `SRT` script가 실제로 생성되었고, `hwpforge_to_json` 재export 결과도 동일했다.
+- 즉 현재 결론은 `HwpForge = equation 생성 가능`, `HwpForge preserving patch = equation 변경 불가`로 구분된다. 사용 경로에 따라 capability가 다르다.
+- 하이브리드 전환 1단계로 Markdown 병행 계약을 추가했다. 백엔드 `ExtractorContext`와 API 응답에 `problem_markdown`, `explanation_markdown`, `markdown_version`를 넣고 기존 `ocr_text`, `explanation`, `mathml`은 유지했다.
+- `02_main/app/pipeline/markdown_contract.py`를 추가해 기존 `<math>...</math>` 기반 산출물을 제한 Markdown bridge 형식으로 변환하도록 했다. 현재 버전 문자열은 `mathocr_markdown_bridge_v1`이다.
+- `run_pipeline`는 OCR/해설 완료 직후 Markdown bridge 값을 함께 저장하고, export 가능 판정은 Markdown 필드를 우선 사용하되 구필드로 fallback 하도록 바꿨다.
+- 저장소/과금/API도 병행 필드를 이해하도록 갱신했다. `repository.py`, `main.py`, `billing.py`에서 새 필드를 select/upsert/response/output 판정에 반영했다.
+- 프런트는 `jobApi.ts`, `jobStore.ts`, `jobMappers.ts`, `JobDetailPage.tsx`, `ResultsViewer.tsx`를 갱신해 Markdown 필드를 상태에 보관하고 뷰어에서 우선 렌더링하도록 바꿨다.
+- 미리보기 파서 `mathMarkupPreview.ts`는 `<math>...</math>`, `$...$`, `$$...$$`를 모두 formula segment로 읽도록 확장했다. malformed delimiter는 delimiter 제거 후 일반 텍스트로 폴백한다.
+- DB 마이그레이션 파일 `02_main/schemas/2026-03-23_markdown_output_fields.sql`를 추가했고, `supabase_saas_init.sql`과 과금 backfill SQL에도 새 필드를 반영했다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main/tests/test_pipeline_storage.py 02_main/tests/test_job_response_fields.py -q` 기준 `22 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR && py -3 -m pytest 02_main/tests/test_billing.py -q` 기준 `42 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/ResultsViewer.test.tsx src/app/store/jobMappers.test.ts src/app/lib/mathMarkupPreview.test.ts src/app/api/jobApi.test.ts src/app/store/jobStore.test.tsx` 기준 `24 passed`.
+- 이번 단계는 출력 안정성 우선 원칙을 지켰다. 기존 canonical exporter와 reference renderer는 유지했고, HwpForge helper 기반 section writer 교체는 다음 단계로 넘겼다.
+- 공개 홈 랜딩을 `04_new_design` 기준의 다크 풀스크린 구조로 개편했다. `PublicHomePage.tsx`에서 히어로, 중앙 하이라이트, 3카드, 하단 CTA, 푸터 흐름을 새 시안 기준으로 다시 구성했다.
+- CTA 라벨은 서비스 흐름에 맞춰 `사용해 보기`(`/new`), `가격 보기`(`/pricing`), `로그인`(`/login`)으로 고정했고, 공개 홈의 `useAuth` 의존은 제거했다.
+- 카드 1/2용 로컬 자산을 `04_design_renewal/src/assets/home/home-source-problem.png`, `04_design_renewal/src/assets/home/home-ocr-result.png`로 추가했다. 카드 3과 중앙 하이라이트 이미지는 외부 자산을 유지하되 `ImageWithFallback`로 감싸 로드 실패 시 placeholder로 대체되게 했다.
+- `theme.css`에 `.public-home-page` 범위의 다크 랜딩 토큰과 `hero-title`, `hero-word`, `reveal`, `cosmos-card`, `glow-bg`, `glass-nav` 유틸을 추가했다. 다른 화면 토큰과 충돌하지 않도록 홈 전용 스코프로 제한했다.
+- `PublicHomePage.test.tsx`를 새 구조에 맞춰 갱신했다. 히어로 카피, CTA 라벨과 navigate 목적지, 카드 이미지 src, 외부 이미지 fallback placeholder를 검증하도록 바꿨다.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` 기준 `4 passed`.
+- 검증 결과: `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. 프런트 정적 자산 번들은 정상 생성됐고, 기존 Vite chunk size warning만 유지됐다.
+- 이번 변경은 프런트 정적 자산 범위로 제한됐다. 백엔드 API, 환경변수, 라우트 계약 변경은 없다.
+## 2026-03-23 14:25 KST
+
+- HwpForge exporter 통합을 TDD로 시작했다.
+- [test_exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_exporter.py)에 `auto helper 성공`, `auto fallback`, `hwpforge 강제 실패` 3개 케이스를 추가했다.
+- 현재 `py -3 -m pytest 02_main/tests/test_exporter.py -q` 결과는 3 failed / 21 passed다.
+- 실패 원인은 exporter에 `roundtrip_section_via_hwpforge` 통합 지점과 엔진 분기(`legacy/auto/hwpforge`)가 아직 없기 때문이다.
+- 다음 구현은 HwpForge roundtrip helper 모듈 추가, baseline HWPX roundtrip 후 `section0.xml`만 canonical bundle에 재주입하는 경로다.
+## 2026-03-23 15:05 KST
+
+- HwpForge standalone helper MVP를 추가했다. Python 래퍼는 [hwpforge_helper.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_helper.py), 실제 Node helper CLI는 [hwpforge_doc_helper.js](/D:/03_PROJECT/05_mathOCR/02_main/scripts/hwpforge_doc_helper.js)다.
+- helper 계약은 `sample_hwpx_path + mcp_script_path + output_hwpx_path + stem + choices(5개) + explanation_paragraphs` 입력을 받아 `to_json -> full-document JSON 수정 -> from_json -> inspect -> validate` 순서로 새 HWPX를 만든다.
+- 현재 helper는 exporter에 아직 연결되지 않았고, standalone smoke/통합 준비 단계다. 우선순위는 사용자 출력 안정성 유지이므로 legacy exporter를 건드리지 않은 채 경계와 회귀 테스트부터 고정했다.
+- sample baseline은 `templates/generated-canonical-sample.hwpx`를 사용한다. helper는 `HWPFORGE_MCP_PATH` 환경변수를 우선 보고, 없으면 `.tmp/hwpforge-poc/from-json-equation`, `.tmp/hwpforge-poc/one-question`, `.tmp/hwpforge-poc/text-variant-geo` 아래의 로컬 `@hwpforge/mcp` 경로를 후보로 찾는다.
+- 단위 테스트 [test_hwpforge_helper.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_hwpforge_helper.py)를 추가했다. 검증 범위는 요청 JSON 직렬화, 성공 응답 파싱, 구조화 실패 응답 매핑, MCP 런타임 누락 오류다.
+- 검증 결과: `py -3 -m pytest 02_main/tests/test_hwpforge_helper.py -q` -> `3 passed`
+- 회귀 확인: `py -3 -m pytest 02_main/tests/test_exporter.py 02_main/tests/test_hwpforge_helper.py -q` -> `27 passed`
+- 실제 smoke도 성공했다. `HWPFORGE_MCP_PATH=D:\03_PROJECT\05_mathOCR\.tmp\hwpforge-poc\from-json-equation\node_modules\@hwpforge\mcp\bin\hwpforge-mcp.js` 기준으로 helper를 호출해 `D:\03_PROJECT\05_mathOCR\.tmp\hwpforge-helper-smoke\generated.hwpx`를 생성했고, helper 내부 `hwpforge_validate` 통과 후 summary는 `1 sections, 10 paragraphs, 1 tables, 1 images, 0 charts`였다.
+- 이 상태에서 다음 핵심 작업은 exporter 통합이다. 방향은 `legacy base 유지 -> helper roundtrip -> helper가 만든 section0.xml만 canonical bundle에 삽입 -> 실패 시 legacy fallback`이다.
+- 배포 영향은 아직 없다. 다만 exporter 본경로에 helper를 연결하는 시점부터 Docker/Cloud Run 이미지에 Node 런타임과 HwpForge MCP 번들이 필요하다.
+## 2026-03-23 15:12 KST
+
+- HwpForge roundtrip helper를 exporter 본경로에 연결했다.
+- 새 파일 [hwpforge_roundtrip.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_roundtrip.py)에서 MCP stdio 세션으로 `hwpforge_to_json`, `hwpforge_from_json`, `hwpforge_inspect`, `hwpforge_validate`를 호출한다.
+- exporter는 baseline canonical bundle을 먼저 만든 뒤 HwpForge roundtrip으로 생성한 `section0.xml`만 다시 주입한다.
+- helper 또는 roundtrip 후 canonical contract 검증이 실패하면 `auto` 모드에서는 즉시 legacy section으로 복구하고 export를 계속한다.
+- 환경변수 [config.py](/D:/03_PROJECT/05_mathOCR/02_main/app/config.py)에 `HWPX_EXPORT_ENGINE`, `HWPFORGE_MCP_PATH`를 추가했다. 기본 엔진은 `legacy`다.
+- 문서 [README.md](/D:/03_PROJECT/05_mathOCR/02_main/README.md), [.env.example](/D:/03_PROJECT/05_mathOCR/02_main/.env.example)에 새 엔진 설정과 배포 주의사항을 기록했다.
+- 회귀 검증:
+  - `py -3 -m pytest 02_main/tests/test_exporter.py 02_main/tests/test_pipeline_storage.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_billing.py -q` -> `91 passed`
+  - `HWPX_EXPORT_ENGINE=hwpforge` 실제 smoke export 성공. 최종 산출물에 `Contents/section0.xml`, `Contents/header.xml`, `BinData/*`가 모두 포함됐다.
+- 현재 구조는 안정성 우선용 bridge다. 다음 단계는 baseline HWPX roundtrip을 없애고 direct export IR -> HwpForge writer로 교체하는 것이다.
+## 2026-03-23 14:10 KST
+
+- 공개 홈에서 상단 헤더를 제거했다. 이에 따라 `Math OCR`, `Photo to HWPX`, `로그인` 버튼이 첫 화면 상단에서 더 이상 노출되지 않는다.
+- 히어로 CTA 라벨을 `사용해보기`로 통일했고, 화살표 아이콘을 제거했다. 기존 `/new`, `/pricing` 이동 동작은 유지했다.
+- 중앙 하이라이트 제목은 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)에서 줄바꿈이 강제되도록 수정해 `수학문제 직접 타이핑하느라` 다음 줄에 `힘들지 않았나요?`가 나오게 했다.
+- 랜딩 카드에서 `무료로 이용하세요` 섹션을 삭제해 2카드 구조로 단순화했다.
+- 중앙 하이라이트 이미지와 카드 이미지의 `object-fit`을 `contain` 기준으로 바꾸고 확대 효과를 제거해 이미지 잘림을 줄였다.
+- 푸터 설명 문구 `사진에서 구조를 읽고, 최종 결과를 HWPX까지 연결하는 수학 OCR 워크플로우.`를 제거했다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `4 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. 기존 chunk size warning만 유지됐다.
+## 2026-03-23 14:15 KST
+
+- 웹 배포 경로에서 HwpForge가 실제로 동작하도록 컨테이너 런타임 번들링을 마쳤다.
+- [Dockerfile](/D:/03_PROJECT/05_mathOCR/Dockerfile)와 [02_main/Dockerfile](/D:/03_PROJECT/05_mathOCR/02_main/Dockerfile)에 `node:20-bookworm-slim` builder stage를 추가하고 `@hwpforge/mcp@0.5.0`를 이미지 안 `vendor/hwpforge-mcp`로 복사하도록 맞췄다.
+- 두 컨테이너 경로 모두 `HWPX_EXPORT_ENGINE=auto`를 기본값으로 사용하게 맞췄다. HwpForge가 실패해도 기존 legacy exporter fallback이 유지된다.
+- [hwpforge_roundtrip.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_roundtrip.py)의 vendored runtime 탐색 테스트 [test_hwpforge_roundtrip.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_hwpforge_roundtrip.py)를 기준으로 컨테이너 번들 경로가 계속 보장되게 했다.
+- 프런트 [jobStore.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobStore.ts)의 export 흐름도 보정했다. 이제 실제 다운로드 성공 후에만 `status=exported`로 바뀌고, 다운로드 실패 시 이전 상태를 유지한 채 `lastError`를 기록한다.
+- 프런트 회귀 테스트 [jobStore.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobStore.test.tsx)에 `다운로드 전 상태 유지`, `다운로드 실패 rollback` 케이스를 추가했다.
+- 문서 [README.md](/D:/03_PROJECT/05_mathOCR/02_main/README.md), [.env.example](/D:/03_PROJECT/05_mathOCR/02_main/.env.example), [cloud_run_supabase_free_runbook_ko.md](/D:/03_PROJECT/05_mathOCR/02_main/docs/cloud_run_supabase_free_runbook_ko.md)를 현재 배포 계약에 맞게 갱신했다.
+- 실제 검증 결과:
+  - `docker build -t mathocr-api-hwpforge-web .` 성공
+  - `docker run --rm mathocr-api-hwpforge-web python -c "from app.pipeline.hwpforge_roundtrip import resolve_hwpforge_runtime; runtime = resolve_hwpforge_runtime(); print(runtime.executable_path); print(runtime.command)"` 성공
+  - `docker run --rm mathocr-api-hwpforge-web python -c "from pathlib import Path; from app.pipeline.hwpforge_roundtrip import roundtrip_section_via_hwpforge; out = roundtrip_section_via_hwpforge(Path('/app/templates/style_guide.hwpx'), Path('/tmp/hwpforge-check')); print(out.exists()); print(out)"` 성공
+  - `docker build -f 02_main/Dockerfile -t mathocr-api-local-hwpforge 02_main` 성공
+  - `docker run --rm mathocr-api-local-hwpforge python -c "from pathlib import Path; from app.pipeline.hwpforge_roundtrip import roundtrip_section_via_hwpforge; out = roundtrip_section_via_hwpforge(Path('/app/templates/style_guide.hwpx'), Path('/tmp/hwpforge-check')); print(out.exists()); print(out)"` 성공
+  - `py -3 -m pytest 02_main/tests/test_hwpforge_roundtrip.py 02_main/tests/test_exporter.py 02_main/tests/test_pipeline_storage.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_billing.py -q` -> `92 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/store/jobStore.test.tsx src/app/api/jobApi.test.ts src/app/components/ResultsViewer.test.tsx src/app/store/jobMappers.test.ts` -> `21 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+- 현재 남은 핵심 과제는 bridge 구조 제거다. 다음 구현은 `legacy baseline -> roundtrip section 교체` 대신 Markdown/export IR에서 direct HwpForge section writer를 만드는 것이다.
+## 2026-03-23 14:32 KST
+
+- HwpForge bridge 제거를 구현했다. main path는 이제 `direct export IR -> HwpForge writer -> section0.xml -> canonical bundle 삽입`이다.
+- 기존 `legacy baseline -> HwpForge roundtrip section 교체` 경로는 exporter fallback 전용으로만 남겼다. direct writer 실패 시 `auto`에서는 roundtrip/legacy fallback으로 정상 파일 출력을 유지하고, `hwpforge`에서는 HwpForge roundtrip fallback까지 시도한다.
+- 직접 writer는 [hwpforge_roundtrip.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_roundtrip.py)에 `build_section_via_hwpforge()`로 추가했다. 이 함수는 [hwpforge_json_builder.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_json_builder.py)의 export IR + template JSON을 사용해 `hwpforge_from_json`으로 새 HWPX를 만들고 `section0.xml`을 추출한다.
+- exporter는 [exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/exporter.py)에서 direct bundle 준비 함수 `_prepare_direct_hwpforge_bundle()`을 먼저 타고, 실패했을 때만 legacy bundle + roundtrip fallback으로 내려가도록 재구성했다.
+- direct writer template 자산 [hwpforge_generated_canonical_sample.json](/D:/03_PROJECT/05_mathOCR/02_main/templates/hwpx/hwpforge_generated_canonical_sample.json)을 `02_main/templates/hwpx/`에 추가했다.
+- 루트 배포 이미지가 새 template 자산을 포함하도록 [Dockerfile](/D:/03_PROJECT/05_mathOCR/Dockerfile)과 [.dockerignore](/D:/03_PROJECT/05_mathOCR/.dockerignore)를 갱신했다.
+- direct writer 제어 흐름 회귀 테스트를 [test_exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_exporter.py)에 추가했다.
+  - direct writer 성공 시 roundtrip 미호출
+  - direct writer 실패 시 roundtrip fallback
+  - direct/roundtrip 모두 실패 시 legacy fallback
+- direct writer 자체 단위 테스트를 [test_hwpforge_roundtrip.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_hwpforge_roundtrip.py)에 추가했다.
+  - template JSON 자산 탐색
+  - generated hwpx에서 section0.xml 추출
+- 검증 결과:
+  - `py -3 -m pytest 02_main/tests/test_hwpforge_roundtrip.py 02_main/tests/test_hwpforge_json_builder.py 02_main/tests/test_exporter.py 02_main/tests/test_pipeline_storage.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_billing.py -q` -> `98 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/store/jobStore.test.tsx src/app/api/jobApi.test.ts src/app/components/ResultsViewer.test.tsx src/app/store/jobMappers.test.ts` -> `21 passed`
+  - `docker build -t mathocr-api-hwpforge-web .` 성공
+  - `docker build -f 02_main/Dockerfile -t mathocr-api-local-hwpforge 02_main` 성공
+  - 루트 이미지에서 `build_section_via_hwpforge()` smoke 성공
+  - 루트 이미지에서 `export_hwpx()` end-to-end smoke 성공
+  - `02_main` 이미지에서도 `export_hwpx()` end-to-end smoke 성공
+- 남은 핵심 작업은 품질 확대다. 다음 단계는 direct writer가 `problem_markdown`, `explanation_markdown`을 우선 사용하도록 넓히고, multi-region/빈 해설/보기 없는 문항 회귀를 늘리는 것이다.
+## 2026-03-23 14:19 KST
+
+- 공개 홈 중앙 하이라이트 이미지만 기존처럼 꽉 차게 보이도록 되돌렸다.
+- [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)에서 중앙 이미지의 `object-fit`을 `contain`에서 `cover`로 변경하고, 내부 패딩을 제거해 카드 이미지는 그대로 둔 채 중앙 섹션만 영향받게 했다.
+- [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx) 회귀 테스트도 `디지털 작업 공간` 이미지가 `object-cover`를 사용하도록 갱신했다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `4 passed`

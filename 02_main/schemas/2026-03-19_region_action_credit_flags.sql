@@ -9,6 +9,7 @@ where ocr_charged = false
   and (
     was_charged = true
     or nullif(btrim(coalesce(ocr_text, '')), '') is not null
+    or nullif(btrim(coalesce(problem_markdown, '')), '') is not null
     or nullif(btrim(coalesce(mathml, '')), '') is not null
   );
 
@@ -20,7 +21,10 @@ where image_charged = false
 update public.ocr_job_regions
 set explanation_charged = true
 where explanation_charged = false
-  and nullif(btrim(coalesce(explanation, '')), '') is not null;
+  and (
+    nullif(btrim(coalesce(explanation, '')), '') is not null
+    or nullif(btrim(coalesce(explanation_markdown, '')), '') is not null
+  );
 
 update public.ocr_jobs jobs
 set

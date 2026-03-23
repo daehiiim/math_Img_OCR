@@ -20,6 +20,9 @@ class ExtractorContext(BaseModel):
     ocr_text: Optional[str] = None
     explanation: Optional[str] = None
     mathml: Optional[str] = None
+    problem_markdown: Optional[str] = None
+    explanation_markdown: Optional[str] = None
+    markdown_version: Optional[str] = None
     model_used: Optional[str] = None
     openai_request_id: Optional[str] = None
 

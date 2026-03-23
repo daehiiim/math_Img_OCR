@@ -2,6 +2,7 @@ import importlib
 import sys
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from zipfile import ZipFile
 
 import pytest
@@ -45,6 +46,9 @@ NS = {
     "opf": "http://www.idpf.org/2007/opf/",
 }
 STYLE_GUIDE_HWPX_PATH = Path(__file__).resolve().parents[2] / "templates" / "style_guide.hwpx"
+HWPFORGE_TEMPLATE_JSON_PATH = (
+    Path(__file__).resolve().parent / "fixtures" / "hwpforge_generated_canonical_sample.json"
+)
 
 
 def make_png_bytes(width: int = 32, height: int = 24) -> bytes:
@@ -76,6 +80,13 @@ def copy_style_guide_bundle(target_path: Path) -> Path:
     """canonical style guide HWPX를 임시 경로로 복사한다."""
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(STYLE_GUIDE_HWPX_PATH.read_bytes())
+    return target_path
+
+
+def copy_hwpforge_template_json(target_path: Path) -> Path:
+    """direct HwpForge writer용 템플릿 JSON을 임시 경로로 복사한다."""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(HWPFORGE_TEMPLATE_JSON_PATH.read_text(encoding="utf-8"), encoding="utf-8")
     return target_path
 
 
@@ -203,6 +214,7 @@ def make_runtime_paths(module, tmp_path, monkeypatch):
     """exporter 테스트용 runtime 환경을 만든다."""
     app_root = tmp_path / "02_main"
     copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+    copy_hwpforge_template_json(app_root / "templates" / "hwpx" / HWPFORGE_TEMPLATE_JSON_PATH.name)
     copy_style_guide_bundle(tmp_path / "templates" / "style_guide.hwpx")
     monkeypatch.setattr(module, "ROOT", app_root)
     monkeypatch.setattr(module, "_get_codex_home", lambda: tmp_path / "missing-codex-home")
@@ -284,6 +296,93 @@ def test_export_hwpx_creates_valid_file_using_vendored_runtime(tmp_path, monkeyp
     assert any(name.startswith("BinData/image") and name != "BinData/image1.bmp" for name in names)
 
 
+def test_export_hwpx_auto_engine_uses_hwpforge_section_when_helper_succeeds(tmp_path, monkeypatch):
+    """auto 모드에서 helper가 성공하면 HwpForge section 교체 경로를 타야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+    direct_calls: list[Path] = []
+    roundtrip_calls: list[Path] = []
+
+    def fake_settings(_root):
+        """테스트용 export engine 설정을 반환한다."""
+        return SimpleNamespace(hwpx_skill_dir=None, hwpx_export_engine="auto", hwpforge_mcp_path="dummy")
+
+    def fake_direct_writer(
+        root_path: Path,
+        job,
+        bindata_dir: Path,
+        output_dir: Path,
+        year: str,
+        warnings,
+        runtime_path: str | None,
+        app_root: Path,
+    ):
+        """직접 writer 성공만 시뮬레이션한다."""
+        direct_calls.append(output_dir)
+        bindata_dir.mkdir(parents=True, exist_ok=True)
+        target_path = output_dir / "section0.direct.xml"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        with ZipFile(STYLE_GUIDE_HWPX_PATH, "r") as archive:
+            target_path.write_bytes(archive.read("Contents/section0.xml"))
+        return target_path, []
+
+    monkeypatch.setattr(module, "get_settings", fake_settings)
+    monkeypatch.setattr(module, "build_section_via_hwpforge", fake_direct_writer)
+    monkeypatch.setattr(module, "inspect_and_validate_hwpx_via_hwpforge", lambda *_args: None)
+
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+
+    assert hwpx_path.exists()
+    assert len(direct_calls) == 1
+    assert roundtrip_calls == []
+
+
+def test_export_hwpx_auto_engine_falls_back_to_legacy_when_helper_fails(tmp_path, monkeypatch):
+    """auto 모드에서 direct writer 실패는 즉시 legacy fallback으로 흡수해야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+
+    def fake_settings(_root):
+        """테스트용 export engine 설정을 반환한다."""
+        return SimpleNamespace(hwpx_skill_dir=None, hwpx_export_engine="auto", hwpforge_mcp_path="dummy")
+
+    monkeypatch.setattr(module, "get_settings", fake_settings)
+    monkeypatch.setattr(
+        module,
+        "build_section_via_hwpforge",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("direct failed")),
+    )
+
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+
+    assert hwpx_path.exists()
+    section_xml = ZipFile(hwpx_path, "r").read("Contents/section0.xml").decode("utf-8")
+    assert "문제 본문" in section_xml
+
+
+def test_export_hwpx_hwpforge_mode_raises_when_helper_fails(tmp_path, monkeypatch):
+    """hwpforge 강제 모드에서는 helper 실패를 그대로 실패로 올려야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+
+    def fake_settings(_root):
+        """테스트용 export engine 설정을 반환한다."""
+        return SimpleNamespace(hwpx_skill_dir=None, hwpx_export_engine="hwpforge", hwpforge_mcp_path="dummy")
+
+    monkeypatch.setattr(module, "get_settings", fake_settings)
+    monkeypatch.setattr(
+        module,
+        "build_section_via_hwpforge",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(module.HwpxTemplateError("HWPFORGE_SECTION_BUILD_FAILED", "forced hwpforge failure")),
+    )
+
+    with pytest.raises(ValueError, match="문서 템플릿을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."):
+        module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+
+
 def test_export_hwpx_uses_style_guide_secpr_exactly(tmp_path, monkeypatch):
     """section secPr/pagePr/masterPage는 style guide와 완전히 같아야 한다."""
     module = load_exporter_module()
@@ -347,6 +446,27 @@ def test_export_hwpx_uses_style_guide_even_when_vendored_base_changes(tmp_path, 
         style_section.find(".//hp:secPr", NS)
     )
     assert serialize_xml_for_compare(generated_masterpage) == serialize_xml_for_compare(style_masterpage)
+
+
+def test_export_hwpx_uses_app_local_canonical_template_in_flat_runtime(tmp_path, monkeypatch):
+    """컨테이너처럼 app 루트에만 canonical template가 있어도 export가 되어야 한다."""
+    module = load_exporter_module()
+    app_root = tmp_path / "app"
+    copy_runtime_bundle(app_root / "vendor" / "hwpxskill-math")
+    copy_style_guide_bundle(app_root / "templates" / "style_guide.hwpx")
+    monkeypatch.setattr(module, "ROOT", app_root)
+    monkeypatch.setattr(module, "_get_codex_home", lambda: tmp_path / "missing-codex-home")
+    monkeypatch.setattr(module, "_get_home_dir", lambda: tmp_path / "missing-home")
+    root_path = tmp_path / "runtime"
+    image_relative_path = Path("assets/q1.png")
+    image_path = root_path / image_relative_path
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(make_png_bytes(width=459, height=213))
+
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), tmp_path / "exports")
+
+    assert hwpx_path.exists()
+    assert "Contents/masterpage0.xml" in list_archive_names(hwpx_path)
 
 
 def test_export_hwpx_uses_fixed_title(tmp_path, monkeypatch):
@@ -617,3 +737,77 @@ def test_export_hwpx_normalizes_problem_numbers_and_latex_scripts(tmp_path, monk
     assert all("\\frac" not in script for script in scripts)
     assert any("°" in script for script in scripts)
     assert all("degree" not in script for script in scripts)
+
+
+def test_resolve_hwpforge_cli_path_prefers_configured_binary(tmp_path):
+    """설정 경로의 hwpforge 실행 파일이 있으면 그 경로를 그대로 써야 한다."""
+    sys.modules.pop("app.pipeline.hwpforge_roundtrip", None)
+    helper_module = importlib.import_module("app.pipeline.hwpforge_roundtrip")
+    configured_cli = tmp_path / "bin" / "hwpforge.exe"
+    configured_cli.parent.mkdir(parents=True, exist_ok=True)
+    configured_cli.write_text("stub", encoding="utf-8")
+
+    resolved = helper_module.resolve_hwpforge_runtime(
+        app_root=tmp_path / "02_main",
+        configured_runtime_path=str(configured_cli),
+    )
+
+    assert resolved.executable_path == configured_cli
+
+
+def test_export_hwpx_falls_back_when_hwpforge_bundle_build_fails(tmp_path, monkeypatch):
+    """helper bundle 준비가 실패해도 reference renderer fallback으로 export가 완료되어야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+
+    class FakeSettings:
+        hwpx_skill_dir = None
+        hwpx_export_engine = "auto"
+        hwpforge_mcp_path = "C:/tooling/hwpforge-mcp.exe"
+
+    monkeypatch.setattr(module, "get_settings", lambda _root: FakeSettings())
+    monkeypatch.setattr(
+        module,
+        "roundtrip_section_via_hwpforge",
+        lambda *_args: (_ for _ in ()).throw(module.HwpForgeRoundtripError("HWPFORGE_SECTION_BUILD_FAILED", "boom")),
+    )
+
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+    section_xml = ZipFile(hwpx_path, "r").read("Contents/section0.xml").decode("utf-8")
+
+    assert hwpx_path.exists()
+    assert "문제 본문" in section_xml
+
+
+def test_export_hwpx_prefers_hwpforge_bundle_when_available(tmp_path, monkeypatch):
+    """helper bundle이 성공하면 reference renderer 대신 그 결과를 사용해야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+
+    class FakeSettings:
+        hwpx_skill_dir = None
+        hwpx_export_engine = "auto"
+        hwpforge_mcp_path = "C:/tooling/hwpforge-mcp.exe"
+
+    helper_calls: list[Path] = []
+
+    def fake_roundtrip(base_hwpx_path: Path, output_dir: Path, runtime_path: str | None):
+        """baseline section을 그대로 복사해 helper 성공 경로만 검증한다."""
+        helper_calls.append(base_hwpx_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        target_path = output_dir / "section0.hwpforge.xml"
+        with ZipFile(base_hwpx_path, "r") as archive:
+            target_path.write_bytes(archive.read("Contents/section0.xml"))
+        return target_path
+
+    monkeypatch.setattr(module, "get_settings", lambda _root: FakeSettings())
+    monkeypatch.setattr(module, "roundtrip_section_via_hwpforge", fake_roundtrip)
+    monkeypatch.setattr(module, "inspect_and_validate_hwpx_via_hwpforge", lambda *_args: None)
+
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
+    section_xml = ZipFile(hwpx_path, "r").read("Contents/section0.xml").decode("utf-8")
+
+    assert len(helper_calls) == 1
+    assert "ANGLE BAC= ANGLE DAE" in section_xml

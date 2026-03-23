@@ -20,6 +20,9 @@ export interface BackendRegion {
   ocr_text?: string | null;
   explanation?: string | null;
   mathml?: string | null;
+  problem_markdown?: string | null;
+  explanation_markdown?: string | null;
+  markdown_version?: string | null;
   svg_url?: string | null;
   crop_url?: string | null;
   image_crop_url?: string | null;

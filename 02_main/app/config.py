@@ -41,10 +41,13 @@ class AppSettings:
     nano_banana_location: str | None = None
     nano_banana_prompt_version: str = "csat_v1"
     hwpx_skill_dir: str | None = None
+    hwpx_export_engine: str = "legacy"
+    hwpforge_mcp_path: str | None = None
     app_url: str | None = None
     cors_allow_origins: tuple[str, ...] = ()
 
 SUPPORTED_NANO_BANANA_PROMPT_VERSIONS = ("csat_v1", "math_general_v1")
+SUPPORTED_HWPX_EXPORT_ENGINES = ("auto", "legacy", "hwpforge")
 
 
 def _load_env_file(root_path: Path) -> dict[str, str]:
@@ -110,6 +113,14 @@ def _get_nano_banana_provider(env_values: dict[str, str]) -> str:
     return (value or DEFAULT_NANO_BANANA_PROVIDER).strip().lower()
 
 
+def _get_hwpx_export_engine(env_values: dict[str, str]) -> str:
+    """지원하는 HWPX export engine 값만 허용한다."""
+    engine = (_get_setting(env_values, "HWPX_EXPORT_ENGINE") or "legacy").strip().lower()
+    if engine in SUPPORTED_HWPX_EXPORT_ENGINES:
+        return engine
+    raise ValueError(f"Unsupported HWPX_EXPORT_ENGINE: {engine}")
+
+
 def get_settings(root_path: Path) -> AppSettings:
     """OCR API가 필요로 하는 인증/과금 설정 묶음을 반환한다."""
     env_values = _load_env_file(root_path)
@@ -126,6 +137,8 @@ def get_settings(root_path: Path) -> AppSettings:
         nano_banana_prompt_version=_get_nano_banana_prompt_version(env_values),
         database_url=_get_setting(env_values, "DATABASE_URL"),
         hwpx_skill_dir=_get_setting(env_values, "HWPX_SKILL_DIR"),
+        hwpx_export_engine=_get_hwpx_export_engine(env_values),
+        hwpforge_mcp_path=_get_setting(env_values, "HWPFORGE_MCP_PATH"),
         app_url=_normalize_url(_get_setting(env_values, "APP_URL")),
         cors_allow_origins=_get_multi_setting(env_values, "CORS_ALLOW_ORIGINS"),
         auth=AuthSettings(

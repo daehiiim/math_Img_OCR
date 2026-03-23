@@ -4,11 +4,12 @@ export type PreviewSegment = {
 };
 
 const MATH_TAG_PATTERN = /<\/?math>/g;
-const INLINE_MATH_PATTERN = /<math>(.*?)<\/math>/g;
+const RAW_DELIMITER_PATTERN = /<\/?math>|\$\$|\$/g;
+const INLINE_MATH_PATTERN = /<math>(.*?)<\/math>|\$\$(.+?)\$\$|\$(.+?)\$/g;
 
 /** 수식 마크업 태그만 제거한 일반 텍스트를 반환한다. */
 function stripMathTags(value: string): string {
-  return value.replace(MATH_TAG_PATTERN, "");
+  return value.replace(RAW_DELIMITER_PATTERN, "");
 }
 
 /** 태그 쌍이 정상적인 순서로 닫히는지 확인한다. */
@@ -23,6 +24,20 @@ function hasBalancedMathTags(value: string): boolean {
   }
 
   return depth === 0;
+}
+
+/** 이스케이프되지 않은 달러 구분자 개수가 짝수인지 확인한다. */
+function hasBalancedDollarDelimiters(value: string): boolean {
+  let count = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] !== "$" || value[index - 1] === "\\") {
+      continue;
+    }
+    count += 1;
+  }
+
+  return count % 2 === 0;
 }
 
 /** 인접한 일반 텍스트를 하나의 세그먼트로 합친다. */
@@ -46,7 +61,7 @@ function parseMathMarkupLine(value: string): PreviewSegment[] {
     return [{ kind: "text", value: "" }];
   }
 
-  if (!hasBalancedMathTags(value)) {
+  if (!hasBalancedMathTags(value) || !hasBalancedDollarDelimiters(value)) {
     return [{ kind: "text", value: stripMathTags(value) }];
   }
 
@@ -57,7 +72,7 @@ function parseMathMarkupLine(value: string): PreviewSegment[] {
     const matchIndex = match.index ?? 0;
     pushTextSegment(segments, value.slice(lastIndex, matchIndex));
 
-    const formulaValue = (match[1] ?? "").trim();
+    const formulaValue = (match[1] ?? match[2] ?? match[3] ?? "").trim();
     if (formulaValue) {
       segments.push({ kind: "formula", value: formulaValue });
     }

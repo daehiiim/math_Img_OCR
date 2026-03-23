@@ -128,6 +128,21 @@ describe("ResultsViewer", () => {
     expect(within(panel).queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("Markdown 필드가 있으면 기존 OCR 텍스트보다 우선해서 렌더링한다", () => {
+    const region = makeRegion({
+      ocrText: "기존 OCR",
+      problemMarkdown: "새 문제 $x+1$",
+    });
+
+    render(<ResultsViewer regions={[region]} />);
+
+    const panel = screen.getByRole("tabpanel", { name: /ocr 결과/i });
+
+    expect(within(panel).getByText(/새 문제/)).toBeInTheDocument();
+    expect(within(panel).getByText("x+1")).toBeInTheDocument();
+    expect(within(panel).queryByText("기존 OCR")).not.toBeInTheDocument();
+  });
+
   it("실패 상태여도 텍스트가 남아 있으면 결과 탭을 유지한다", () => {
     const region = makeRegion({
       status: "failed",

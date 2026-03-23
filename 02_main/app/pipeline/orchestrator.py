@@ -20,6 +20,11 @@ from app.pipeline.figure import (
     render_svg_to_png,
     sanitize_svg,
 )
+from app.pipeline.markdown_contract import (
+    MARKDOWN_VERSION,
+    bridge_legacy_markup_to_markdown,
+    has_markdown_output,
+)
 from app.pipeline.repository import PipelineRepository, PipelineUserContext, build_repository_from_settings
 from app.pipeline.schema import JobPipelineContext, RegionContext, RegionPipelineContext
 
@@ -116,7 +121,19 @@ def _materialize_input_image(
 
 def _is_region_exportable(region: RegionPipelineContext) -> bool:
     """문제 또는 해설 텍스트가 있으면 문서 포함 가능 영역으로 본다."""
-    return bool((region.extractor.ocr_text or "").strip() or (region.extractor.explanation or "").strip())
+    return bool(
+        has_markdown_output(region.extractor.problem_markdown, region.extractor.explanation_markdown)
+        or (region.extractor.ocr_text or "").strip()
+        or (region.extractor.explanation or "").strip()
+    )
+
+
+def _sync_region_markdown_version(region: RegionPipelineContext) -> None:
+    """현재 region에 Markdown 출력이 남아 있으면 버전을 기록한다."""
+    if has_markdown_output(region.extractor.problem_markdown, region.extractor.explanation_markdown):
+        region.extractor.markdown_version = MARKDOWN_VERSION
+        return
+    region.extractor.markdown_version = None
 
 
 def _should_skip_region(region: RegionPipelineContext) -> bool:
@@ -135,8 +152,11 @@ def _reset_region_outputs(
     if do_ocr:
         region.extractor.ocr_text = None
         region.extractor.mathml = None
+        region.extractor.problem_markdown = None
     if do_explanation:
         region.extractor.explanation = None
+        region.extractor.explanation_markdown = None
+    _sync_region_markdown_version(region)
     region.extractor.model_used = None
     region.extractor.openai_request_id = None
     region.figure.crop_url = None
@@ -233,6 +253,8 @@ def _process_region(
         if do_ocr:
             region.extractor.ocr_text = (analyzed.get("ocr_text") or "") or None
             region.extractor.mathml = (analyzed.get("mathml") or "") or None
+            region.extractor.problem_markdown = bridge_legacy_markup_to_markdown(region.extractor.ocr_text)
+            _sync_region_markdown_version(region)
             executed_action_flags["ocr"] = True
         region.extractor.model_used = analyzed.get("model_used")
         region.extractor.openai_request_id = analyzed.get("openai_request_id")
@@ -250,6 +272,8 @@ def _process_region(
             except Exception:
                 explanation = "연습장에 풀이를 기록하세요."
             region.extractor.explanation = explanation or None
+            region.extractor.explanation_markdown = bridge_legacy_markup_to_markdown(region.extractor.explanation)
+            _sync_region_markdown_version(region)
             executed_action_flags["explanation"] = True
             _save_region_progress(user, job)
 

@@ -37,6 +37,12 @@ describe("useJobStore", () => {
     getJobApiMock.mockReset();
     runPipelineApiMock.mockReset();
     saveRegionsApiMock.mockReset();
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:mock"),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   });
 
   it("영역 재저장 시 기존 과금 플래그를 즉시 초기화한다", async () => {
@@ -126,5 +132,99 @@ describe("useJobStore", () => {
     await act(async () => {
       await pendingSave;
     });
+  });
+
+  it("HWPX 다운로드가 끝나기 전에는 job 상태를 exported로 바꾸지 않는다", async () => {
+    createJobApiMock.mockResolvedValue({
+      job_id: "job-export-pending",
+      status: "completed",
+      file_name: "sample.png",
+      image_url: "/sample.png",
+      image_width: 400,
+      image_height: 300,
+      regions: [],
+    });
+    exportHwpxApiMock.mockResolvedValue({ download_url: "/jobs/job-export-pending/export/hwpx/download" });
+
+    let resolveDownload: ((value: { blob: Blob; filename: string }) => void) | null = null;
+    downloadHwpxApiMock.mockImplementation(
+      () =>
+        new Promise<{ blob: Blob; filename: string }>((resolve) => {
+          resolveDownload = resolve;
+        })
+    );
+
+    const { result } = renderHook(() => useJobStore());
+    let jobId = "";
+
+    await act(async () => {
+      jobId = await result.current.createJob(
+        "sample.png",
+        "data:image/png;base64,ZmFrZQ==",
+        400,
+        300,
+        new File(["fake"], "sample.png", { type: "image/png" })
+      );
+    });
+
+    let pendingExport: Promise<void> | null = null;
+    await act(async () => {
+      pendingExport = result.current.exportHwpx(jobId);
+      await Promise.resolve();
+    });
+
+    expect(result.current.getJob(jobId)?.status).toBe("completed");
+    expect(result.current.getJob(jobId)?.hwpxPath).toBeUndefined();
+
+    resolveDownload?.({ blob: new Blob(["hwpx"]), filename: "생성결과.hwpx" });
+
+    await act(async () => {
+      await pendingExport;
+    });
+
+    expect(result.current.getJob(jobId)?.status).toBe("exported");
+    expect(result.current.getJob(jobId)?.hwpxPath).toBe("/jobs/job-export-pending/export/hwpx/download");
+    expect(result.current.getJob(jobId)?.lastError).toBeUndefined();
+  });
+
+  it("HWPX 다운로드가 실패하면 이전 상태를 유지하고 에러를 기록한다", async () => {
+    createJobApiMock.mockResolvedValue({
+      job_id: "job-export-failed",
+      status: "completed",
+      file_name: "sample.png",
+      image_url: "/sample.png",
+      image_width: 400,
+      image_height: 300,
+      regions: [],
+    });
+    exportHwpxApiMock.mockResolvedValue({ download_url: "/jobs/job-export-failed/export/hwpx/download" });
+    downloadHwpxApiMock.mockRejectedValue(new Error("다운로드 실패"));
+
+    const { result } = renderHook(() => useJobStore());
+    let jobId = "";
+
+    await act(async () => {
+      jobId = await result.current.createJob(
+        "sample.png",
+        "data:image/png;base64,ZmFrZQ==",
+        400,
+        300,
+        new File(["fake"], "sample.png", { type: "image/png" })
+      );
+    });
+
+    let failure: Error | null = null;
+    await act(async () => {
+      try {
+        await result.current.exportHwpx(jobId);
+      } catch (error) {
+        failure = error as Error;
+      }
+    });
+
+    expect(failure?.message).toBe("다운로드 실패");
+    expect(result.current.getJob(jobId)?.status).toBe("completed");
+    expect(result.current.getJob(jobId)?.hwpxPath).toBeUndefined();
+    expect(result.current.getJob(jobId)?.lastError).toBe("다운로드 실패");
   });
 });

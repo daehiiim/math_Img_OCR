@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"data\": {\n    \"metadata\": {\n      \"title\": \"\",\n      \"author\": \"\"\n    },\n    \"sections\": 1,\n    \"total_paragraphs\": 10,\n    \"total_tables\": 1,\n    \"total_images\": 1,\n    \"total_charts\": 0,\n    \"section_details\": [\n      {\n        \"index\": 0,\n        \"paragraphs\": 10,\n        \"tables\": 1,\n        \"images\": 1,\n        \"charts\": 0,\n        \"has_header\": false,\n        \"has_footer\": false,\n        \"has_page_number\": false\n      }\n    ]\n  },\n  \"summary\": \"1 sections, 10 paragraphs, 1 tables, 1 images, 0 charts\",\n  \"next\": [\n    \"Use hwpforge_to_json to export for editing\",\n    \"Use hwpforge_convert to create new documents\"\n  ]\n}"
+    }
+  ],
+  "isError": false
+}

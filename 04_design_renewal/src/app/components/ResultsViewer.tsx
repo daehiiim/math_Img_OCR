@@ -17,7 +17,22 @@ interface MathMarkupPreviewProps {
 
 /** 문서에 포함 가능한 텍스트가 있는지 판단한다. */
 function isExportableRegion(region: Region): boolean {
-  return Boolean(region.ocrText?.trim() || region.explanation?.trim());
+  return Boolean(
+    region.problemMarkdown?.trim() ||
+      region.explanationMarkdown?.trim() ||
+      region.ocrText?.trim() ||
+      region.explanation?.trim()
+  );
+}
+
+/** 문제 탭에 표시할 우선순위 본문을 고른다. */
+function getProblemPreviewValue(region: Region): string | undefined {
+  return region.problemMarkdown?.trim() ? region.problemMarkdown : region.ocrText;
+}
+
+/** 해설 탭에 표시할 우선순위 본문을 고른다. */
+function getExplanationPreviewValue(region: Region): string | undefined {
+  return region.explanationMarkdown?.trim() ? region.explanationMarkdown : region.explanation;
 }
 
 /** 화면에 표시할 상태 라벨을 계산한다. */
@@ -140,10 +155,10 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
 
                   <TabsContent value="ocr" className="mt-3">
                     <div className="rounded-lg bg-muted/50 p-4">
-                      <MathMarkupPreview value={region.ocrText} emptyLabel="OCR 결과 없음" />
+                      <MathMarkupPreview value={getProblemPreviewValue(region)} emptyLabel="OCR 결과 없음" />
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                      ⓘ 화면에서는 수식 태그를 숨긴 미리보기만 보여주며, HWPX 내보내기 원본은 그대로 유지됩니다.
+                      ⓘ 화면에서는 수식 마크업을 숨긴 미리보기만 보여주며, HWPX 내보내기 원본은 그대로 유지됩니다.
                     </p>
                   </TabsContent>
 
@@ -183,7 +198,7 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
 
                   <TabsContent value="explain" className="mt-3">
                     <div className="rounded-lg bg-muted/50 p-4">
-                      <MathMarkupPreview value={region.explanation} emptyLabel="해설 없음" />
+                      <MathMarkupPreview value={getExplanationPreviewValue(region)} emptyLabel="해설 없음" />
                     </div>
                   </TabsContent>
                 </Tabs>

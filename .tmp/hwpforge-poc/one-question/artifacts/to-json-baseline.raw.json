@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"data\": {\n    \"output_path\": \"D:\\\\03_PROJECT\\\\05_mathOCR\\\\.tmp\\\\hwpforge-poc\\\\one-question\\\\section0.original.json\",\n    \"size_bytes\": 52516,\n    \"section_only\": true\n  },\n  \"summary\": \"Exported to D:\\\\03_PROJECT\\\\05_mathOCR\\\\.tmp\\\\hwpforge-poc\\\\one-question\\\\section0.original.json (52516 bytes, section only)\",\n  \"next\": [\n    \"Edit the JSON and use hwpforge_patch to apply changes\",\n    \"Use hwpforge_inspect to understand structure first\"\n  ]\n}"
+    }
+  ],
+  "isError": false
+}

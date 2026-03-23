@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"code\": \"PATCH_ERROR\",\n  \"message\": \"Preserving patch failed: Invalid HWPX structure: preserving patch currently supports text-only section edits; structural change detected\",\n  \"hint\": \"Re-export the target section with the current hwpforge_to_json tool so preservation metadata is embedded. Structural/style changes still require a broader rebuild workflow.\"\n}"
+    }
+  ],
+  "isError": true
+}

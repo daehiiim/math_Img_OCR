@@ -987,7 +987,7 @@ class SupabaseBillingStore:
         return client.select(
             "ocr_job_regions",
             params={
-                "select": "region_key,ocr_text,mathml,explanation,styled_image_path,ocr_charged,image_charged,explanation_charged",
+                "select": "region_key,ocr_text,mathml,explanation,problem_markdown,explanation_markdown,styled_image_path,ocr_charged,image_charged,explanation_charged",
                 "job_id": f"eq.{job_id}",
                 "order": "region_order.asc",
             },
@@ -996,11 +996,18 @@ class SupabaseBillingStore:
     def _has_region_action_output(self, region_row: dict[str, Any], action: str) -> bool:
         """region row에서 액션별 성공 산출물 존재 여부를 판단한다."""
         if action == "ocr":
-            return bool(str(region_row.get("ocr_text") or "").strip() or str(region_row.get("mathml") or "").strip())
+            return bool(
+                str(region_row.get("problem_markdown") or "").strip()
+                or str(region_row.get("ocr_text") or "").strip()
+                or str(region_row.get("mathml") or "").strip()
+            )
         if action == "image_stylize":
             return bool(str(region_row.get("styled_image_path") or "").strip())
         if action == "explanation":
-            return bool(str(region_row.get("explanation") or "").strip())
+            return bool(
+                str(region_row.get("explanation_markdown") or "").strip()
+                or str(region_row.get("explanation") or "").strip()
+            )
         return False
 
     def _build_pending_region_actions(

@@ -1,0 +1,141 @@
+{
+  "sample_path": "D:\\03_PROJECT\\05_mathOCR\\templates\\generated-canonical-sample.hwpx",
+  "output_path": "D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\from-json-equation\\hwpforge-generated-equation-example.hwpx",
+  "runtime": {
+    "command": "C:\\Program Files\\nodejs\\node.exe",
+    "args": [
+      "D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\from-json-equation\\node_modules\\@hwpforge\\mcp\\bin\\hwpforge-mcp.js"
+    ]
+  },
+  "initialize": {
+    "protocolVersion": "2025-03-26",
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "serverInfo": {
+      "name": "hwpforge-mcp",
+      "title": "HwpForge MCP Server",
+      "version": "0.5.0",
+      "description": "AI-first Korean HWPX document generation and editing tools",
+      "websiteUrl": "https://github.com/ai-screams/HwpForge"
+    },
+    "instructions": "HwpForge MCP server for Korean HWPX document generation and editing. Converts Markdown to HWPX, inspects document structure, and supports JSON round-trip editing. Use hwpforge_templates to discover available style templates before creating documents. Resources provide style template details. Prompts guide document creation workflows."
+  },
+  "export_full": {
+    "name": "hwpforge_to_json",
+    "payload": {
+      "data": {
+        "output_path": "D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\from-json-equation\\document.original.json",
+        "size_bytes": 47336,
+        "section_only": false
+      },
+      "summary": "Exported to D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\from-json-equation\\document.original.json (47336 bytes)",
+      "next": [
+        "Edit the JSON and use hwpforge_patch to apply changes",
+        "Use hwpforge_inspect to understand structure first"
+      ]
+    }
+  },
+  "original_equations": [
+    "1",
+    "3/2",
+    "9/4",
+    "7/3",
+    "5/2",
+    "ANGLE BAC= ANGLE DAE",
+    "ANGLE ABC= ANGLE ADE",
+    "ABC",
+    "ADE"
+  ],
+  "expected_equations": [
+    "2",
+    "5 over 3",
+    "11 over 4",
+    "8 over 3",
+    "7 over 2",
+    "ANGLE QPR= ANGLE SRT",
+    "ANGLE PQR= ANGLE STR",
+    "PQR",
+    "SRT"
+  ],
+  "from_json": {
+    "name": "hwpforge_from_json",
+    "payload": {
+      "data": {
+        "output_path": "D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\from-json-equation\\hwpforge-generated-equation-example.hwpx",
+        "size_bytes": 9490,
+        "sections": 1,
+        "paragraphs": 9
+      },
+      "summary": "Created D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\from-json-equation\\hwpforge-generated-equation-example.hwpx (9490 bytes, 1 sections, 9 paragraphs)",
+      "next": [
+        "Use hwpforge_inspect to verify the output",
+        "Use hwpforge_to_json + hwpforge_patch to edit",
+        "Note: images are NOT preserved in JSON round-trip; use hwpforge_patch with base_path to keep images"
+      ]
+    }
+  },
+  "inspect_generated": {
+    "name": "hwpforge_inspect",
+    "payload": {
+      "data": {
+        "metadata": {
+          "title": "",
+          "author": ""
+        },
+        "sections": 1,
+        "total_paragraphs": 9,
+        "total_tables": 1,
+        "total_images": 0,
+        "total_charts": 0,
+        "section_details": [
+          {
+            "index": 0,
+            "paragraphs": 9,
+            "tables": 1,
+            "images": 0,
+            "charts": 0,
+            "has_header": false,
+            "has_footer": false,
+            "has_page_number": false
+          }
+        ]
+      },
+      "summary": "1 sections, 9 paragraphs, 1 tables, 0 images, 0 charts",
+      "next": [
+        "Use hwpforge_to_json to export for editing",
+        "Use hwpforge_convert to create new documents"
+      ]
+    }
+  },
+  "generated_export": {
+    "name": "hwpforge_to_json",
+    "payload": {
+      "data": {
+        "output_path": "D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\from-json-equation\\document.generated.json",
+        "size_bytes": 46342,
+        "section_only": false
+      },
+      "summary": "Exported to D:\\03_PROJECT\\05_mathOCR\\.tmp\\hwpforge-poc\\from-json-equation\\document.generated.json (46342 bytes)",
+      "next": [
+        "Edit the JSON and use hwpforge_patch to apply changes",
+        "Use hwpforge_inspect to understand structure first"
+      ]
+    }
+  },
+  "actual_equations": [
+    "2",
+    "5 over 3",
+    "11 over 4",
+    "8 over 3",
+    "7 over 2",
+    "ANGLE QPR= ANGLE SRT",
+    "ANGLE PQR= ANGLE STR",
+    "PQR",
+    "SRT"
+  ],
+  "success": true,
+  "message": "HwpForge from_json 생성 경로에서 equation script가 그대로 HWPX로 생성됨"
+}
