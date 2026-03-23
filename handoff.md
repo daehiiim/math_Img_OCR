@@ -1,42 +1,31 @@
 Done
-- HwpForge direct writer를 메인 경로로 올렸다. exporter는 이제 `direct export IR -> HwpForge writer -> section0.xml`을 먼저 시도한다.
-- bridge 구조는 메인 경로에서 제거됐다. 기존 `legacy baseline -> HwpForge roundtrip section 교체`는 fallback 전용으로만 남아 있다.
-- direct writer 구현은 `02_main/app/pipeline/hwpforge_roundtrip.py`의 `build_section_via_hwpforge()`와 `02_main/app/pipeline/hwpforge_json_builder.py`를 사용한다.
-- direct writer 템플릿 자산 `02_main/templates/hwpx/hwpforge_generated_canonical_sample.json`을 추가했고, 루트 `Dockerfile`도 이를 `/app/templates/hwpx`로 함께 복사한다.
-- 컨테이너 smoke 완료:
-- `build_section_via_hwpforge()` 직접 실행 성공
-- `export_hwpx()` end-to-end 성공
-- 루트 배포 이미지와 `02_main/Dockerfile` 이미지 둘 다 성공
-- 검증 완료:
-- `py -3 -m pytest 02_main/tests/test_hwpforge_roundtrip.py 02_main/tests/test_hwpforge_json_builder.py 02_main/tests/test_exporter.py 02_main/tests/test_pipeline_storage.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_billing.py -q` -> `98 passed`
-- `cd 04_design_renewal && npm run test:run -- src/app/store/jobStore.test.tsx src/app/api/jobApi.test.ts src/app/components/ResultsViewer.test.tsx src/app/store/jobMappers.test.ts` -> `21 passed`
-- `docker build -t mathocr-api-hwpforge-web .` 성공
-- `docker build -f 02_main/Dockerfile -t mathocr-api-local-hwpforge 02_main` 성공
-- root/local 컨테이너에서 direct writer 및 exporter smoke 모두 성공
+- 공개 홈 히어로에 조건부 그레이스케일 타임랩스 배경을 추가했고 실서비스용 파생 자산 `hero-timelapse.webm`, `hero-timelapse.mp4`, `hero-timelapse-poster.jpg`를 `04_design_renewal/src/assets/home/`에 반영했다.
+- `/new` 작업 생성 화면에서 업로드 미리보기 카드를 제거하고 큰 영역 지정 캔버스 중심 레이아웃으로 재배치했다.
+- 배포 DB에 `problem_markdown`, `explanation_markdown`, `markdown_version` 컬럼이 없어도 파이프라인 실행과 과금 점검이 구스키마 fallback으로 계속 동작하도록 백엔드 호환 로직을 추가했다.
+- 백엔드 회귀 검증 `py -3 -m pytest 02_main/tests/test_pipeline_storage.py 02_main/tests/test_billing.py 02_main/tests/test_job_response_fields.py -q`에서 `67 passed`를 확인했다.
 
 In Progress
-- 최우선 과제: direct writer 결과 품질을 Markdown 중심 입력과 multi-region 실데이터 기준으로 넓힌다.
-- 진행 상태: 현재 direct writer는 main path에서 정상 동작하고, 실패 시만 roundtrip/legacy fallback을 탄다.
-- 다음 단계: Markdown 필드 우선 사용, HwpForge 전용 에러 코드 노출, 실서비스 Cloud Run smoke.
+- 최우선 과제: 공개 홈 히어로 타임랩스의 실서비스 QA 및 농도 미세조정
+- 진행 상태: 데스크톱 `min-width: 768px` + `prefers-reduced-motion: no-preference`에서만 비디오가 재생되고, 모바일에서는 poster만 유지된다.
+- 다음 단계: 운영 브라우저에서 실제 첫 인상과 CTA 가독성을 다시 확인하고 필요 시 opacity/filter만 미세조정한다.
 
 Next
-- direct writer 입력을 `problem_markdown` / `explanation_markdown` 우선으로 확장
-- HwpForge 전용 에러 코드를 API와 프런트 사용자 메시지에 반영
-- multi-region / 이미지 우선순위 / 빈 해설 / 보기 없는 문항 회귀 테스트 확대
-- Cloud Run 실제 서비스에 새 루트 이미지 재배포 후 `/jobs/{id}/export/hwpx` 실서비스 smoke
+- 실서비스 배포본에서 히어로 배경 존재감과 헤드라인 대비를 재확인
+- `prefers-reduced-motion` 환경의 실기기 QA
+- 백엔드 API를 재배포한 뒤 `/jobs/{job_id}/run` 실서비스 smoke로 구스키마 fallback 동작을 확인
 
 Related Files
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\hwpforge_roundtrip.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\hwpforge_json_builder.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\exporter.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\templates\hwpx\hwpforge_generated_canonical_sample.json`
-- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_hwpforge_roundtrip.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_hwpforge_json_builder.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_exporter.py`
-- `D:\03_PROJECT\05_mathOCR\Dockerfile`
-- `D:\03_PROJECT\05_mathOCR\.dockerignore`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PublicHomePage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\styles\theme.css`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\NewJobPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\repository.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\billing.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\schema_compat.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_pipeline_storage.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_billing.py`
 
 Last State
-- 웹사이트가 쓰는 same-origin `/jobs/{id}/export/hwpx` 경로는 그대로 유지된다.
-- 컨테이너 기본값 `HWPX_EXPORT_ENGINE=auto`에서는 direct writer를 우선 시도하고, direct 실패 시 roundtrip/legacy fallback으로 정상 파일 출력을 유지한다.
-- 배포 환경 영향이 있다. Cloud Run은 새 루트 `Dockerfile` 이미지로 재배포해야 direct writer 자산과 런타임 번들이 운영에 반영된다.
+- 프런트 히어로 배경은 장식 전용이며 비디오 실패/자동재생 차단 시 사용자 메시지 없이 poster + 기존 블랙 배경으로 폴백한다.
+- `/new` 화면은 업로드 미리보기 대신 큰 영역 지정 캔버스와 파일 교체 버튼을 노출한다.
+- 백엔드 API 계약과 DB migration 파일 자체는 바꾸지 않았고, 미배포 migration 상태에서도 새 Markdown 컬럼을 생략해 구스키마로 동작한다.
+- 배포 환경 변수 변경은 없지만, 이번 수정 반영에는 백엔드 서비스 재배포가 필요하다.

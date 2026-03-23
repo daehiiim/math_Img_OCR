@@ -14,6 +14,11 @@ from standardwebhooks.webhooks import Webhook, WebhookVerificationError
 
 from app.auth import AuthenticatedUser
 from app.config import get_settings
+from app.schema_compat import (
+    is_markdown_output_schema_error,
+    remember_markdown_output_columns_available,
+    should_use_markdown_output_columns,
+)
 from app.supabase import SupabaseApiError, SupabaseClient, SupabaseConfig
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +44,20 @@ JOB_ACTION_FLAG_MAP = {
     "explanation": "explanation_charged",
 }
 FREE_USER_KEY_ACTIONS = {"ocr", "explanation"}
+_JOB_ACTION_CHARGE_BASE_SELECT_COLUMNS = (
+    "region_key",
+    "ocr_text",
+    "mathml",
+    "explanation",
+    "styled_image_path",
+    "ocr_charged",
+    "image_charged",
+    "explanation_charged",
+)
+_JOB_ACTION_CHARGE_MARKDOWN_COLUMNS = (
+    "problem_markdown",
+    "explanation_markdown",
+)
 
 
 @dataclass(frozen=True)
@@ -214,6 +233,14 @@ def _normalize_int(value: Any, field_name: str) -> int:
         return int(value)
     except (TypeError, ValueError) as error:
         raise ValueError(f"invalid {field_name}") from error
+
+
+def _build_job_action_charge_select(include_markdown_output: bool) -> str:
+    """과금 점검용 region 조회 컬럼 목록을 스키마 수준에 맞게 만든다."""
+    columns = list(_JOB_ACTION_CHARGE_BASE_SELECT_COLUMNS)
+    if include_markdown_output:
+        columns[3:3] = list(_JOB_ACTION_CHARGE_MARKDOWN_COLUMNS)
+    return ",".join(columns)
 
 
 def _validate_openai_api_key(api_key: str) -> str:
@@ -984,13 +1011,25 @@ class SupabaseBillingStore:
         job_id: str,
     ) -> list[dict[str, Any]]:
         """job 하위 region들의 액션별 과금 상태와 산출물 존재 여부를 읽는다."""
+        params = {
+            "job_id": f"eq.{job_id}",
+            "order": "region_order.asc",
+        }
+        if should_use_markdown_output_columns():
+            try:
+                rows = client.select(
+                    "ocr_job_regions",
+                    params={**params, "select": _build_job_action_charge_select(include_markdown_output=True)},
+                )
+                remember_markdown_output_columns_available(True)
+                return rows
+            except Exception as error:
+                if not is_markdown_output_schema_error(error):
+                    raise
+                remember_markdown_output_columns_available(False)
         return client.select(
             "ocr_job_regions",
-            params={
-                "select": "region_key,ocr_text,mathml,explanation,problem_markdown,explanation_markdown,styled_image_path,ocr_charged,image_charged,explanation_charged",
-                "job_id": f"eq.{job_id}",
-                "order": "region_order.asc",
-            },
+            params={**params, "select": _build_job_action_charge_select(include_markdown_output=False)},
         )
 
     def _has_region_action_output(self, region_row: dict[str, Any], action: str) -> bool:

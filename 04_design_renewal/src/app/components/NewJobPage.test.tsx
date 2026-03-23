@@ -223,6 +223,32 @@ describe("NewJobPage", () => {
     expect(prepareLoginMock).not.toHaveBeenCalled();
   });
 
+  it("업로드 후에는 별도 미리보기 카드 없이 영역 지정 화면에서 파일을 교체할 수 있다", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <NewJobPage />
+      </MemoryRouter>
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [new File(["fake"], "sample.png", { type: "image/png" })],
+      },
+    });
+
+    expect(await screen.findByText("sample.png")).toBeInTheDocument();
+    expect(screen.queryByText("업로드 미리보기")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다른 파일 선택" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "다른 파일 선택" }));
+
+    expect(screen.getByRole("button", { name: "파일 선택" })).toBeInTheDocument();
+    expect(screen.queryByText("sample.png")).not.toBeInTheDocument();
+  });
+
   it("비로그인 상태에서 파이프라인 실행을 누르면 draft를 저장하고 로그인으로 이동한다", async () => {
     const user = userEvent.setup();
     mockAuthState = {

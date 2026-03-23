@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import app.auth as auth_module
 import app.main as main_module
+import app.schema_compat as schema_compat_module
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingPlan, BillingProfile, BillingService, PolarGateway, StoredOpenAiKey, SupabaseBillingStore, build_billing_service
 from app.config import AppSettings, AuthSettings, BillingSettings
@@ -757,6 +758,64 @@ def test_consume_job_action_credits_skips_ocr_and_explanation_for_user_key():
     assert preview["required_credits"] == 2
     assert charged["charged_actions"] == ["image_stylize", "image_stylize"]
     assert charged["credits_balance"] == 1
+
+
+def test_ensure_job_action_credits_available_falls_back_when_markdown_columns_are_missing():
+    schema_compat_module._markdown_output_columns_available = None
+    user = make_user()
+
+    class SchemaFallbackClient:
+        """Markdown 컬럼이 없는 배포 DB를 재현하는 테스트 클라이언트다."""
+
+        def __init__(self) -> None:
+            self.region_selects: list[str] = []
+
+        def select(self, table: str, *, params: dict[str, object]) -> list[dict]:
+            """과금 점검에 필요한 region row만 반환한다."""
+            if table != "ocr_job_regions":
+                raise AssertionError(f"unexpected table: {table}")
+            select_value = str(params.get("select") or "")
+            self.region_selects.append(select_value)
+            if "problem_markdown" in select_value:
+                raise SupabaseApiError(
+                    'column problem_markdown does not exist in relation "ocr_job_regions"'
+                )
+            return [
+                {
+                    "region_key": "q1",
+                    "ocr_text": "문제 1",
+                    "mathml": None,
+                    "explanation": "해설 1",
+                    "styled_image_path": None,
+                    "ocr_charged": False,
+                    "image_charged": False,
+                    "explanation_charged": False,
+                }
+            ]
+
+    client = SchemaFallbackClient()
+    store = object.__new__(SupabaseBillingStore)
+    store._user_client = lambda current_user: client
+    store._read_job_charge_state = lambda current_client, job_id: {"id": job_id, "status": "queued"}
+    store.get_or_create_profile = lambda current_user: BillingProfile(
+        user_id=current_user.user_id,
+        credits_balance=5,
+        used_credits=0,
+        openai_connected=False,
+        openai_key_masked=None,
+    )
+
+    preview = store.ensure_job_action_credits_available(
+        user,
+        "job-123",
+        ["ocr", "explanation"],
+        processing_type="service_api",
+    )
+
+    assert preview["required_credits"] == 2
+    assert len(client.region_selects) == 2
+    assert "problem_markdown" in client.region_selects[0]
+    assert "problem_markdown" not in client.region_selects[1]
 
 
 def test_ensure_job_region_credits_available_counts_only_uncharged_regions():

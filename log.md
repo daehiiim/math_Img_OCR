@@ -228,3 +228,45 @@
 - [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx) 회귀 테스트도 `디지털 작업 공간` 이미지가 `object-cover`를 사용하도록 갱신했다.
 - 검증 결과:
   - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `4 passed`
+
+## 2026-03-23 14:46 KST
+
+- 공개 홈 히어로에 저존재감 타임랩스 배경을 추가했다. 구현 파일은 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx), [theme.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css), [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx)다.
+- 원본 [star-timelapse.mp4](/D:/03_PROJECT/05_mathOCR/04_new_design/star-timelapse.mp4)에서 실서비스용 파생 자산 3종을 생성했다.
+  - [hero-timelapse.webm](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/assets/home/hero-timelapse.webm) `180745 bytes`
+  - [hero-timelapse.mp4](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/assets/home/hero-timelapse.mp4) `206201 bytes`
+  - [hero-timelapse-poster.jpg](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/assets/home/hero-timelapse-poster.jpg) `47451 bytes`
+- 비디오는 `min-width: 768px`이며 `prefers-reduced-motion: no-preference`일 때만 클라이언트에서 마운트되도록 분리했다. SSR/초기 렌더에서는 poster + 기존 블랙 그라데이션만 보이게 유지했다.
+- 예상 가능한 폴백 사유를 `viewport-blocked`, `reduced-motion`, `media-query-unsupported`, `video-unavailable`로 정의했고, 모든 케이스에서 사용자 메시지 없이 정적 poster 상태를 유지하도록 맞췄다.
+- CSS는 비디오 존재감을 낮추기 위해 `grayscale`, `brightness`, `contrast`, dark overlay, noise, 하단 마스크를 조합했다. 모바일에서는 poster opacity만 더 낮춰 첫 화면 블랙 인상을 유지했다.
+- 회귀 테스트를 먼저 추가해 실패를 확인한 뒤 구현했다. 새 테스트는 데스크톱 조건부 비디오 렌더, `muted/loop/playsInline/aria-hidden/poster/preload` 속성, 모바일/감속 모드 미노출을 검증한다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+  - `npx vite preview --host 127.0.0.1 --port 5173` 기준 데스크톱 `1440px`에서 비디오 재생/낮은 opacity 확인, 모바일 `390px`에서 비디오 미마운트 확인
+- 이번 변경은 프런트 정적 자산 범위다. 백엔드 API, Cloud Run, 타입 계약 변경은 없다.
+
+## 2026-03-23 14:52 KST
+
+- `/new` 작업 생성 화면에서 업로드 미리보기 카드를 제거하고, 파일 정보와 교체 액션을 [NewJobPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx)의 영역 지정 헤더로 이동했다.
+- 편집 레이아웃은 `max-w-4xl` 고정 폭 대신 넓은 작업 영역을 사용하도록 확장했고, 데스크톱에서는 큰 영역 지정 캔버스 + 우측 고정 실행 패널 구조로 재배치했다.
+- 같은 파일도 다시 선택할 수 있도록 숨김 파일 입력 초기화 로직을 추가했고, `다른 파일 선택` 버튼으로 현재 draft를 비우고 업로드 단계로 되돌아가게 했다.
+- 회귀 테스트를 먼저 추가해 실패를 확인한 뒤 구현했다. 새 테스트는 업로드 후 `업로드 미리보기` 섹션이 사라지고, 영역 지정 화면에서 파일 교체 버튼이 노출되는 흐름을 검증한다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/NewJobPage.test.tsx src/app/components/RegionEditor.test.tsx` -> `8 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+  - `npm run dev -- --host 127.0.0.1 --port 4173` + 브라우저 스냅샷 기준 `/new?resumeDraft=1`에서 별도 미리보기 카드 없이 큰 편집 캔버스가 노출되는 것을 확인
+- 이번 변경은 프런트 레이아웃 범위다. 백엔드 API, Cloud Run, 배포 환경 변수 변경은 없다.
+
+## 2026-03-23 14:53 KST
+
+- 파이프라인 실행 버튼에서 `[500] 배포 DB 스키마가 최신이 아닙니다.`가 뜨는 원인을 `2026-03-23_markdown_output_fields.sql` 미적용 배포 DB와 새 Markdown 출력 컬럼 직접 조회/저장 로직의 충돌로 확인했다.
+- `02_main/app/schema_compat.py`를 추가해 `problem_markdown`, `explanation_markdown`, `markdown_version` 컬럼 부재를 감지하고 현재 프로세스에서 구스키마 fallback 여부를 기억하도록 정리했다.
+- `02_main/app/pipeline/repository.py`는 `ocr_job_regions` 조회와 upsert에서 새 Markdown 컬럼이 없으면 구버전 컬럼 집합으로 자동 재시도하도록 수정했다. 따라서 `/jobs/{job_id}/run`, `/jobs/{job_id}`, `/jobs/{job_id}/regions` 모두 구스키마에서도 계속 동작한다.
+- `02_main/app/billing.py`도 과금 사전 점검/후차감에서 같은 fallback을 사용하도록 바꿨다. 배포 DB migration이 늦어도 파이프라인 실행 전 크레딧 점검에서 더 이상 500으로 막히지 않는다.
+- 회귀 테스트를 먼저 추가해 실패를 확인한 뒤 구현했다. 새 테스트는 저장소 read/save fallback과 과금 점검 fallback을 각각 검증한다.
+- 검증 결과:
+  - `py -3 -m pytest 02_main/tests/test_pipeline_storage.py -k "falls_back_when_markdown_columns_are_missing" -q` -> `2 passed`
+  - `py -3 -m pytest 02_main/tests/test_billing.py -k "falls_back_when_markdown_columns_are_missing" -q` -> `1 passed`
+  - `py -3 -m pytest 02_main/tests/test_pipeline_storage.py 02_main/tests/test_billing.py 02_main/tests/test_job_response_fields.py -q` -> `67 passed`
+- 이번 변경은 배포 환경 변수 변경이 없고 DB migration을 강제하지 않는다. 다만 실제 오류 해소를 위해서는 백엔드 서비스 재배포가 필요하다.

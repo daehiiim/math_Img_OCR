@@ -6,6 +6,12 @@ from typing import Protocol
 
 from app.auth import AuthenticatedUser
 from app.config import get_settings
+from app.schema_compat import (
+    is_markdown_output_schema_error,
+    remember_markdown_output_columns_available,
+    should_use_markdown_output_columns,
+    strip_markdown_output_fields,
+)
 from app.pipeline.schema import (
     ExtractorContext,
     FigureContext,
@@ -16,6 +22,38 @@ from app.pipeline.schema import (
 from app.supabase import SupabaseClient, SupabaseConfig
 
 PipelineUserContext = AuthenticatedUser
+_REGION_BASE_SELECT_COLUMNS = (
+    "region_key",
+    "polygon",
+    "region_type",
+    "region_order",
+    "status",
+    "ocr_text",
+    "explanation",
+    "mathml",
+    "model_used",
+    "openai_request_id",
+    "svg_path",
+    "edited_svg_path",
+    "edited_svg_version",
+    "crop_path",
+    "image_crop_path",
+    "styled_image_path",
+    "styled_image_model",
+    "png_rendered_path",
+    "processing_ms",
+    "error_reason",
+    "was_charged",
+    "ocr_charged",
+    "image_charged",
+    "explanation_charged",
+    "charged_at",
+)
+_REGION_MARKDOWN_COLUMNS = (
+    "problem_markdown",
+    "explanation_markdown",
+    "markdown_version",
+)
 
 
 class PipelineRepository(Protocol):
@@ -64,6 +102,14 @@ def _guess_content_type(path_value: str, fallback: str) -> str:
     """파일명 확장자로 MIME 타입을 추정한다."""
     guessed, _ = mimetypes.guess_type(path_value)
     return guessed or fallback
+
+
+def _build_region_select(include_markdown_output: bool) -> str:
+    """region 조회 컬럼 목록을 현재 스키마 호환 수준에 맞게 만든다."""
+    columns = list(_REGION_BASE_SELECT_COLUMNS)
+    if include_markdown_output:
+        columns[8:8] = list(_REGION_MARKDOWN_COLUMNS)
+    return ",".join(columns)
 
 
 class SupabasePipelineRepository:
@@ -127,7 +173,7 @@ class SupabasePipelineRepository:
 
     def _build_region_payload(self, job: JobPipelineContext) -> list[dict[str, object]]:
         """영역 목록을 upsert payload로 변환한다."""
-        return [
+        payloads = [
             {
                 "job_id": job.job_id,
                 "region_key": region.context.id,
@@ -161,6 +207,47 @@ class SupabasePipelineRepository:
             }
             for region in job.regions
         ]
+        if should_use_markdown_output_columns():
+            return payloads
+        return [strip_markdown_output_fields(payload) for payload in payloads]
+
+    def _read_region_rows(self, client: SupabaseClient, job_id: str) -> list[dict]:
+        """job region row를 현재 배포 스키마에 맞는 컬럼 집합으로 읽는다."""
+        params = {
+            "job_id": f"eq.{job_id}",
+            "order": "region_order.asc",
+        }
+        if should_use_markdown_output_columns():
+            try:
+                rows = client.select(
+                    "ocr_job_regions",
+                    params={**params, "select": _build_region_select(include_markdown_output=True)},
+                )
+                remember_markdown_output_columns_available(True)
+                return rows
+            except Exception as error:
+                if not is_markdown_output_schema_error(error):
+                    raise
+                remember_markdown_output_columns_available(False)
+        return client.select(
+            "ocr_job_regions",
+            params={**params, "select": _build_region_select(include_markdown_output=False)},
+        )
+
+    def _upsert_region_rows(self, client: SupabaseClient, job: JobPipelineContext) -> None:
+        """job region upsert를 현재 배포 스키마에 맞는 payload로 수행한다."""
+        payload = self._build_region_payload(job)
+        if should_use_markdown_output_columns():
+            try:
+                client.upsert("ocr_job_regions", payload=payload, on_conflict="job_id,region_key")
+                remember_markdown_output_columns_available(True)
+                return
+            except Exception as error:
+                if not is_markdown_output_schema_error(error):
+                    raise
+                remember_markdown_output_columns_available(False)
+                payload = [strip_markdown_output_fields(row) for row in payload]
+        client.upsert("ocr_job_regions", payload=payload, on_conflict="job_id,region_key")
 
     def create_job(
         self,
@@ -222,15 +309,7 @@ class SupabasePipelineRepository:
         if not job_rows:
             raise FileNotFoundError(f"job not found: {job_id}")
 
-        region_rows = client.select(
-            "ocr_job_regions",
-            params={
-                "select": "region_key,polygon,region_type,region_order,status,ocr_text,explanation,mathml,model_used,openai_request_id,svg_path,edited_svg_path,edited_svg_version,crop_path,image_crop_path,styled_image_path,styled_image_model,png_rendered_path,processing_ms,error_reason,was_charged,ocr_charged,image_charged,explanation_charged,charged_at",
-                "select": "region_key,polygon,region_type,region_order,status,ocr_text,explanation,mathml,problem_markdown,explanation_markdown,markdown_version,model_used,openai_request_id,svg_path,edited_svg_path,edited_svg_version,crop_path,image_crop_path,styled_image_path,styled_image_model,png_rendered_path,processing_ms,error_reason,was_charged,ocr_charged,image_charged,explanation_charged,charged_at",
-                "job_id": f"eq.{job_id}",
-                "order": "region_order.asc",
-            },
-        )
+        region_rows = self._read_region_rows(client, job_id)
 
         job_row = job_rows[0]
         regions = [self._map_region_row(row) for row in region_rows]
@@ -286,11 +365,7 @@ class SupabasePipelineRepository:
         if not job.regions:
             return
 
-        client.upsert(
-            "ocr_job_regions",
-            payload=self._build_region_payload(job),
-            on_conflict="job_id,region_key",
-        )
+        self._upsert_region_rows(client, job)
 
     def upload_bytes(
         self,

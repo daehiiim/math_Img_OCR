@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockNavigate = vi.fn();
 
@@ -22,9 +22,38 @@ vi.mock("react-router", async () => {
 
 import { PublicHomePage } from "./PublicHomePage";
 
+const originalMatchMedia = window.matchMedia;
+const originalInnerWidth = window.innerWidth;
+
+/** 히어로 비디오 노출 여부를 테스트할 수 있도록 반응형 환경을 흉내 낸다. */
+function mockHeroMediaEnvironment({ allowMotion, isDesktop }: { allowMotion: boolean; isDesktop: boolean }) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: isDesktop ? 1440 : 390,
+    writable: true,
+  });
+
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches:
+      query === "(min-width: 768px)"
+        ? isDesktop
+        : query === "(prefers-reduced-motion: no-preference)"
+          ? allowMotion
+          : false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
 describe("PublicHomePage", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
+    mockHeroMediaEnvironment({ allowMotion: true, isDesktop: true });
   });
 
   it("다크 랜딩 카피와 주요 섹션을 노출한다", () => {
@@ -72,6 +101,54 @@ describe("PublicHomePage", () => {
     expect(screen.queryByAltText("출력 형식")).not.toBeInTheDocument();
   });
 
+  it("데스크톱이며 감속 모드가 아니면 히어로 장식 비디오를 렌더링한다", async () => {
+    const { container } = render(
+      <MemoryRouter>
+        <PublicHomePage />
+      </MemoryRouter>
+    );
+
+    const heroVideo = await waitFor(() => {
+      const videoElement = container.querySelector("video");
+      expect(videoElement).not.toBeNull();
+      return videoElement as HTMLVideoElement;
+    });
+
+    expect(heroVideo.autoplay).toBe(true);
+    expect(heroVideo.muted).toBe(true);
+    expect(heroVideo.loop).toBe(true);
+    expect(heroVideo.playsInline).toBe(true);
+    expect(heroVideo).toHaveAttribute("aria-hidden", "true");
+    expect(heroVideo).toHaveAttribute("poster", expect.stringContaining("hero-timelapse-poster"));
+    expect(heroVideo).toHaveAttribute("preload", "metadata");
+    expect(heroVideo.querySelector('source[type="video/webm"]')).toHaveAttribute("src", expect.stringContaining("hero-timelapse"));
+    expect(heroVideo.querySelector('source[type="video/mp4"]')).toHaveAttribute("src", expect.stringContaining("hero-timelapse"));
+  });
+
+  it("모바일 환경에서는 히어로 장식 비디오를 렌더링하지 않는다", () => {
+    mockHeroMediaEnvironment({ allowMotion: true, isDesktop: false });
+
+    const { container } = render(
+      <MemoryRouter>
+        <PublicHomePage />
+      </MemoryRouter>
+    );
+
+    expect(container.querySelector("video")).not.toBeInTheDocument();
+  });
+
+  it("감속 모드에서는 히어로 장식 비디오를 렌더링하지 않는다", () => {
+    mockHeroMediaEnvironment({ allowMotion: false, isDesktop: true });
+
+    const { container } = render(
+      <MemoryRouter>
+        <PublicHomePage />
+      </MemoryRouter>
+    );
+
+    expect(container.querySelector("video")).not.toBeInTheDocument();
+  });
+
   it("히어로와 하단 CTA가 기존 목적지로 이동한다", async () => {
     const user = userEvent.setup();
 
@@ -102,4 +179,13 @@ describe("PublicHomePage", () => {
 
     expect(screen.getByAltText("Error loading image")).toBeInTheDocument();
   });
+});
+
+afterAll(() => {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: originalInnerWidth,
+    writable: true,
+  });
+  window.matchMedia = originalMatchMedia;
 });

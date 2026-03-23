@@ -55,6 +55,28 @@ export function NewJobPage() {
     regions
   );
 
+  /** 선택한 파일과 draft 편집 상태를 초기화한다. */
+  const resetDraftSelection = useCallback(() => {
+    setPreview(null);
+    setRegions([]);
+    setExecutionOptions(defaultExecutionOptions);
+    setErrorMessage(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  /** 같은 파일도 다시 고를 수 있도록 파일 선택기를 연다. */
+  const openFilePicker = useCallback(() => {
+    if (!fileInputRef.current) {
+      return;
+    }
+
+    fileInputRef.current.value = "";
+    fileInputRef.current.click();
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -286,7 +308,20 @@ export function NewJobPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-[1480px] p-4 sm:p-6 lg:p-8">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".png,.jpg,.jpeg"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            handleFile(file);
+          }
+        }}
+      />
+
       <div className="mb-8">
         <h1>새 작업 생성</h1>
         <p className="text-muted-foreground text-[14px] mt-1">
@@ -296,7 +331,7 @@ export function NewJobPage() {
 
       {/* 업로드 영역 */}
       {!preview ? (
-        <Card className="mb-6">
+        <Card className="mx-auto mb-6 max-w-4xl">
           <CardContent className="pt-6">
             <div
               className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
@@ -320,80 +355,60 @@ export function NewJobPage() {
               </p>
               <Button
                 variant="outline"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openFilePicker}
                 className="gap-2"
               >
                 <ImageIcon className="w-4 h-4" />
                 파일 선택
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".png,.jpg,.jpeg"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFile(file);
-                }}
-              />
             </div>
           </CardContent>
         </Card>
       ) : (
-        /* 미리보기 */
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-[14px]">업로드 미리보기</CardTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setPreview(null);
-                  setErrorMessage(null);
-                }}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-muted rounded-xl overflow-hidden mb-4">
-              <img
-                src={preview.url}
-                alt={preview.name}
-                className="w-full max-h-[400px] object-contain"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[14px]">{preview.name}</p>
-                <p className="text-[12px] text-muted-foreground">
-                  {preview.width} × {preview.height}px
-                </p>
-              </div>
-            </div>
-            {errorMessage && (
-              <p className="text-[12px] text-destructive mt-3">{errorMessage}</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {preview ? (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-[14px]">영역 지정</CardTitle>
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0">
+            <Card className="overflow-hidden">
+              <CardHeader className="gap-4 border-b bg-muted/20">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-[15px]">영역 지정</CardTitle>
+                    <p className="text-[13px] text-muted-foreground">
+                      업로드 원본을 크게 보면서 바로 문제 영역을 그릴 수 있도록 미리보기 카드를 제거했습니다.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={resetDraftSelection}
+                    className="gap-2 self-start"
+                  >
+                    <X className="w-4 h-4" />
+                    다른 파일 선택
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+                  <span className="rounded-full border bg-background px-3 py-1 font-medium text-foreground">
+                    {preview.name}
+                  </span>
+                  <span className="rounded-full bg-background/70 px-3 py-1">
+                    {preview.width} × {preview.height}px
+                  </span>
+                  <span className="rounded-full bg-background/70 px-3 py-1">
+                    영역 {regions.length}개
+                  </span>
+                </div>
+                {errorMessage && (
+                  <p className="text-[12px] text-destructive">{errorMessage}</p>
+                )}
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 pb-6 pt-6 sm:px-6">
                 <RegionEditor
                   imageUrl={preview.url}
                   imageWidth={preview.width}
                   imageHeight={preview.height}
                   regions={regions}
                   onRegionsChange={setRegions}
+                  disabled={isSubmitting}
                   onSaveRegions={async (draftRegions) => {
                     setRegions(draftRegions);
                     toast.success("영역 draft가 반영되었습니다.");
@@ -403,7 +418,7 @@ export function NewJobPage() {
             </Card>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-6 xl:sticky xl:top-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-[14px] flex items-center gap-2">
@@ -472,7 +487,7 @@ export function NewJobPage() {
             </Card>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

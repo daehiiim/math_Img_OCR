@@ -10,6 +10,8 @@ from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+import app.pipeline.repository as repository_module
+import app.schema_compat as schema_compat_module
 from app.pipeline import orchestrator
 from app.pipeline.repository import PipelineRepository, PipelineUserContext
 from app.pipeline.schema import (
@@ -19,6 +21,7 @@ from app.pipeline.schema import (
     RegionContext,
     RegionPipelineContext,
 )
+from app.supabase import SupabaseApiError
 
 
 def make_png_bytes(width: int = 32, height: int = 24) -> bytes:
@@ -847,3 +850,170 @@ def test_run_pipeline_returns_partial_failure_counts(monkeypatch):
     assert saved_job.regions[1].status == "failed"
     assert saved_job.regions[0].extractor.ocr_text == "첫 번째 문제"
     assert saved_job.regions[1].extractor.ocr_text is None
+
+
+def test_supabase_repository_read_job_falls_back_when_markdown_columns_are_missing():
+    schema_compat_module._markdown_output_columns_available = None
+
+    class SchemaFallbackClient:
+        """Markdown 컬럼이 없는 구스키마를 흉내 내는 테스트 클라이언트다."""
+
+        def __init__(self) -> None:
+            self.region_selects: list[str] = []
+
+        def select(self, table: str, *, params: dict[str, object]) -> list[dict]:
+            """테이블별 select 결과를 고정 응답으로 반환한다."""
+            if table == "ocr_jobs":
+                return [
+                    {
+                        "id": "job-123",
+                        "file_name": "sample.png",
+                        "source_image_path": "user-123/job-123/input/sample.png",
+                        "image_width": 32,
+                        "image_height": 24,
+                        "processing_type": "service_api",
+                        "status": "completed",
+                        "last_error": None,
+                        "hwpx_export_path": None,
+                        "created_at": "2026-03-23T00:00:00+00:00",
+                        "updated_at": "2026-03-23T00:00:00+00:00",
+                    }
+                ]
+            if table == "ocr_job_regions":
+                select_value = str(params.get("select") or "")
+                self.region_selects.append(select_value)
+                if "problem_markdown" in select_value:
+                    raise SupabaseApiError(
+                        'column problem_markdown does not exist in relation "ocr_job_regions"'
+                    )
+                return [
+                    {
+                        "region_key": "q1",
+                        "polygon": [[0, 0], [8, 0], [8, 8], [0, 8]],
+                        "region_type": "mixed",
+                        "region_order": 1,
+                        "status": "completed",
+                        "ocr_text": "문제 본문",
+                        "explanation": "해설 본문",
+                        "mathml": "<math>x</math>",
+                        "model_used": "gpt-test",
+                        "openai_request_id": "req-test",
+                        "svg_path": None,
+                        "edited_svg_path": None,
+                        "edited_svg_version": 0,
+                        "crop_path": None,
+                        "image_crop_path": None,
+                        "styled_image_path": None,
+                        "styled_image_model": None,
+                        "png_rendered_path": None,
+                        "processing_ms": 10,
+                        "error_reason": None,
+                        "was_charged": False,
+                        "ocr_charged": False,
+                        "image_charged": False,
+                        "explanation_charged": False,
+                        "charged_at": None,
+                    }
+                ]
+            raise AssertionError(f"unexpected table: {table}")
+
+    repository = object.__new__(repository_module.SupabasePipelineRepository)
+    client = SchemaFallbackClient()
+    repository._client = lambda user: client
+
+    saved_job = repository.read_job(make_user(), "job-123")
+
+    assert len(client.region_selects) == 2
+    assert "problem_markdown" in client.region_selects[0]
+    assert "problem_markdown" not in client.region_selects[1]
+    assert saved_job.regions[0].extractor.problem_markdown is None
+    assert saved_job.regions[0].extractor.explanation_markdown is None
+    assert saved_job.regions[0].extractor.markdown_version is None
+
+
+def test_supabase_repository_save_job_falls_back_when_markdown_columns_are_missing():
+    schema_compat_module._markdown_output_columns_available = None
+
+    class SchemaFallbackClient:
+        """Markdown 컬럼 upsert 실패를 재현하는 테스트 클라이언트다."""
+
+        def __init__(self) -> None:
+            self.upsert_payloads: list[list[dict[str, object]]] = []
+
+        def update(
+            self,
+            table: str,
+            *,
+            filters: dict[str, object],
+            payload: dict[str, object],
+        ) -> list[dict]:
+            """job update 호출을 허용한다."""
+            return [payload]
+
+        def select(self, table: str, *, params: dict[str, object]) -> list[dict]:
+            """기존 region 키 조회는 빈 결과를 돌려준다."""
+            if table == "ocr_job_regions":
+                return []
+            raise AssertionError(f"unexpected table: {table}")
+
+        def delete(self, table: str, *, filters: dict[str, object]) -> None:
+            """삭제는 발생하지 않아야 한다."""
+            raise AssertionError("delete should not be called")
+
+        def upsert(
+            self,
+            table: str,
+            *,
+            payload: list[dict[str, object]],
+            on_conflict: str,
+        ) -> list[dict]:
+            """첫 번째 upsert는 실패시키고 두 번째는 성공시킨다."""
+            self.upsert_payloads.append(payload)
+            if "problem_markdown" in payload[0]:
+                raise SupabaseApiError(
+                    'column problem_markdown does not exist in relation "ocr_job_regions"'
+                )
+            return payload
+
+    repository = object.__new__(repository_module.SupabasePipelineRepository)
+    client = SchemaFallbackClient()
+    repository._client = lambda user: client
+
+    job = JobPipelineContext(
+        job_id="job-123",
+        file_name="sample.png",
+        image_url="user-123/job-123/input/sample.png",
+        image_width=32,
+        image_height=24,
+        processing_type="service_api",
+        status="completed",
+        created_at="2026-03-23T00:00:00+00:00",
+        updated_at="2026-03-23T00:00:00+00:00",
+        regions=[
+            RegionPipelineContext(
+                context=RegionContext(
+                    id="q1",
+                    polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
+                    type="mixed",
+                    order=1,
+                ),
+                extractor=ExtractorContext(
+                    ocr_text="문제 본문",
+                    explanation="해설 본문",
+                    problem_markdown="문제 $x$",
+                    explanation_markdown="해설 $x$",
+                    markdown_version="mathocr_markdown_bridge_v1",
+                ),
+                status="completed",
+                success=True,
+            )
+        ],
+    )
+
+    repository.save_job(make_user(), job)
+
+    assert len(client.upsert_payloads) == 2
+    assert "problem_markdown" in client.upsert_payloads[0][0]
+    assert "problem_markdown" not in client.upsert_payloads[1][0]
+    assert "explanation_markdown" not in client.upsert_payloads[1][0]
+    assert "markdown_version" not in client.upsert_payloads[1][0]

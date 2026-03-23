@@ -1,7 +1,10 @@
 import { motion } from "motion/react";
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router";
 
+import heroTimelapseMp4 from "@/assets/home/hero-timelapse.mp4";
+import heroTimelapsePoster from "@/assets/home/hero-timelapse-poster.jpg";
+import heroTimelapseWebm from "@/assets/home/hero-timelapse.webm";
 import homeOcrResultImage from "@/assets/home/home-ocr-result.png";
 import homeSourceProblemImage from "@/assets/home/home-source-problem.png";
 
@@ -31,10 +34,29 @@ type LandingCardPanelProps = {
   index: number;
 };
 
+type HeroMediaAvailability = {
+  fallbackReason: HeroMediaFallbackReason | null;
+  shouldRenderVideo: boolean;
+  userMessage: null;
+};
+
+type HeroMediaFallbackReason =
+  | "viewport-blocked"
+  | "reduced-motion"
+  | "media-query-unsupported"
+  | "video-unavailable";
+
 const heroWordRows = [
   ["수학", "수식을", "HWPX로,"],
   ["완벽한", "감각으로."],
 ];
+
+const heroMediaFallbackPolicy: Record<HeroMediaFallbackReason, { fallbackReason: HeroMediaFallbackReason; userMessage: null }> = {
+  "media-query-unsupported": { fallbackReason: "media-query-unsupported", userMessage: null },
+  "reduced-motion": { fallbackReason: "reduced-motion", userMessage: null },
+  "video-unavailable": { fallbackReason: "video-unavailable", userMessage: null },
+  "viewport-blocked": { fallbackReason: "viewport-blocked", userMessage: null },
+};
 
 const middleFeatureImage =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuAUbOoVIra_wGGc0Y8fJTDtAOB9SyewR6KJw8YY4wtSdtUGyuuGDuHn189WHLiEKF0DQOAKabwg3dkUTBnFrJZYXKEIZix6MT8pS9aRoEV3kxHqe70hAuaDfhyhVrdfdJ_R-bRa1DE976ej6IJMY4DON08gdbhmeJF3c-jZauCXcfQmB6N96Vz72LIXZ06_8Ad64iZLdDHBRFCnLuPgjyhpateoHa88_Flu2s7X43bR07VocdjO98rKU8l5LxursfAiKrO8pWbVjLE";
@@ -73,6 +95,65 @@ function getRevealMotion(delay = 0, distance = 24) {
   } as const;
 }
 
+/** 구형 브라우저까지 포함해 미디어 쿼리 변경 리스너를 연결한다. */
+function subscribeMediaQuery(queryList: MediaQueryList, onChange: () => void) {
+  if ("addEventListener" in queryList) {
+    queryList.addEventListener("change", onChange);
+    return () => queryList.removeEventListener("change", onChange);
+  }
+
+  queryList.addListener(onChange);
+  return () => queryList.removeListener(onChange);
+}
+
+/** 현재 장치 조건에서 히어로 비디오를 노출할 수 있는지 계산한다. */
+function getHeroMediaAvailability(): HeroMediaAvailability {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return { shouldRenderVideo: false, ...heroMediaFallbackPolicy["media-query-unsupported"] };
+  }
+
+  if (!window.matchMedia("(min-width: 768px)").matches) {
+    return { shouldRenderVideo: false, ...heroMediaFallbackPolicy["viewport-blocked"] };
+  }
+
+  if (!window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+    return { shouldRenderVideo: false, ...heroMediaFallbackPolicy["reduced-motion"] };
+  }
+
+  return { shouldRenderVideo: true, fallbackReason: null, userMessage: null };
+}
+
+/** 히어로 배경 비디오의 노출 조건을 클라이언트에서만 동기화한다. */
+function useHeroMediaAvailability() {
+  const [availability, setAvailability] = useState<HeroMediaAvailability>({
+    shouldRenderVideo: false,
+    fallbackReason: null,
+    userMessage: null,
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      setAvailability(getHeroMediaAvailability());
+      return undefined;
+    }
+
+    const desktopQuery = window.matchMedia("(min-width: 768px)");
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: no-preference)");
+    const syncAvailability = () => setAvailability(getHeroMediaAvailability());
+
+    syncAvailability();
+    const unsubscribeDesktop = subscribeMediaQuery(desktopQuery, syncAvailability);
+    const unsubscribeMotion = subscribeMediaQuery(motionQuery, syncAvailability);
+
+    return () => {
+      unsubscribeDesktop();
+      unsubscribeMotion();
+    };
+  }, []);
+
+  return availability;
+}
+
 /** 헤더와 하단 CTA에서 공통으로 쓰는 버튼 그룹을 렌더링한다. */
 function ActionButtons({ alignCenter = false, onPricing, onTry }: ActionButtonsProps) {
   const wrapperClassName = alignCenter ? "justify-center" : "justify-center md:justify-start";
@@ -89,12 +170,52 @@ function ActionButtons({ alignCenter = false, onPricing, onTry }: ActionButtonsP
   );
 }
 
+/** 히어로 섹션 전용 배경 포스터와 조건부 비디오 레이어를 렌더링한다. */
+function HeroBackgroundMedia() {
+  const availability = useHeroMediaAvailability();
+  const [hasVideoError, setHasVideoError] = useState(false);
+
+  useEffect(() => {
+    if (availability.shouldRenderVideo) {
+      setHasVideoError(false);
+    }
+  }, [availability.shouldRenderVideo]);
+
+  const fallbackReason = hasVideoError ? "video-unavailable" : availability.fallbackReason;
+  const shouldRenderVideo = availability.shouldRenderVideo && !hasVideoError;
+
+  return (
+    <div className="public-home-hero-media" aria-hidden="true" data-hero-media-fallback={fallbackReason ?? undefined}>
+      <div className="public-home-hero-poster" style={{ backgroundImage: `url(${heroTimelapsePoster})` }} />
+      {shouldRenderVideo ? (
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+          className="public-home-hero-video"
+          poster={heroTimelapsePoster}
+          onError={() => setHasVideoError(true)}
+        >
+          <source src={heroTimelapseWebm} type="video/webm" />
+          <source src={heroTimelapseMp4} type="video/mp4" />
+        </video>
+      ) : null}
+      <div className="public-home-hero-overlay" />
+      <div className="public-home-hero-noise" />
+    </div>
+  );
+}
+
 /** 풀스크린 히어로 섹션과 대표 CTA를 렌더링한다. */
 function HeroSection({ onPricing, onTry }: ActionButtonsProps) {
   return (
-    <section className="relative flex min-h-screen items-center justify-center px-6 py-20 text-center">
-      <div className="glow-bg left-1/2 top-10 h-[34rem] w-[34rem] -translate-x-1/2" />
-      <motion.div {...getRevealMotion(0.05, 18)} className="reveal relative mx-auto flex max-w-6xl flex-col items-center gap-12">
+    <section className="public-home-hero-section relative flex min-h-screen items-center justify-center px-6 py-20 text-center">
+      <HeroBackgroundMedia />
+      <div className="glow-bg left-1/2 top-10 z-10 h-[34rem] w-[34rem] -translate-x-1/2" />
+      <motion.div {...getRevealMotion(0.05, 18)} className="reveal relative z-20 mx-auto flex max-w-6xl flex-col items-center gap-12">
         <h1 className="hero-title text-[clamp(3.2rem,11vw,9rem)] font-black leading-[0.94] text-[var(--home-ink)]">
           {heroWordRows.map((wordRow, rowIndex) => (
             <span key={wordRow.join("-")} className="block">
