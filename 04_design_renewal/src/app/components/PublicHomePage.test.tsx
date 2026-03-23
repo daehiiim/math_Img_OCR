@@ -77,6 +77,24 @@ describe("PublicHomePage", () => {
     expect(screen.queryByText("문제 사진이 곧,")).not.toBeInTheDocument();
   });
 
+  it("중앙 하이라이트 헤드라인은 원하는 두 줄 구조를 명시한다", () => {
+    render(
+      <MemoryRouter>
+        <PublicHomePage />
+      </MemoryRouter>
+    );
+
+    const featureHeading = screen.getByRole("heading", { name: /수학문제 직접 타이핑하느라\s*힘들지 않았나요\?/ });
+    const headingLines = featureHeading.querySelectorAll("span");
+
+    expect(headingLines).toHaveLength(2);
+    expect(headingLines[0]).toHaveTextContent("수학문제 직접 타이핑하느라");
+    expect(headingLines[0]).toHaveClass("block", "md:whitespace-nowrap");
+    expect(headingLines[1]).toHaveTextContent("힘들지 않았나요?");
+    expect(headingLines[1]).toHaveClass("block");
+    expect(featureHeading).toHaveClass("break-keep");
+  });
+
   it("현재 서비스 흐름에 맞는 CTA와 이미지 자산을 노출한다", () => {
     const { container } = render(
       <MemoryRouter>
@@ -102,7 +120,7 @@ describe("PublicHomePage", () => {
     expect(screen.queryByAltText("출력 형식")).not.toBeInTheDocument();
   });
 
-  it("히어로 장식 비디오는 환경과 무관하게 렌더되고 어두운 구간만 반복한다", async () => {
+  it("히어로 장식 비디오는 환경과 무관하게 렌더되고 기본 루프 재생을 유지한다", async () => {
     const { container } = render(
       <MemoryRouter>
         <PublicHomePage />
@@ -135,13 +153,13 @@ describe("PublicHomePage", () => {
 
     fireEvent.loadedMetadata(heroVideo);
 
-    expect(heroVideo.currentTime).toBeCloseTo(0.3);
-    expect(heroVideo.playbackRate).toBeCloseTo(1.35);
+    expect(heroVideo.currentTime).toBeCloseTo(0);
+    expect(heroVideo.playbackRate).toBeCloseTo(1);
 
-    heroVideo.currentTime = 4.4;
+    heroVideo.currentTime = 5.8;
     fireEvent.timeUpdate(heroVideo);
 
-    expect(heroVideo.currentTime).toBeCloseTo(0.3);
+    expect(heroVideo.currentTime).toBeCloseTo(5.8);
   });
 
   it("모바일 환경에서도 히어로 장식 비디오를 계속 렌더링한다", () => {

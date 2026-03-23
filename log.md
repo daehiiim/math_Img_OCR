@@ -389,3 +389,41 @@
 - 검증 결과:
   - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
 - 이번 변경은 프런트 범위라 백엔드 API, Cloud Run, 환경 변수 변경은 없다.
+
+## 2026-03-23 17:36 KST
+
+- 공개 홈 중앙 하이라이트 헤드라인이 `타이핑하느라`를 중간에서 끊어 먹는 문제를 수정했다.
+- root cause는 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 의 `h2`가 첫 줄을 일반 텍스트 노드로 렌더해, 한국어 기본 줄바꿈 규칙이 단어 내부까지 허용되던 구조였다.
+- 같은 파일에 `mainFeatureHeadingLines` 상수를 추가하고, 헤드라인을 두 개의 block span으로 명시했다. 첫 줄은 `md:whitespace-nowrap`, 전체 헤드라인은 `break-keep` 계약을 적용해 데스크톱에서는 요청한 두 줄 구성을 유지하고 한국어 단어 중간 줄바꿈을 막도록 정리했다.
+- [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx) 에 회귀 테스트를 먼저 추가해, 중앙 하이라이트 헤드라인이 두 개의 span으로 분리되고 첫 줄 계약이 유지되는지 실패로 고정한 뒤 통과시켰다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `8 passed`
+- 이번 변경도 프런트 범위라 백엔드 API, Cloud Run, 환경 변수 변경은 없다.
+
+## 2026-03-23 17:39 KST
+
+- 공개 홈 히어로 비디오가 너무 빨리 반복된다는 피드백에 맞춰 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 의 루프 계약을 다시 조정했다.
+- 원인은 기존 설정이 `0.3s -> 4.3s` 구간을 `1.35x`로 돌려 실제 반복 주기가 약 `3초` 수준까지 짧아진 점이었다.
+- 같은 파일에서 `heroVideoPlaybackRate`를 `0.36`으로 낮추고 `heroVideoLoopResetSeconds`를 `5.7`로 늘려, 시작점 `0.3s` 기준 실제 체감 루프가 약 `15초`가 되도록 맞췄다.
+- [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx) 는 TDD로 먼저 수정했다. `loadedmetadata` 이후 `playbackRate=0.36`, `timeupdate` 시점 `5.8s`에서 `0.3s`로 되돌아가는 계약을 실패로 고정한 뒤 통과시켰다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `8 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` -> `built in 3.54s`
+- 이번 변경도 프런트 범위라 백엔드 API, Cloud Run, 환경 변수 변경은 없다.
+
+## 2026-03-23 17:55 KST
+
+- 사용자가 지적한 `뚝뚝 끊김` 과 `밝아지는 구간 튐` 을 근본적으로 없애기 위해, 단순 `playbackRate` 감속 접근을 버리고 새 15초 루프 자산 재생성 방식으로 전환했다.
+- 새 설계와 구현 계획은 [2026-03-23-home-hero-video-15s-loop-design.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-03-23-home-hero-video-15s-loop-design.md), [2026-03-23-home-hero-video-15s-loop-plan.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-03-23-home-hero-video-15s-loop-plan.md) 에 기록했다.
+- [build_hero_timelapse_loop.py](/D:/03_PROJECT/05_mathOCR/04_design_renewal/scripts/build_hero_timelapse_loop.py) 를 추가해 원본 [star-timelapse.mp4](/D:/03_PROJECT/05_mathOCR/04_new_design/star-timelapse.mp4) 를 읽고, 밝기 컷오프 탐지, 광류 기반 프레임 보간, 루프 tail 블렌드, `mp4/webm/poster` 재출력을 한 번에 처리하도록 만들었다.
+- 스크립트는 원본 기준 `cutoff_index=120`, `safety_margin_frames=10`, `usable_end_index=110` 을 선택해 밝아지는 후반 구간을 잘라냈고, 서비스 자산을 `25fps / 15초` 루프로 다시 생성했다.
+- [test_build_hero_timelapse_loop.py](/D:/03_PROJECT/05_mathOCR/04_design_renewal/tests/test_build_hero_timelapse_loop.py) 를 먼저 추가해 밝기 컷오프 감지와 출력 위치 샘플링 로직을 실패로 고정한 뒤 통과시켰다.
+- [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 는 수동 `playbackRate` 조절과 `timeupdate` 리셋을 제거하고, 새 자산을 브라우저 기본 `loop` 로만 재생하도록 단순화했다.
+- [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx) 도 새 계약에 맞춰 `loadedmetadata` 이후 `currentTime=0`, `playbackRate=1`, `timeupdate` 에서 강제 리셋 없음으로 기대값을 바꿔 실패를 확인한 뒤 통과시켰다.
+- 출력 비디오 밝기 검증 기준 `min=29.56`, `max=33.55`, `mean=30.51` 이었고, 0초/3.7초/7.5초/11.2초/15초 시점 모두 어두운 톤을 유지했다.
+- 브라우저 수동 QA 기준 `duration=15`, `paused=false`, `readyState=4`, `loop=true`, `currentTime` 이 `2.82 -> 5.83` 으로 증가해 정상 재생을 확인했다. 콘솔 오류는 `favicon.ico` 404 하나뿐이었고 기능 영향은 없었다.
+- 검증 결과:
+  - `py -3 -m pytest 04_design_renewal/tests/test_build_hero_timelapse_loop.py -q` -> `2 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `8 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` -> `built in 3.73s`
+- 이번 변경도 프런트 정적 자산 범위라 백엔드 API, Cloud Run, 환경 변수 변경은 없다. 프런트 재배포만 필요하다.

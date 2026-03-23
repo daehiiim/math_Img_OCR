@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useState, type CSSProperties, type SyntheticEvent } from "react";
+import { useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router";
 
 import heroTimelapseMp4 from "@/assets/home/hero-timelapse.mp4";
@@ -39,9 +39,6 @@ const heroWordRows = [
   ["완벽한", "감각으로."],
 ];
 
-const heroVideoPlaybackRate = 1.35;
-const heroVideoStartSeconds = 0.3;
-const heroVideoLoopResetSeconds = 4.3;
 const heroMediaVisualTokens = {
   "--hero-media-position": "32% center",
   "--hero-poster-opacity": "0.46",
@@ -54,6 +51,8 @@ const heroMediaVisualTokens = {
 
 const middleFeatureImage =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuAUbOoVIra_wGGc0Y8fJTDtAOB9SyewR6KJw8YY4wtSdtUGyuuGDuHn189WHLiEKF0DQOAKabwg3dkUTBnFrJZYXKEIZix6MT8pS9aRoEV3kxHqe70hAuaDfhyhVrdfdJ_R-bRa1DE976ej6IJMY4DON08gdbhmeJF3c-jZauCXcfQmB6N96Vz72LIXZ06_8Ad64iZLdDHBRFCnLuPgjyhpateoHa88_Flu2s7X43bR07VocdjO98rKU8l5LxursfAiKrO8pWbVjLE";
+
+const mainFeatureHeadingLines = ["수학문제 직접 타이핑하느라", "힘들지 않았나요?"] as const;
 
 const landingCards: LandingCard[] = [
   {
@@ -123,8 +122,6 @@ function HeroBackgroundMedia() {
           aria-hidden="true"
           className="public-home-hero-video"
           poster={heroTimelapsePoster}
-          onLoadedMetadata={primeHeroBackgroundVideo}
-          onTimeUpdate={recycleHeroBackgroundVideo}
           onError={() => setHasVideoError(true)}
         >
           <source src={heroTimelapseWebm} type="video/webm" />
@@ -134,21 +131,6 @@ function HeroBackgroundMedia() {
       <div className="public-home-hero-overlay" />
     </div>
   );
-}
-
-/** 히어로 비디오를 더 읽히는 구간과 속도로 시작시킨다. */
-function primeHeroBackgroundVideo(event: SyntheticEvent<HTMLVideoElement>) {
-  event.currentTarget.currentTime = heroVideoStartSeconds;
-  event.currentTarget.playbackRate = heroVideoPlaybackRate;
-}
-
-/** 히어로 비디오가 어두운 초반 구간으로 돌아가기 전에 밝은 구간으로 다시 되돌린다. */
-function recycleHeroBackgroundVideo(event: SyntheticEvent<HTMLVideoElement>) {
-  if (event.currentTarget.currentTime < heroVideoLoopResetSeconds) {
-    return;
-  }
-
-  event.currentTarget.currentTime = heroVideoStartSeconds;
 }
 
 /** 풀스크린 히어로 섹션과 대표 CTA를 렌더링한다. */
@@ -193,9 +175,9 @@ function MainFeatureSection() {
           />
           <div className="absolute inset-0 flex items-center justify-center bg-black/48 px-8 text-center">
             <div className="max-w-3xl space-y-8">
-              <h2 className="text-[clamp(2.2rem,5vw,4.5rem)] font-black leading-[1.04] tracking-[-0.05em] text-white">
-                수학문제 직접 타이핑하느라
-                <span className="block">힘들지 않았나요?</span>
+              <h2 className="break-keep text-[clamp(2.2rem,5vw,4.5rem)] font-black leading-[1.04] tracking-[-0.05em] text-white">
+                <span className="block md:whitespace-nowrap">{mainFeatureHeadingLines[0]}</span>
+                <span className="block">{mainFeatureHeadingLines[1]}</span>
               </h2>
               <p className="text-sm font-medium leading-8 tracking-[0.08em] text-neutral-300 md:text-base">사진만 찍으면 바로 출력가능한 한글파일로 변환해줍니다.</p>
             </div>
