@@ -157,6 +157,85 @@ def test_build_exported_document_keeps_problem_image_choice_explanation_order():
     ]
 
 
+def test_build_exported_document_converts_problem_stem_math_into_mixed_runs():
+    """문제 본문 `<math>`는 literal text가 아니라 text/equation run으로 분해돼야 한다."""
+    from app.pipeline.hwpforge_json_builder import build_exported_document_from_template
+
+    exported = build_exported_document_from_template(
+        load_template_document(),
+        {
+            "year": "2031",
+            "regions": [
+                {
+                    "number": 1,
+                    "stem": "길이 <math>AB</math> 와 점 <math>E</math> 를 구하라.",
+                    "choices": None,
+                    "image": None,
+                    "explanation_lines": [],
+                }
+            ],
+        },
+    )
+
+    problem_runs = exported["document"]["sections"][0]["paragraphs"][0]["runs"]
+
+    assert [run["content"]["Text"] for run in problem_runs[4:] if "Text" in run["content"]] == [
+        "길이 ",
+        " 와 점 ",
+        " 를 구하라.",
+    ]
+    assert [run["content"]["Control"]["Equation"]["script"] for run in problem_runs[4:] if "Control" in run["content"]] == [
+        "AB",
+        "E",
+    ]
+    assert all("<math>" not in run["content"].get("Text", "") for run in problem_runs[4:])
+
+
+def test_build_exported_document_resizes_equation_widths_from_script_length():
+    """짧은 수식과 긴 수식은 템플릿 고정 폭이 아니라 script 길이에 따라 다른 폭을 가져야 한다."""
+    from app.pipeline.hwpforge_json_builder import build_exported_document_from_template
+
+    exported = build_exported_document_from_template(
+        load_template_document(),
+        {
+            "year": "2031",
+            "regions": [
+                {
+                    "number": 1,
+                    "stem": "닮음 관계를 이용해 값을 구하시오.",
+                    "choices": [
+                        "E",
+                        "3 over 2",
+                        "AB : AD = BC : AE",
+                        "x = 21 over 4 - 8 = 9 over 4",
+                        "AC",
+                    ],
+                    "image": None,
+                    "explanation_lines": [
+                        "<math>AB</math> 와 <math>x = 21 over 4 - 8 = 9 over 4</math> 를 비교한다.",
+                    ],
+                }
+            ],
+        },
+    )
+
+    paragraphs = exported["document"]["sections"][0]["paragraphs"]
+    choice_widths = {
+        run["content"]["Control"]["Equation"]["script"]: run["content"]["Control"]["Equation"]["width"]
+        for run in paragraphs[2]["runs"]
+        if "Control" in run["content"]
+    }
+    explanation_widths = {
+        run["content"]["Control"]["Equation"]["script"]: run["content"]["Control"]["Equation"]["width"]
+        for run in paragraphs[6]["runs"]
+        if "Control" in run["content"]
+    }
+
+    assert choice_widths["AC"] < choice_widths["AB : AD = BC : AE"]
+    assert choice_widths["AB : AD = BC : AE"] < choice_widths["x = 21 over 4 - 8 = 9 over 4"]
+    assert explanation_widths["AB"] < explanation_widths["x = 21 over 4 - 8 = 9 over 4"]
+
+
 def test_build_hwpforge_export_ir_prefers_markdown_fields_when_present(tmp_path):
     """Markdown 필드가 있으면 legacy text 대신 그 값을 export IR에 써야 한다."""
     from app.pipeline.hwpforge_json_builder import build_hwpforge_export_ir

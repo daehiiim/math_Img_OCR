@@ -246,9 +246,11 @@
   inset: 0;
   pointer-events: none;
   opacity: 0.06;
-  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.46) 1px, transparent 0);
-  background-size: 26px 26px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.62), transparent 92%);
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.12) 0%, transparent 22%),
+    radial-gradient(circle at 76% 18%, rgba(255, 255, 255, 0.08) 0%, transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 36%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.78), transparent 88%);
 }
 
 .public-home-page .glass-nav {
@@ -258,7 +260,9 @@
 }
 
 .public-home-page .hero-title {
-  text-shadow: 0 0 60px rgba(255, 255, 255, 0.12);
+  text-shadow:
+    0 0 56px rgba(0, 0, 0, 0.62),
+    0 0 18px rgba(0, 0, 0, 0.28);
 }
 
 .public-home-page .public-home-hero-section {
@@ -281,38 +285,32 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scale(1.05);
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.96) 74%, transparent 100%);
+  transform: scale(1.04);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.98) 88%, rgba(0, 0, 0, 0.72) 100%);
 }
 
 .public-home-page .public-home-hero-poster {
-  background-position: center;
+  background-position: var(--hero-media-position, 32% center);
   background-size: cover;
-  opacity: 0.14;
-  filter: grayscale(1) brightness(0.42) contrast(0.95);
+  opacity: var(--hero-poster-opacity, 0.46);
+  filter: var(--hero-poster-filter, grayscale(1) brightness(1.16) contrast(1.22));
 }
 
 .public-home-page .public-home-hero-video {
-  opacity: 0.36;
+  opacity: var(--hero-video-opacity, 0.9);
+  object-position: var(--hero-media-position, 32% center);
+  filter: var(--hero-video-filter, grayscale(1) brightness(1.42) contrast(1.46));
   mix-blend-mode: screen;
-  filter: grayscale(1) brightness(0.78) contrast(1.18);
 }
 
 .public-home-page .public-home-hero-overlay {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(180deg, rgba(1, 3, 4, 0.82) 0%, rgba(1, 3, 4, 0.58) 38%, rgba(0, 0, 0, 0.9) 100%),
-    radial-gradient(circle at top center, rgba(255, 255, 255, 0.06) 0%, transparent 32%);
-}
-
-.public-home-page .public-home-hero-noise {
-  position: absolute;
-  inset: 0;
-  opacity: 0.055;
-  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.72) 1px, transparent 0);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.44) 60%, transparent 100%);
+  background: var(
+    --hero-overlay-background,
+    linear-gradient(180deg, rgba(1, 3, 4, 0.48) 0%, rgba(1, 3, 4, 0.16) 38%, rgba(0, 0, 0, 0.66) 100%),
+    radial-gradient(circle at top center, rgba(255, 255, 255, 0.05) 0%, transparent 34%)
+  );
 }
 
 .public-home-page .hero-word {
@@ -368,6 +366,7 @@
 
 @media (max-width: 767px) {
   .public-home-page .public-home-hero-poster {
-    opacity: 0.1;
+    opacity: 0.28;
+    filter: grayscale(1) brightness(0.94) contrast(1.14);
   }
 }

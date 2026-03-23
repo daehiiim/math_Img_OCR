@@ -78,7 +78,7 @@ describe("PublicHomePage", () => {
   });
 
   it("현재 서비스 흐름에 맞는 CTA와 이미지 자산을 노출한다", () => {
-    render(
+    const { container } = render(
       <MemoryRouter>
         <PublicHomePage />
       </MemoryRouter>
@@ -98,6 +98,7 @@ describe("PublicHomePage", () => {
     expect(resultImage).toHaveClass("object-contain");
     expect(featureImage).toHaveClass("object-cover");
     expect(featureImage).not.toHaveClass("object-contain");
+    expect(container.querySelector(".public-home-hero-noise")).not.toBeInTheDocument();
     expect(screen.queryByAltText("출력 형식")).not.toBeInTheDocument();
   });
 
@@ -123,6 +124,24 @@ describe("PublicHomePage", () => {
     expect(heroVideo).toHaveAttribute("preload", "metadata");
     expect(heroVideo.querySelector('source[type="video/webm"]')).toHaveAttribute("src", expect.stringContaining("hero-timelapse"));
     expect(heroVideo.querySelector('source[type="video/mp4"]')).toHaveAttribute("src", expect.stringContaining("hero-timelapse"));
+
+    const heroMedia = container.querySelector(".public-home-hero-media");
+
+    expect(heroMedia).toHaveStyle({
+      "--hero-media-position": "32% center",
+      "--hero-poster-opacity": "0.46",
+      "--hero-video-opacity": "0.9",
+    });
+
+    fireEvent.loadedMetadata(heroVideo);
+
+    expect(heroVideo.currentTime).toBeCloseTo(4.8);
+    expect(heroVideo.playbackRate).toBeCloseTo(1.35);
+
+    heroVideo.currentTime = 5.8;
+    fireEvent.timeUpdate(heroVideo);
+
+    expect(heroVideo.currentTime).toBeCloseTo(4.8);
   });
 
   it("모바일 환경에서는 히어로 장식 비디오를 렌더링하지 않는다", () => {

@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type SyntheticEvent } from "react";
 import { useNavigate } from "react-router";
 
 import heroTimelapseMp4 from "@/assets/home/hero-timelapse.mp4";
@@ -50,6 +50,19 @@ const heroWordRows = [
   ["수학", "수식을", "HWPX로,"],
   ["완벽한", "감각으로."],
 ];
+
+const heroVideoPlaybackRate = 1.35;
+const heroVideoStartSeconds = 4.8;
+const heroVideoLoopResetSeconds = 5.7;
+const heroMediaVisualTokens = {
+  "--hero-media-position": "32% center",
+  "--hero-poster-opacity": "0.46",
+  "--hero-poster-filter": "grayscale(1) brightness(1.16) contrast(1.22)",
+  "--hero-video-opacity": "0.9",
+  "--hero-video-filter": "grayscale(1) brightness(1.42) contrast(1.46)",
+  "--hero-overlay-background":
+    "linear-gradient(180deg, rgba(1, 3, 4, 0.48) 0%, rgba(1, 3, 4, 0.16) 38%, rgba(0, 0, 0, 0.66) 100%), radial-gradient(circle at top center, rgba(255, 255, 255, 0.05) 0%, transparent 34%)",
+} as CSSProperties;
 
 const heroMediaFallbackPolicy: Record<HeroMediaFallbackReason, { fallbackReason: HeroMediaFallbackReason; userMessage: null }> = {
   "media-query-unsupported": { fallbackReason: "media-query-unsupported", userMessage: null },
@@ -185,7 +198,7 @@ function HeroBackgroundMedia() {
   const shouldRenderVideo = availability.shouldRenderVideo && !hasVideoError;
 
   return (
-    <div className="public-home-hero-media" aria-hidden="true" data-hero-media-fallback={fallbackReason ?? undefined}>
+    <div className="public-home-hero-media" aria-hidden="true" data-hero-media-fallback={fallbackReason ?? undefined} style={heroMediaVisualTokens}>
       <div className="public-home-hero-poster" style={{ backgroundImage: `url(${heroTimelapsePoster})` }} />
       {shouldRenderVideo ? (
         <video
@@ -197,6 +210,8 @@ function HeroBackgroundMedia() {
           aria-hidden="true"
           className="public-home-hero-video"
           poster={heroTimelapsePoster}
+          onLoadedMetadata={primeHeroBackgroundVideo}
+          onTimeUpdate={recycleHeroBackgroundVideo}
           onError={() => setHasVideoError(true)}
         >
           <source src={heroTimelapseWebm} type="video/webm" />
@@ -204,9 +219,23 @@ function HeroBackgroundMedia() {
         </video>
       ) : null}
       <div className="public-home-hero-overlay" />
-      <div className="public-home-hero-noise" />
     </div>
   );
+}
+
+/** 히어로 비디오를 더 읽히는 구간과 속도로 시작시킨다. */
+function primeHeroBackgroundVideo(event: SyntheticEvent<HTMLVideoElement>) {
+  event.currentTarget.currentTime = heroVideoStartSeconds;
+  event.currentTarget.playbackRate = heroVideoPlaybackRate;
+}
+
+/** 히어로 비디오가 어두운 초반 구간으로 돌아가기 전에 밝은 구간으로 다시 되돌린다. */
+function recycleHeroBackgroundVideo(event: SyntheticEvent<HTMLVideoElement>) {
+  if (event.currentTarget.currentTime < heroVideoLoopResetSeconds) {
+    return;
+  }
+
+  event.currentTarget.currentTime = heroVideoStartSeconds;
 }
 
 /** 풀스크린 히어로 섹션과 대표 CTA를 렌더링한다. */

@@ -1,32 +1,29 @@
 Done
-- 공개 홈 히어로에 조건부 그레이스케일 타임랩스 배경을 추가했고 실서비스용 파생 자산 `hero-timelapse.webm`, `hero-timelapse.mp4`, `hero-timelapse-poster.jpg`를 `04_design_renewal/src/assets/home/`에 반영했다.
-- `/new` 작업 생성 화면에서 업로드 미리보기 카드를 제거하고 큰 영역 지정 캔버스 중심 레이아웃으로 재배치했다.
-- 배포 DB에 `problem_markdown`, `explanation_markdown`, `markdown_version` 컬럼이 없어도 파이프라인 실행과 과금 점검이 구스키마 fallback으로 계속 동작하도록 백엔드 호환 로직을 추가했다.
-- 백엔드 회귀 검증 `py -3 -m pytest 02_main/tests/test_pipeline_storage.py 02_main/tests/test_billing.py 02_main/tests/test_job_response_fields.py -q`에서 `67 passed`를 확인했다.
+- `hwpx_math_layout.py`를 추가해 `<math>` 분해, 수식 스크립트 정규화, script 길이 측정, equation width 샘플 보간을 공통화했다.
+- `hwpforge_json_builder.py`에서 문제 본문을 mixed Text/Equation run으로 재조립하고, problem/choice/explanation equation width를 공통 보간 규칙으로 계산하도록 수정했다.
+- `hwpx_reference_renderer.py`도 같은 공통 수식 레이아웃 계층을 사용하도록 정리했다.
+- `test_hwpforge_json_builder.py`, `test_exporter.py`, `error_patterns.md`를 갱신했고 `py -3 -m pytest 02_main/tests/test_hwpforge_json_builder.py 02_main/tests/test_exporter.py -q`에서 `32 passed`를 확인했다.
 
 In Progress
-- 최우선 과제: 공개 홈 히어로 타임랩스의 실서비스 QA 및 농도 미세조정
-- 진행 상태: 데스크톱 `min-width: 768px` + `prefers-reduced-motion: no-preference`에서만 비디오가 재생되고, `screen` blend 기반 가시성 조정을 반영했다. 모바일에서는 poster만 유지된다.
-- 다음 단계: 운영 브라우저에서 실제 첫 인상과 CTA 가독성을 다시 확인하고 필요 시 opacity/filter만 미세조정한다.
+- 최우선 과제: 실제 HwpForge 런타임 기준 direct writer 강제 E2E 및 한글 수동 QA
+- 진행 상태: 코드 수정과 unit/integration 회귀는 끝났지만, 현재 저장소에 HwpForge MCP 런타임이 없어 `HWPX_EXPORT_ENGINE=hwpforge` 강제 export 실동작 검증은 아직 못 했다.
+- 다음 단계: 런타임 경로를 준비한 뒤 강제 hwpforge export를 생성하고 `Contents/section0.xml` 및 한글 열람으로 본문 수식 렌더링과 짧은 수식 여백을 확인한다.
 
 Next
-- 실서비스 배포본에서 히어로 배경 존재감과 헤드라인 대비를 재확인
-- `prefers-reduced-motion` 환경의 실기기 QA
-- 백엔드 API를 재배포한 뒤 `/jobs/{job_id}/run` 실서비스 smoke로 구스키마 fallback 동작을 확인
+- HwpForge MCP 런타임 설치 또는 경로 연결
+- `HWPX_EXPORT_ENGINE=hwpforge` 기준 export smoke 및 `section0.xml` 확인
+- 백엔드 재배포 후 실제 export 경로 수동 QA
 
 Related Files
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PublicHomePage.tsx`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\styles\theme.css`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\NewJobPage.tsx`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\repository.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\billing.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\schema_compat.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_pipeline_storage.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_billing.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\hwpx_math_layout.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\hwpforge_json_builder.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\hwpx_reference_renderer.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_hwpforge_json_builder.py`
+- `D:\03_PROJECT\05_mathOCR\02_main\tests\test_exporter.py`
+- `D:\03_PROJECT\05_mathOCR\error_patterns.md`
 
 Last State
-- 프런트 히어로 배경은 장식 전용이며 비디오 실패/자동재생 차단 시 사용자 메시지 없이 poster + 기존 블랙 배경으로 폴백한다.
-- 2026-03-23 15:05 KST 기준 비디오는 정상 재생되며, visibility 이슈는 CSS 톤 조정으로 완화했다.
-- `/new` 화면은 업로드 미리보기 대신 큰 영역 지정 캔버스와 파일 교체 버튼을 노출한다.
-- 백엔드 API 계약과 DB migration 파일 자체는 바꾸지 않았고, 미배포 migration 상태에서도 새 Markdown 컬럼을 생략해 구스키마로 동작한다.
-- 배포 환경 변수 변경은 없지만, 이번 수정 반영에는 백엔드 서비스 재배포가 필요하다.
+- direct writer는 더 이상 problem `stem`의 `<math>` markup을 literal Text run으로 내보내지 않는다.
+- equation width는 템플릿 폭 순환 재사용이 아니라 script 길이 샘플 보간으로 계산한다.
+- 배포 환경 변수 변경은 없고 백엔드 코드 재배포만 필요하다.
+- 실제 hwpforge 강제 경로 E2E는 런타임 부재 때문에 다음 세션에서 이어서 확인해야 한다.

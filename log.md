@@ -260,6 +260,87 @@
   - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
   - `http://127.0.0.1:5173/` Playwright 확인 기준 데스크톱 히어로에서 별 타임랩스 흔적이 이전보다 명확히 드러나고, 헤드라인 대비는 유지됨
 
+## 2026-03-23 15:44 KST
+
+- 사용자 스크린샷 기준으로 “아예 안 보인다”는 피드백이 계속되어 root cause를 한 단계 더 파고들었다.
+- 결론은 opacity 하나가 아니라 레이어 조합 문제였다.
+  - 소스 비디오는 대부분 프레임이 매우 어둡다. 샘플 분석 기준 평균 밝기 약 `6/255` 구간이 길고, 밝은 픽셀 비율도 낮았다.
+  - 히어로 위에 정적 점무늬가 2겹 있었다. [theme.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css)의 `.public-home-page::before`와 `.public-home-hero-noise`가 실제 별보다 더 먼저 눈에 들어와 타임랩스를 배경 노이즈처럼 보이게 만들었다.
+  - 하단 마스크와 중앙 대형 타이포 때문에 산 능선/은하대처럼 “영상이 있다”는 신호가 더 약해졌다.
+- 수정 방향:
+  - [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)에서 히어로 전용 정적 noise 레이어를 제거했다.
+  - [theme.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css)에서 전역 점무늬를 도트 패턴 대신 큰 haze gradient로 바꿨다.
+  - poster/video의 구도를 `40% center`로 옮겨 은하대가 더 보이게 했고, 하단 마스크를 완화했다.
+  - poster/video 밝기와 대비를 올리고 overlay는 소폭 약화했다.
+- 회귀 테스트를 먼저 고정했다. [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx)에 히어로가 더 이상 `.public-home-hero-noise`를 렌더하지 않는다는 검증을 추가했고, 실패를 확인한 뒤 구현했다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+  - `http://127.0.0.1:5173/` Playwright 확인 기준 히어로 상단에서 별/은하대와 산 능선이 이전보다 명확히 읽히고, CTA 가독성은 유지됨
+
+## 2026-03-23 15:51 KST
+
+- 사용자가 “이제 보이긴 하지만 엄청 희미하다”고 피드백해, 첫 인상 자체를 더 읽히게 하는 보강을 추가했다.
+- [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx)에 회귀 테스트를 먼저 추가했다. `loadedmetadata` 이후 히어로 비디오가 `4.8초` 구간에서 시작하고 `playbackRate=1.35`를 갖는지 검증하도록 고정했다.
+- 실패 확인 후 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)에 `primeHeroBackgroundVideo()`를 추가하고, `onLoadedMetadata`에서 시작 오프셋과 재생 속도를 세팅하도록 구현했다.
+- 의도는 첫 1초 안에 더 밝은 별/산 능선 프레임을 보여주고, 느린 별 이동이 “정지 화면처럼 보이는” 문제를 줄이는 것이다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+  - `http://127.0.0.1:5173/` Playwright 확인 기준 `playbackRate=1.35`, source는 `hero-timelapse.webm`, 1초 후 `currentTime`이 `1.69`로 확인되어 밝은 구간 시작 후 빠르게 loop 되는 동작을 확인했다.
+
+## 2026-03-23 15:56 KST
+
+- 사용자 피드백 `너무 희미해`에 맞춰 히어로 가시성 토큰을 한 단계 더 상향했다.
+- [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx)에 히어로 미디어 컨테이너가 `--hero-media-position=36% center`, `--hero-poster-opacity=0.34`, `--hero-video-opacity=0.72` 토큰을 가진다는 회귀 테스트를 먼저 추가했고, 실패를 확인한 뒤 구현했다.
+- [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)에 `heroMediaVisualTokens`를 추가해 히어로 미디어 톤 값을 컴포넌트에서 명시적으로 관리하도록 바꿨다.
+- [theme.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css)는 해당 CSS 변수를 사용하도록 바꿨고, 실제 값도 다음처럼 상향했다.
+  - poster opacity `0.34`
+  - video opacity `0.72`
+  - position `36% center`
+  - video filter `grayscale(1) brightness(1.2) contrast(1.32)`
+  - overlay dark gradient 완화
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+  - `http://127.0.0.1:5173/` Playwright 확인 기준 inline token과 runtime style이 모두 반영됐고, 히어로에서 산 능선과 별 질감이 이전보다 더 직접적으로 읽히는 상태를 확인했다.
+
+## 2026-03-23 16:29 KST
+
+- 사용자가 여전히 `너무 연하다`고 피드백해, 히어로 배경을 한 단계 더 공격적으로 올렸다. 이번에는 추정이 아니라 `localhost:5173` 실브라우저 렌더를 기준으로 값 조정을 마쳤다.
+- 원인 중 하나로 확인된 점은 로컬 미리보기 서버가 `127.0.0.1`이 아니라 `::1/localhost`로만 바인딩된 상태였다는 것이다. 따라서 브라우저/Playwright가 서로 다른 주소를 보고 있으면 실제 인상이 다르게 느껴질 수 있었다.
+- [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx)에 회귀 테스트를 먼저 수정해 히어로 미디어 토큰이 `--hero-media-position=32% center`, `--hero-poster-opacity=0.46`, `--hero-video-opacity=0.9`를 기대하도록 바꿨고, 실패를 확인한 뒤 구현했다.
+- [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)에서는 `heroMediaVisualTokens`를 다음 값으로 재상향했다.
+  - position `32% center`
+  - poster opacity `0.46`
+  - poster filter `grayscale(1) brightness(1.16) contrast(1.22)`
+  - video opacity `0.9`
+  - video filter `grayscale(1) brightness(1.42) contrast(1.46)`
+  - overlay `rgba(1, 3, 4, 0.48) / 0.16 / 0.66` 기반으로 완화
+- [theme.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css)도 같은 기본값으로 올렸고, 추가로 다음을 반영했다.
+  - video에 `mix-blend-mode: screen`
+  - poster/video 마스크 하단 완화
+  - 히어로 타이포 text-shadow를 검정 기반으로 바꿔 배경이 밝아져도 CTA/헤드라인 가독성이 무너지지 않게 조정
+  - 모바일 poster도 `opacity 0.28`, `brightness 0.94`, `contrast 1.14`로 소폭 상향
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+  - `http://localhost:5173/` Playwright 확인 기준 runtime style이 `poster 0.46`, `video 0.9`, `mix-blend-mode: screen`으로 반영됐고, 히어로에서 산 능선과 별 움직임이 이전보다 훨씬 직접적으로 읽히는 상태를 확인했다.
+
+## 2026-03-23 16:33 KST
+
+- 사용자가 `동영상이 멈춰있다`고 피드백해 `localhost:5173`에서 실제 비디오 상태를 다시 계측했다.
+- 확인 결과 비디오는 멈춘 것이 아니었다. Playwright 기준 `paused=false`, `readyState=4`, `playbackRate=1.35`였고 `currentTime`도 증가했다.
+- 실제 root cause는 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 의 `loadedmetadata`에서 `4.8초` 밝은 구간으로 시작시키는 설정과 기본 `loop`의 조합이었다.
+  - 첫 루프는 `4.8s -> 6.0s` 구간만 재생돼 밝게 보인다.
+  - 그 다음부터는 브라우저 기본 `loop` 때문에 `0초`로 돌아가고, `0s -> 4.8s` 구간은 원본이 너무 어두워 사용자가 정지처럼 느끼게 된다.
+- 회귀 테스트를 먼저 추가했다. [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx)에 `currentTime=5.8`에서 `timeUpdate`가 오면 다시 `4.8`로 되돌아가는 검증을 넣고 실패를 확인한 뒤 구현했다.
+- [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)에 `heroVideoLoopResetSeconds=5.7`과 `recycleHeroBackgroundVideo()`를 추가하고, `onTimeUpdate`에서 `5.7s` 이후에는 다시 `4.8s`로 되돌리도록 바꿨다. 이제 밝은 구간 안에서만 반복된다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `7 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공
+  - `http://localhost:5173/` Playwright 확인 기준 3초 후에도 `paused=false` 상태를 유지했고, `currentTime`이 `0초`대로 떨어지지 않고 `5초대`에 머물며 밝은 구간 루프가 유지되는 것을 확인했다.
+
 ## 2026-03-23 14:52 KST
 
 - `/new` 작업 생성 화면에서 업로드 미리보기 카드를 제거하고, 파일 정보와 교체 액션을 [NewJobPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx)의 영역 지정 헤더로 이동했다.
@@ -284,3 +365,17 @@
   - `py -3 -m pytest 02_main/tests/test_billing.py -k "falls_back_when_markdown_columns_are_missing" -q` -> `1 passed`
   - `py -3 -m pytest 02_main/tests/test_pipeline_storage.py 02_main/tests/test_billing.py 02_main/tests/test_job_response_fields.py -q` -> `67 passed`
 - 이번 변경은 배포 환경 변수 변경이 없고 DB migration을 강제하지 않는다. 다만 실제 오류 해소를 위해서는 백엔드 서비스 재배포가 필요하다.
+
+## 2026-03-23 18:10 KST
+
+- HWPX direct writer 수식 출력 깨짐의 실제 원인을 두 갈래로 정리했다. [hwpforge_json_builder.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_json_builder.py)는 문제 본문 `stem`을 Text run 하나로만 넣어 `<math>`가 literal로 남았고, direct writer equation run은 템플릿 샘플 폭을 그대로 재사용해 짧은 수식도 긴 수식 폭을 물려받고 있었다.
+- 공통 수식 레이아웃 계층 [hwpx_math_layout.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpx_math_layout.py)를 추가해 `<math>` 분해, HWP 수식 스크립트 정규화, script 길이 측정, 폭 샘플 보간을 한곳으로 모았다.
+- [hwpx_reference_renderer.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpx_reference_renderer.py)는 새 공통 모듈을 import하도록 정리했고, legacy renderer도 같은 정규화/폭 계산 규칙을 쓰게 바꿨다.
+- [hwpforge_json_builder.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_json_builder.py)는 문제 본문과 해설 mixed 문단을 segment 순서 기반 run 재조립으로 통일했고, choice/problem/explanation 모든 equation run이 공통 폭 샘플 보간을 사용하도록 수정했다.
+- [test_hwpforge_json_builder.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_hwpforge_json_builder.py)에 문제 본문 literal `<math>` 회귀와 짧은/긴 수식 폭 회귀 테스트를 먼저 추가해 실패를 확인한 뒤 구현했다.
+- [test_exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_exporter.py)는 현재 direct writer 기본 경로에 맞게 hwpforge helper 성공 테스트를 갱신했다.
+- [error_patterns.md](/D:/03_PROJECT/05_mathOCR/error_patterns.md)에 direct writer mixed run 분해와 equation width 재계산 규칙을 추가했다.
+- 검증 결과:
+  - `py -3 -m pytest 02_main/tests/test_hwpforge_json_builder.py -q` -> `5 passed`
+  - `py -3 -m pytest 02_main/tests/test_hwpforge_json_builder.py 02_main/tests/test_exporter.py -q` -> `32 passed`
+- 실제 `HWPX_EXPORT_ENGINE=hwpforge` 강제 E2E는 저장소 안에 HwpForge MCP 런타임이 없어 이 세션에서 실행하지 못했다. 백엔드 코드 변경만 있으므로 배포 환경 변수 변경은 없지만, 실제 반영에는 백엔드 재배포가 필요하다.

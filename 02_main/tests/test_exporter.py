@@ -781,7 +781,7 @@ def test_export_hwpx_falls_back_when_hwpforge_bundle_build_fails(tmp_path, monke
 
 
 def test_export_hwpx_prefers_hwpforge_bundle_when_available(tmp_path, monkeypatch):
-    """helper bundle이 성공하면 reference renderer 대신 그 결과를 사용해야 한다."""
+    """direct writer helper가 성공하면 그 section 결과를 최종 산출물에 써야 한다."""
     module = load_exporter_module()
     root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
 
@@ -792,17 +792,27 @@ def test_export_hwpx_prefers_hwpforge_bundle_when_available(tmp_path, monkeypatc
 
     helper_calls: list[Path] = []
 
-    def fake_roundtrip(base_hwpx_path: Path, output_dir: Path, runtime_path: str | None):
-        """baseline section을 그대로 복사해 helper 성공 경로만 검증한다."""
-        helper_calls.append(base_hwpx_path)
+    def fake_direct_writer(
+        root_path: Path,
+        job,
+        bindata_dir: Path,
+        output_dir: Path,
+        year: str,
+        warnings,
+        runtime_path: str | None,
+        app_root: Path,
+    ):
+        """helper section 경로만 고정 marker와 함께 시뮬레이션한다."""
+        helper_calls.append(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        target_path = output_dir / "section0.hwpforge.xml"
-        with ZipFile(base_hwpx_path, "r") as archive:
-            target_path.write_bytes(archive.read("Contents/section0.xml"))
-        return target_path
+        target_path = output_dir / "section0.direct.xml"
+        with ZipFile(STYLE_GUIDE_HWPX_PATH, "r") as archive:
+            section_xml = archive.read("Contents/section0.xml").decode("utf-8")
+        target_path.write_text(section_xml.replace("</hs:sec>", "<!--direct-writer-marker--></hs:sec>"), encoding="utf-8")
+        return target_path, []
 
     monkeypatch.setattr(module, "get_settings", lambda _root: FakeSettings())
-    monkeypatch.setattr(module, "roundtrip_section_via_hwpforge", fake_roundtrip)
+    monkeypatch.setattr(module, "build_section_via_hwpforge", fake_direct_writer)
     monkeypatch.setattr(module, "inspect_and_validate_hwpx_via_hwpforge", lambda *_args: None)
 
     export_dir = tmp_path / "exports"
@@ -810,4 +820,4 @@ def test_export_hwpx_prefers_hwpforge_bundle_when_available(tmp_path, monkeypatc
     section_xml = ZipFile(hwpx_path, "r").read("Contents/section0.xml").decode("utf-8")
 
     assert len(helper_calls) == 1
-    assert "ANGLE BAC= ANGLE DAE" in section_xml
+    assert "direct-writer-marker" in section_xml

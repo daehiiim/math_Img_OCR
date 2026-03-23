@@ -9,6 +9,16 @@ from typing import Any
 
 from lxml import etree
 
+from app.pipeline.hwpx_math_layout import (
+    collect_equation_width_samples,
+    estimate_inline_equation_width,
+    has_math_tag,
+    measure_equation_script,
+    normalize_export_text,
+    normalize_hwp_equation_script,
+    split_math_text,
+)
+
 HP_NS = "http://www.hancom.co.kr/hwpml/2011/paragraph"
 HC_NS = "http://www.hancom.co.kr/hwpml/2011/core"
 NS = {"hp": HP_NS, "hc": HC_NS}
@@ -291,58 +301,6 @@ def normalize_problem_line(line: str, *, strip_problem_number: bool = False) -> 
     return normalized.strip()
 
 
-def normalize_export_text(text: str) -> str:
-    """문서에 남는 텍스트를 HWP 친화 스크립트로 정규화한다."""
-    if not text:
-        return text
-    segments: list[str] = []
-    for is_math, part in split_math_text(text):
-        if is_math:
-            segments.append(f"<math>{normalize_hwp_equation_script(part)}</math>")
-        else:
-            segments.append(normalize_hwp_equation_script(part))
-    return "".join(segments)
-
-
-def normalize_hwp_equation_script(text: str) -> str:
-    """LaTeX 잔재를 한글 수식 편집기 호환 표기로 바꾼다."""
-    if not text:
-        return text
-    normalized = text
-    for source, target in (
-        ("\\triangle", "△"),
-        ("\\angle", "∠"),
-        ("\\circ", "°"),
-        ("\\therefore", "∴"),
-        ("\\because", "∵"),
-        ("\\parallel", "∥"),
-        ("\\times", "×"),
-        ("\\div", "÷"),
-        ("\\cdot", "·"),
-        ("\\pm", "±"),
-        ("\\mp", "∓"),
-        ("\\leq", "≤"),
-        ("\\le", "≤"),
-        ("\\geq", "≥"),
-        ("\\ge", "≥"),
-        ("\\neq", "≠"),
-        ("\\approx", "≈"),
-        ("\\equiv", "≡"),
-        ("\\infty", "∞"),
-        ("degree", "°"),
-    ):
-        normalized = normalized.replace(source, target)
-    normalized = re.sub(r"\\(?:mathrm|text|mathbf|mathit)\{([^{}]*)\}", r"\1", normalized)
-    normalized = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"\1/\2", normalized)
-    normalized = re.sub(r"\\sqrt\{([^{}]+)\}", r"√\1", normalized)
-    normalized = re.sub(r"\\overline\{([^{}]+)\}", r"\1", normalized)
-    normalized = normalized.replace("{", "").replace("}", "")
-    normalized = normalized.replace("$", "")
-    normalized = normalized.replace("`", "")
-    normalized = re.sub(r"\s{2,}", " ", normalized)
-    return normalized.strip()
-
-
 def build_choice_label(template: Any, marker: str) -> Any:
     """레퍼런스 label node를 복제해 선택지 마커만 교체한다."""
     node = deepcopy(template)
@@ -407,25 +365,6 @@ def build_text_node(template: Any, text: str) -> Any:
         node.remove(child)
     node.text = text
     return node
-
-
-def split_math_text(text: str) -> list[tuple[bool, str]]:
-    """`<math>` 태그 기준으로 텍스트와 수식 조각을 분리한다."""
-    parts = re.split(r"(<math>.*?</math>)", text, flags=re.DOTALL)
-    segments: list[tuple[bool, str]] = []
-    for part in parts:
-        if not part:
-            continue
-        if part.startswith("<math>") and part.endswith("</math>"):
-            segments.append((True, part[6:-7].strip()))
-            continue
-        segments.append((False, part))
-    return segments
-
-
-def has_math_tag(text: str) -> bool:
-    """문자열에 `<math>` 태그가 있는지 반환한다."""
-    return "<math>" in text and "</math>" in text
 
 
 def clone_dynamic_paragraph(paragraph: Any, idgen: Any) -> Any:
@@ -517,43 +456,12 @@ def resize_inline_equation(equation: Any, templates: tuple[Any, ...], script: st
     size = equation.find("hp:sz", NS)
     if size is None:
         return
-    estimated_width = estimate_inline_equation_width(templates, script, read_equation_width(equation))
+    samples = collect_equation_width_samples(
+        (read_equation_script(template), read_equation_width(template)) for template in templates
+    )
+    estimated_width = estimate_inline_equation_width(samples, script, read_equation_width(equation))
     if estimated_width > 0:
         size.set("width", str(estimated_width))
-
-
-def estimate_inline_equation_width(templates: tuple[Any, ...], script: str, fallback_width: int) -> int:
-    """참조 수식 길이 샘플로 현재 inline 수식 width를 선형 보간한다."""
-    target_metric = measure_equation_script(script)
-    if target_metric <= 0:
-        return fallback_width
-    samples = collect_equation_width_samples(templates)
-    if not samples:
-        return fallback_width
-    if len(samples) == 1:
-        metric, width = samples[0]
-        return max(525, round(width * target_metric / metric))
-    low_metric, low_width = samples[0]
-    high_metric, high_width = samples[-1]
-    if high_metric == low_metric:
-        return max(525, low_width)
-    slope = (high_width - low_width) / (high_metric - low_metric)
-    intercept = low_width - (slope * low_metric)
-    estimated_width = round((slope * target_metric) + intercept)
-    minimum_width = max(525, round(low_width * 0.6))
-    return max(minimum_width, estimated_width)
-
-
-def collect_equation_width_samples(templates: tuple[Any, ...]) -> list[tuple[int, int]]:
-    """템플릿 수식 길이별 평균 width 샘플을 오름차순으로 정리한다."""
-    grouped: dict[int, list[int]] = {}
-    for template in templates:
-        metric = measure_equation_script(read_equation_script(template))
-        width = read_equation_width(template)
-        if metric <= 0 or width <= 0:
-            continue
-        grouped.setdefault(metric, []).append(width)
-    return sorted((metric, round(sum(widths) / len(widths))) for metric, widths in grouped.items())
 
 
 def read_equation_script(equation: Any) -> str:
@@ -565,12 +473,6 @@ def read_equation_width(equation: Any) -> int:
     """equation node 안의 width 값을 정수로 반환한다."""
     size = equation.find("hp:sz", NS)
     return int(size.get("width", "0")) if size is not None else 0
-
-
-def measure_equation_script(text: str) -> int:
-    """공백을 제외한 수식 길이를 계산해 width 추정 기준으로 사용한다."""
-    compact = re.sub(r"\s+", "", normalize_hwp_equation_script(text))
-    return len(compact)
 
 
 def copy_region_image(

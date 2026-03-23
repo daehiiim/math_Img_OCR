@@ -6,14 +6,15 @@ from pathlib import Path
 import re
 from typing import Any
 
-from app.pipeline.hwpx_reference_renderer import (
-    collect_exportable_regions,
-    copy_region_image,
+from app.pipeline.hwpx_math_layout import (
+    collect_equation_width_samples,
+    estimate_inline_equation_width,
     has_math_tag,
+    measure_equation_script,
     normalize_export_text,
-    parse_problem_text,
     split_math_text,
 )
+from app.pipeline.hwpx_reference_renderer import collect_exportable_regions, copy_region_image, parse_problem_text
 
 
 @dataclass(frozen=True)
@@ -29,10 +30,11 @@ class JsonTemplateProfile:
     explanation_blank: dict[str, Any]
     explanation_plain: dict[str, Any]
     explanation_mixed: dict[str, Any]
+    problem_text_run: dict[str, Any]
     choice_label_runs: tuple[dict[str, Any], ...]
-    choice_equation_runs: tuple[dict[str, Any], ...]
     mixed_text_run: dict[str, Any]
-    mixed_equation_runs: tuple[dict[str, Any], ...]
+    equation_template_runs: tuple[dict[str, Any], ...]
+    equation_width_samples: tuple[tuple[int, int], ...]
 
 
 def build_hwpforge_export_ir(
@@ -136,6 +138,7 @@ def _build_template_profile(template_document: dict[str, Any]) -> JsonTemplatePr
     paragraphs = template_document["document"]["sections"][0]["paragraphs"]
     choice_runs = paragraphs[3]["runs"]
     mixed_runs = paragraphs[8]["runs"] + paragraphs[9]["runs"]
+    equation_runs = tuple(deepcopy(run) for run in choice_runs + mixed_runs if _is_equation_run(run))
     return JsonTemplateProfile(
         first_problem=deepcopy(paragraphs[0]),
         problem_gap=deepcopy(paragraphs[1]),
@@ -146,10 +149,15 @@ def _build_template_profile(template_document: dict[str, Any]) -> JsonTemplatePr
         explanation_blank=deepcopy(paragraphs[6]),
         explanation_plain=deepcopy(paragraphs[7]),
         explanation_mixed=deepcopy(paragraphs[8]),
+        problem_text_run=deepcopy(paragraphs[0]["runs"][4]),
         choice_label_runs=tuple(deepcopy(run) for run in choice_runs if "Text" in run["content"]),
-        choice_equation_runs=tuple(deepcopy(run) for run in choice_runs if _is_equation_run(run)),
         mixed_text_run=deepcopy(next(run for run in mixed_runs if "Text" in run["content"])),
-        mixed_equation_runs=tuple(deepcopy(run) for run in mixed_runs if _is_equation_run(run)),
+        equation_template_runs=equation_runs,
+        equation_width_samples=tuple(
+            collect_equation_width_samples(
+                (_read_equation_script(run), _read_equation_width(run)) for run in equation_runs
+            )
+        ),
     )
 
 
@@ -180,13 +188,17 @@ def _build_problem_paragraph(
 ) -> dict[str, Any]:
     """첫 문제/반복 문제에 맞는 problem 문단을 만든다."""
     paragraph = _clone_paragraph(profile.first_problem if number == 1 else _build_repeated_problem(profile))
+    body_index = 4 if number == 1 else 1
+    number_index = body_index - 1
     if number == 1:
         _replace_year_text(paragraph, year)
-        paragraph["runs"][3]["content"]["Text"] = f"{number}."
-        paragraph["runs"][4]["content"]["Text"] = stem
-        return paragraph
-    paragraph["runs"][0]["content"]["Text"] = f"{number}."
-    paragraph["runs"][1]["content"]["Text"] = stem
+    paragraph["runs"][number_index]["content"]["Text"] = f"{number}."
+    paragraph["runs"] = paragraph["runs"][:body_index] + _build_mixed_runs(
+        profile,
+        stem,
+        profile.problem_text_run,
+        profile.problem_text_run["char_shape_id"],
+    )
     return paragraph
 
 
@@ -214,9 +226,10 @@ def _build_choice_paragraph(
     """보기 5개를 label/equation run으로 다시 채운다."""
     paragraph = _clone_paragraph(profile.choice)
     paragraph["runs"] = []
+    char_shape_id = profile.choice_label_runs[0]["char_shape_id"]
     for index, choice in enumerate(choices):
         paragraph["runs"].append(_build_choice_label_run(profile.choice_label_runs[index], index))
-        paragraph["runs"].append(_build_equation_run(profile.choice_equation_runs[index], choice))
+        paragraph["runs"].append(_build_equation_run(profile, choice, char_shape_id))
     return paragraph
 
 
@@ -263,17 +276,31 @@ def _build_mixed_paragraph(
 ) -> dict[str, Any]:
     """텍스트와 inline 수식이 섞인 해설 문단을 만든다."""
     paragraph = _clone_paragraph(profile.explanation_mixed)
-    paragraph["runs"] = []
-    equation_index = 0
-    for is_math, part in split_math_text(normalized_line):
+    paragraph["runs"] = _build_mixed_runs(
+        profile,
+        normalized_line,
+        profile.mixed_text_run,
+        profile.mixed_text_run["char_shape_id"],
+    )
+    return paragraph
+
+
+def _build_mixed_runs(
+    profile: JsonTemplateProfile,
+    normalized_text: str,
+    text_template: dict[str, Any],
+    char_shape_id: int,
+) -> list[dict[str, Any]]:
+    """segment 순서를 유지하며 text/equation run 배열을 만든다."""
+    runs: list[dict[str, Any]] = []
+    for is_math, part in split_math_text(normalized_text):
         if not part:
             continue
         if is_math:
-            paragraph["runs"].append(_build_equation_run(profile.mixed_equation_runs[equation_index % len(profile.mixed_equation_runs)], part))
-            equation_index += 1
+            runs.append(_build_equation_run(profile, part, char_shape_id))
             continue
-        paragraph["runs"].append(_build_text_run(profile.mixed_text_run, part))
-    return paragraph
+        runs.append(_build_text_run(text_template, part))
+    return runs or [_build_text_run(text_template, "")]
 
 
 def _build_text_run(template_run: dict[str, Any], text: str) -> dict[str, Any]:
@@ -283,11 +310,45 @@ def _build_text_run(template_run: dict[str, Any], text: str) -> dict[str, Any]:
     return run
 
 
-def _build_equation_run(template_run: dict[str, Any], script: str) -> dict[str, Any]:
-    """수식 run 템플릿을 복제해 equation script만 교체한다."""
-    run = _clone_run(template_run)
-    run["content"]["Control"]["Equation"]["script"] = script
+def _build_equation_run(profile: JsonTemplateProfile, script: str, char_shape_id: int) -> dict[str, Any]:
+    """공통 템플릿과 폭 계산 규칙으로 equation run을 만든다."""
+    run = _clone_run(_select_equation_run_template(profile.equation_template_runs, script))
+    run["char_shape_id"] = char_shape_id
+    equation = run["content"]["Control"]["Equation"]
+    equation["script"] = script
+    estimated_width = estimate_inline_equation_width(
+        list(profile.equation_width_samples),
+        script,
+        int(equation.get("width", 0) or 0),
+    )
+    if estimated_width > 0:
+        equation["width"] = estimated_width
     return run
+
+
+def _select_equation_run_template(
+    template_runs: tuple[dict[str, Any], ...],
+    script: str,
+) -> dict[str, Any]:
+    """대상 script 길이와 가장 가까운 equation 템플릿 run을 고른다."""
+    target_metric = measure_equation_script(script)
+    return min(
+        template_runs,
+        key=lambda run: (
+            abs(measure_equation_script(_read_equation_script(run)) - target_metric),
+            _read_equation_width(run),
+        ),
+    )
+
+
+def _read_equation_script(run: dict[str, Any]) -> str:
+    """JSON equation run의 script 문자열을 읽어 온다."""
+    return run["content"]["Control"]["Equation"].get("script", "")
+
+
+def _read_equation_width(run: dict[str, Any]) -> int:
+    """JSON equation run의 width 값을 정수로 반환한다."""
+    return int(run["content"]["Control"]["Equation"].get("width", 0) or 0)
 
 
 def _replace_year_text(paragraph: dict[str, Any], year: str) -> None:
