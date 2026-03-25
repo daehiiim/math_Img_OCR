@@ -512,3 +512,25 @@
   - 신규 환경 변수는 없다.
   - 백엔드 재배포는 완료했다.
   - 검증 메타데이터 컬럼용 DB 마이그레이션과 실제 HWPX 수동 QA는 여전히 남아 있다.
+
+## 2026-03-25 15:41 KST
+
+- 사용자 제공 샘플 [생성결과-2.hwpx](/D:/03_PROJECT/05_mathOCR/error/생성결과-2.hwpx) 와 [생성결과-2-ANSWER.hwpx](/D:/03_PROJECT/05_mathOCR/error/생성결과-2-ANSWER.hwpx) 를 다시 비교해, 이번 겹침 문제의 원인이 `section0.xml` mixed inline paragraph 구조와 compact equation width lookup 둘 다라는 점을 확정했다.
+- bad 파일은 해설 문단이 `hp:run` 여러 개로 쪼개져 있었고, `section0.direct.xml` 과 최종 `Contents/section0.xml` 모두 같은 과소 width를 유지했다. answer 파일은 같은 문단이 한 개 `hp:run` 으로 저장되고 script별 width가 더 크게 재계산돼 있었다.
+- [hwpx_math_layout.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpx_math_layout.py) 에서 후처리를 확장했다.
+  - direct HwpForge가 만든 inline-only 문단은 export 직후 한 run으로 병합한다.
+  - compact width lookup은 `ANGLE`/`∠`, 공백 차이를 제거한 canonical key로 처리한다.
+  - [생성결과-2-ANSWER.hwpx](/D:/03_PROJECT/05_mathOCR/error/생성결과-2-ANSWER.hwpx) 에서 확인한 compact inline width 샘플을 override/profile에 추가했다.
+- TDD로 [test_hwpx_math_layout.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_hwpx_math_layout.py) 를 새로 추가했다.
+  - `∠ABC=∠ADE` 가 answer 폭 `8070` 으로 보정되는지
+  - `AB=14` 가 answer 폭 `3870` 으로 보정되는지
+  - inline-only mixed paragraph가 최종적으로 한 개 run으로 합쳐지는지
+  를 RED로 고정한 뒤 통과시켰다.
+- 추가 검증으로 현재 코드의 `repair_equation_widths()` 를 문제 문서의 `section0.direct.xml` 에 직접 적용해 봤고, P10~P15 문단의 run 수와 각 수식의 `width/height/baseLine` 이 answer 파일과 1:1로 같아지는 것을 확인했다.
+- 검증 결과:
+  - `py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_hwpx_math_layout.py` -> `3 passed`
+  - `py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_exporter.py D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_hwpforge_json_builder.py D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_hwpx_math_layout.py` -> `37 passed`
+- 배포 영향:
+  - 신규 환경 변수는 없다.
+  - 백엔드 재배포가 필요하다.
+  - DB 마이그레이션은 이번 수정과 직접 관련 없고, 이전 세션의 운영 작업으로 별도 진행 대상이다.

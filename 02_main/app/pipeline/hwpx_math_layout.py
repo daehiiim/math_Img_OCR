@@ -6,6 +6,7 @@ from typing import Iterable
 from lxml import etree
 
 MATH_SEGMENT_PATTERN = re.compile(r"(<math>.*?</math>)", re.DOTALL)
+ANGLE_KEY_PATTERN = re.compile(r"\bANGLE\b", re.IGNORECASE)
 SCRIPT_REPLACEMENTS = (
     ("\\triangle", "△"),
     ("\\angle", "∠"),
@@ -30,7 +31,7 @@ SCRIPT_REPLACEMENTS = (
 )
 COMPACT_INLINE_EQUATION_HEIGHT = 975
 COMPACT_INLINE_EQUATION_BASELINE = 86
-COMPACT_INLINE_WIDTH_OVERRIDES = {
+COMPACT_INLINE_WIDTH_OVERRIDES_RAW = {
     "20 ÷ 2 = 10": 4975,
     "30 ÷ 2 = 15": 4975,
     "10² : 15²": 3570,
@@ -39,8 +40,26 @@ COMPACT_INLINE_WIDTH_OVERRIDES = {
     "18,000 ÷ 4 = 4,500": 8340,
     "4,500 × 9 = 40,500": 8340,
     "40,500": 2995,
+    "AB=14": 3870,
+    "AE=6": 3345,
+    "BE=14-6=8": 7195,
+    "AD=8": 3420,
+    "DC=x": 3420,
+    "AC=8+x": 5050,
+    "E": 750,
+    "AB": 1575,
+    "D": 825,
+    "AC": 1575,
+    "∠BAC=∠DAE": 8070,
+    "∠ABC=∠ADE": 8070,
+    "A↔A": 2700,
+    "B↔D": 2625,
+    "C↔E": 2550,
+    "AB:AD=AC:AE": 9060,
+    "14:8=(8+x):6": 7835,
+    "84=64+8x": 5575,
+    "x=5/2": 3420,
 }
-COMPACT_INLINE_WIDTH_SAMPLE_PAIRS = tuple(COMPACT_INLINE_WIDTH_OVERRIDES.items())
 
 
 def split_math_text(text: str) -> list[tuple[bool, str]]:
@@ -90,9 +109,23 @@ def normalize_hwp_equation_script(text: str) -> str:
     return normalized.strip()
 
 
+def _canonicalize_equation_key(text: str) -> str:
+    """폭 샘플과 reference lookup에 사용할 공통 수식 키를 만든다."""
+    normalized = normalize_hwp_equation_script(text)
+    normalized = ANGLE_KEY_PATTERN.sub("∠", normalized)
+    return re.sub(r"\s+", "", normalized).strip()
+
+
+COMPACT_INLINE_WIDTH_OVERRIDES = {
+    _canonicalize_equation_key(script): width
+    for script, width in COMPACT_INLINE_WIDTH_OVERRIDES_RAW.items()
+}
+COMPACT_INLINE_WIDTH_SAMPLE_PAIRS = tuple(COMPACT_INLINE_WIDTH_OVERRIDES.items())
+
+
 def measure_equation_script(text: str) -> int:
     """공백을 제외한 수식 길이를 계산해 폭 추정 기준으로 사용한다."""
-    compact = re.sub(r"\s+", "", normalize_hwp_equation_script(text))
+    compact = _canonicalize_equation_key(text)
     return len(compact)
 
 
@@ -126,9 +159,40 @@ def repair_equation_widths(section_xml: bytes, reference_xml: bytes) -> bytes:
     """기준 문서와 보정 프로파일을 사용해 section0.xml 수식 박스를 다시 맞춘다."""
     section_root = etree.fromstring(section_xml)
     reference_root = etree.fromstring(reference_xml)
+    _merge_inline_only_runs(section_root)
     reference_widths, width_samples = _collect_reference_equation_widths(reference_root)
     _repair_section_equation_widths(section_root, reference_widths, width_samples)
     return etree.tostring(section_root, encoding="UTF-8", xml_declaration=True)
+
+
+def _merge_inline_only_runs(section_root) -> None:
+    """text/equation만 있는 direct 문단은 한 run 구조로 다시 합친다."""
+    namespaces = {"hp": "http://www.hancom.co.kr/hwpml/2011/paragraph"}
+    for paragraph in section_root.findall(".//hp:p", namespaces=namespaces):
+        _merge_paragraph_inline_runs(paragraph)
+
+
+def _merge_paragraph_inline_runs(paragraph) -> None:
+    """inline 전용 run 여러 개를 첫 run 하나로 합친다."""
+    namespaces = {"hp": "http://www.hancom.co.kr/hwpml/2011/paragraph"}
+    runs = paragraph.findall("hp:run", namespaces=namespaces)
+    if len(runs) <= 1:
+        return
+    if len({run.get("charPrIDRef") for run in runs}) != 1:
+        return
+    if not all(_is_inline_only_run(run) for run in runs):
+        return
+    primary_run = runs[0]
+    for run in runs[1:]:
+        for child in list(run):
+            primary_run.append(child)
+        paragraph.remove(run)
+
+
+def _is_inline_only_run(run) -> bool:
+    """run 자식이 text/equation만 있는 단순 inline 구조인지 판별한다."""
+    allowed_names = {"t", "equation"}
+    return len(run) > 0 and all(etree.QName(child).localname in allowed_names for child in run)
 
 
 def _is_compact_explanation_paragraph(paragraph) -> bool:
@@ -154,7 +218,7 @@ def _resolve_compact_inline_width(
     fallback_width: int,
 ) -> int:
     """해설 inline 수식에 맞는 compact width를 계산한다."""
-    normalized_script = normalize_hwp_equation_script(script)
+    normalized_script = _canonicalize_equation_key(script)
     if normalized_script in COMPACT_INLINE_WIDTH_OVERRIDES:
         return COMPACT_INLINE_WIDTH_OVERRIDES[normalized_script]
     reference_width = reference_widths.get(script) or reference_widths.get(normalized_script)
@@ -215,7 +279,12 @@ def _collect_reference_equation_widths(reference_root) -> tuple[dict[str, int], 
         if width_value <= 0:
             continue
         script_widths.setdefault(script, []).append(width_value)
+        canonical_script = _canonicalize_equation_key(script)
+        if canonical_script and canonical_script != script:
+            script_widths.setdefault(canonical_script, []).append(width_value)
         width_pairs.append((script, width_value))
+        if canonical_script and canonical_script != script:
+            width_pairs.append((canonical_script, width_value))
     resolved_widths = {script: round(sum(widths) / len(widths)) for script, widths in script_widths.items()}
     return resolved_widths, collect_equation_width_samples(width_pairs)
 
