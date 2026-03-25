@@ -33,7 +33,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-fps", type=float, default=25.0)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
-    parser.add_argument("--blend-seconds", type=float, default=0.6)
     return parser.parse_args()
 
 
@@ -91,76 +90,51 @@ def find_brightness_cutoff_index(brightness_values: list[float], window_size: in
     return len(brightness_values) - 1
 
 
-def build_output_positions(start_index: int, end_index: int, output_frame_count: int) -> list[float]:
-    """출력 프레임이 소스 구간 전체를 균등하게 훑도록 위치를 만든다."""
-    if output_frame_count <= 1:
-        return [float(start_index)]
-    return np.linspace(start_index, end_index, output_frame_count).tolist()
+def build_repeated_frame_indices(start_index: int, end_index: int, output_frame_count: int) -> list[int]:
+    """루프 구간 인덱스를 출력 길이만큼 반복 배치한다."""
+    loop_indices = list(range(start_index, end_index))
+    if not loop_indices:
+        raise RuntimeError(EXPECTED_ERRORS["source_read_failed"])
+    output_indices: list[int] = []
+    while len(output_indices) < output_frame_count:
+        remaining_count = output_frame_count - len(output_indices)
+        output_indices.extend(loop_indices[:remaining_count])
+    return output_indices
 
 
-def calculate_full_resolution_flow(frame_a: np.ndarray, frame_b: np.ndarray, flow_scale: float = 0.25) -> np.ndarray:
-    """두 프레임 사이의 저해상도 광류를 계산해 원본 해상도로 복원한다."""
-    gray_a = cv2.cvtColor(frame_a, cv2.COLOR_BGR2GRAY)
-    gray_b = cv2.cvtColor(frame_b, cv2.COLOR_BGR2GRAY)
-    small_a = cv2.resize(gray_a, None, fx=flow_scale, fy=flow_scale, interpolation=cv2.INTER_AREA)
-    small_b = cv2.resize(gray_b, None, fx=flow_scale, fy=flow_scale, interpolation=cv2.INTER_AREA)
-    flow = cv2.calcOpticalFlowFarneback(small_a, small_b, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-    full_flow = cv2.resize(flow, (frame_a.shape[1], frame_a.shape[0]), interpolation=cv2.INTER_LINEAR)
-    return full_flow * (1.0 / flow_scale)
+def build_gray_thumbnails(source_frames: list[np.ndarray], usable_end_index: int) -> list[np.ndarray]:
+    """루프 경계 비교용 저해상도 그레이스케일 프레임을 만든다."""
+    thumbnails: list[np.ndarray] = []
+    for frame in source_frames[: usable_end_index + 1]:
+        resized_frame = cv2.resize(frame, (320, 180), interpolation=cv2.INTER_AREA)
+        thumbnails.append(cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY))
+    return thumbnails
 
 
-def warp_frame_with_flow(frame: np.ndarray, flow: np.ndarray, strength: float) -> np.ndarray:
-    """광류 방향으로 프레임을 이동시켜 중간 장면을 추정한다."""
-    height, width = frame.shape[:2]
-    grid_x, grid_y = np.meshgrid(np.arange(width, dtype=np.float32), np.arange(height, dtype=np.float32))
-    map_x = grid_x + flow[..., 0].astype(np.float32) * strength
-    map_y = grid_y + flow[..., 1].astype(np.float32) * strength
-    return cv2.remap(frame, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+def measure_frame_difference(frame_a: np.ndarray, frame_b: np.ndarray) -> float:
+    """두 저해상도 프레임의 평균 차이를 계산한다."""
+    return float(np.mean(np.abs(frame_a.astype(np.int16) - frame_b.astype(np.int16))))
 
 
-def interpolate_frames(frame_a: np.ndarray, frame_b: np.ndarray, flow_cache: dict[tuple[int, int], np.ndarray], index_pair: tuple[int, int], fraction: float) -> np.ndarray:
-    """두 프레임과 광류 캐시를 이용해 중간 프레임을 만든다."""
-    if fraction <= 0:
-        return frame_a.copy()
-    if fraction >= 1:
-        return frame_b.copy()
-    flow = flow_cache.setdefault(index_pair, calculate_full_resolution_flow(frame_a, frame_b))
-    inverse_key = (index_pair[1], index_pair[0])
-    inverse_flow = flow_cache.setdefault(inverse_key, calculate_full_resolution_flow(frame_b, frame_a))
-    warped_a = warp_frame_with_flow(frame_a, flow, fraction)
-    warped_b = warp_frame_with_flow(frame_b, inverse_flow, 1.0 - fraction)
-    return cv2.addWeighted(warped_a, 1.0 - fraction, warped_b, fraction, 0.0)
+def find_best_loop_bounds(source_frames: list[np.ndarray], usable_end_index: int, min_loop_frames: int = 95, max_start_index: int = 12) -> tuple[int, int]:
+    """자연스럽게 이어지는 원본 프레임 구간의 시작과 끝을 찾는다."""
+    thumbnails = build_gray_thumbnails(source_frames, usable_end_index)
+    best_score: float | None = None
+    best_bounds = (0, min(len(thumbnails), min_loop_frames))
+    for start_index in range(0, min(max_start_index, usable_end_index - min_loop_frames) + 1):
+        for end_index in range(start_index + min_loop_frames, usable_end_index + 1):
+            difference = measure_frame_difference(thumbnails[start_index], thumbnails[end_index])
+            duration_score = (end_index - start_index) * 0.02
+            score = difference - duration_score
+            if best_score is None or score < best_score:
+                best_score = score
+                best_bounds = (start_index, end_index)
+    return best_bounds
 
 
-def render_output_frames(source_frames: list[np.ndarray], positions: list[float]) -> list[np.ndarray]:
-    """소스 프레임과 보간 위치를 이용해 최종 출력 프레임 배열을 만든다."""
-    flow_cache: dict[tuple[int, int], np.ndarray] = {}
-    output_frames: list[np.ndarray] = []
-    for position in positions:
-        lower_index = int(np.floor(position))
-        upper_index = min(lower_index + 1, len(source_frames) - 1)
-        fraction = position - lower_index
-        output_frames.append(
-            interpolate_frames(
-                source_frames[lower_index],
-                source_frames[upper_index],
-                flow_cache,
-                (lower_index, upper_index),
-                fraction,
-            )
-        )
-    return output_frames
-
-
-def blend_loop_tail(frames: list[np.ndarray], blend_frame_count: int) -> None:
-    """마지막 구간을 첫 구간과 교차 블렌드해 루프 경계를 완화한다."""
-    if blend_frame_count <= 0 or blend_frame_count >= len(frames):
-        return
-    total_frame_count = len(frames)
-    for offset in range(blend_frame_count):
-        alpha = (offset + 1) / (blend_frame_count + 1)
-        tail_index = total_frame_count - blend_frame_count + offset
-        frames[tail_index] = cv2.addWeighted(frames[tail_index], 1.0 - alpha, frames[offset], alpha, 0.0)
+def select_output_frames(source_frames: list[np.ndarray], frame_indices: list[int]) -> list[np.ndarray]:
+    """반복 인덱스 목록을 실제 출력 프레임 배열로 변환한다."""
+    return [source_frames[index].copy() for index in frame_indices]
 
 
 def write_frame_sequence(temp_directory: Path, frames: list[np.ndarray]) -> None:
@@ -235,11 +209,10 @@ def build_loop_assets(arguments: argparse.Namespace) -> None:
     cutoff_index = find_brightness_cutoff_index(brightness_values)
     safety_margin_frames = int(round(source_fps * 0.4))
     usable_end_index = max(cutoff_index - safety_margin_frames, 1)
+    loop_start_index, loop_end_index = find_best_loop_bounds(source_frames, usable_end_index)
     output_frame_count = int(round(arguments.duration_seconds * arguments.output_fps))
-    blend_frame_count = int(round(arguments.blend_seconds * arguments.output_fps))
-    positions = build_output_positions(0, usable_end_index, output_frame_count)
-    output_frames = render_output_frames(source_frames, positions)
-    blend_loop_tail(output_frames, blend_frame_count)
+    frame_indices = build_repeated_frame_indices(loop_start_index, loop_end_index, output_frame_count)
+    output_frames = select_output_frames(source_frames, frame_indices)
     ensure_parent_directories(arguments.mp4_output, arguments.webm_output, arguments.poster_output)
     with tempfile.TemporaryDirectory(prefix="hero-loop-") as temp_directory_name:
         temp_directory = Path(temp_directory_name)
@@ -251,8 +224,10 @@ def build_loop_assets(arguments: argparse.Namespace) -> None:
     print(f"cutoff_index={cutoff_index}")
     print(f"safety_margin_frames={safety_margin_frames}")
     print(f"usable_end_index={usable_end_index}")
+    print(f"loop_start_index={loop_start_index}")
+    print(f"loop_end_index={loop_end_index}")
+    print(f"loop_duration_frames={loop_end_index - loop_start_index}")
     print(f"output_frame_count={output_frame_count}")
-    print(f"blend_frame_count={blend_frame_count}")
 
 
 def main() -> None:

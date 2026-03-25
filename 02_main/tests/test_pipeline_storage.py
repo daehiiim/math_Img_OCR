@@ -524,6 +524,152 @@ def test_run_pipeline_persists_markdown_outputs(monkeypatch):
     assert saved_region.extractor.markdown_version == "mathocr_markdown_bridge_v1"
 
 
+def test_run_pipeline_builds_problem_markdown_from_ordered_segments(monkeypatch):
+    """ordered segment가 있으면 OCR 본문보다 segment 순서를 기준으로 Markdown을 만든다."""
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes())
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [8, 0], [8, 8], [0, 8]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "문제 본문",
+            "mathml": "<math>x+1</math>",
+            "raw_transcript": "1. 문제 본문 <math>x+1</math>",
+            "ordered_segments": [
+                {"type": "text", "content": "문제 본문 ", "source_order": 0},
+                {"type": "math", "content": "x+1", "source_order": 1},
+            ],
+            "has_stylizable_image": False,
+            "image_bbox": None,
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(
+        orchestrator,
+        "generate_explanation_with_gpt",
+        lambda *args, **kwargs: {"explanation_lines": ["해설"], "final_answer_index": None, "final_answer_value": None, "confidence": None, "reason_summary": None},
+    )
+
+    orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=True,
+        do_image_stylize=False,
+        do_explanation=True,
+    )
+    saved_region = orchestrator.read_job(user, job.job_id).regions[0]
+
+    assert saved_region.extractor.raw_transcript == "1. 문제 본문 <math>x+1</math>"
+    assert saved_region.extractor.problem_markdown == "문제 본문 $x+1$"
+    assert saved_region.extractor.ordered_segments == [
+        {"type": "text", "content": "문제 본문 ", "source_order": 0},
+        {"type": "math", "content": "x+1", "source_order": 1},
+    ]
+
+
+def test_run_pipeline_replaces_mismatched_multiple_choice_explanation_with_warning(monkeypatch):
+    """객관식 정답 정보가 서로 충돌하면 해설 본문을 안전 문구로 대체한다."""
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes())
+    orchestrator.save_regions(
+        user,
+        job.job_id,
+        [
+            {"id": "q1", "polygon": [[0, 0], [8, 0], [8, 8], [0, 8]], "type": "mixed", "order": 1},
+        ],
+    )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "값은?\n① <math>1</math> ② <math>2</math> ③ <math>3</math> ④ <math>4</math> ⑤ <math>5</math>",
+            "mathml": "<math>1</math>\n<math>2</math>\n<math>3</math>\n<math>4</math>\n<math>5</math>",
+            "raw_transcript": "1. 값은?\n① <math>1</math> ② <math>2</math> ③ <math>3</math> ④ <math>4</math> ⑤ <math>5</math>",
+            "ordered_segments": [
+                {"type": "text", "content": "값은?\n① ", "source_order": 0},
+                {"type": "math", "content": "1", "source_order": 1},
+                {"type": "text", "content": " ② ", "source_order": 2},
+                {"type": "math", "content": "2", "source_order": 3},
+                {"type": "text", "content": " ③ ", "source_order": 4},
+                {"type": "math", "content": "3", "source_order": 5},
+                {"type": "text", "content": " ④ ", "source_order": 6},
+                {"type": "math", "content": "4", "source_order": 7},
+                {"type": "text", "content": " ⑤ ", "source_order": 8},
+                {"type": "math", "content": "5", "source_order": 9},
+            ],
+            "has_stylizable_image": False,
+            "image_bbox": None,
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(
+        orchestrator,
+        "generate_explanation_with_gpt",
+        lambda *args, **kwargs: {
+            "explanation_lines": ["따라서 정답은 <math>5</math> 이다."],
+            "final_answer_index": 2,
+            "final_answer_value": "<math>5</math>",
+            "confidence": 0.91,
+            "reason_summary": "비교 계산 결과를 선택했다.",
+        },
+    )
+
+    orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=True,
+        do_image_stylize=False,
+        do_explanation=True,
+    )
+    saved_region = orchestrator.read_job(user, job.job_id).regions[0]
+
+    assert saved_region.extractor.question_type == "multiple_choice"
+    assert saved_region.extractor.parsed_choices == ["1", "2", "3", "4", "5"]
+    assert saved_region.extractor.resolved_answer_index == 2
+    assert saved_region.extractor.resolved_answer_value == "<math>5</math>"
+    assert saved_region.extractor.verification_status == "warning"
+    assert saved_region.extractor.verification_warnings
+    assert (
+        saved_region.extractor.explanation
+        == "해설 검증이 필요합니다. 정답과 풀이의 일치 여부를 자동 확인하지 못했습니다."
+    )
+    assert (
+        saved_region.extractor.explanation_markdown
+        == "해설 검증이 필요합니다. 정답과 풀이의 일치 여부를 자동 확인하지 못했습니다."
+    )
+
+
 def test_run_pipeline_saves_styled_image_when_detector_finds_visual(monkeypatch):
     repository = install_memory_repository(monkeypatch)
     user = make_user()

@@ -21,6 +21,7 @@ from app.pipeline.hwpforge_roundtrip import (
     inspect_and_validate_hwpx_via_hwpforge,
     roundtrip_section_via_hwpforge,
 )
+from app.pipeline.hwpx_math_layout import repair_equation_widths
 from app.pipeline.hwpx_reference_renderer import render_section_from_reference
 from app.pipeline.schema import JobPipelineContext
 
@@ -361,6 +362,7 @@ def _prepare_export_bundle(
         context=context,
         warnings=warnings,
     )
+    _repair_inline_equation_layout_metrics(section_path, canonical_template_path, warnings)
     _apply_bundle_common_updates(work_dir, content_hpf, header_xml_path, images_info, runtime_modules)
     _validate_template_contract(work_dir, content_hpf, header_xml_path, section_path, canonical_template_path)
     return section_path, header_xml_path, content_hpf
@@ -390,6 +392,7 @@ def _prepare_direct_hwpforge_bundle(
         app_root=ROOT,
     )
     section_path.write_bytes(direct_section_path.read_bytes())
+    _repair_inline_equation_layout_metrics(section_path, canonical_template_path, warnings)
     _apply_bundle_common_updates(work_dir, content_hpf, header_xml_path, images_info, runtime_modules)
     _validate_template_contract(work_dir, content_hpf, header_xml_path, section_path, canonical_template_path)
     return section_path, header_xml_path, content_hpf
@@ -420,6 +423,21 @@ def _apply_bundle_common_updates(
     _update_header_xml(header_xml_path, images_info)
     _normalize_masterpage_footer(work_dir / "Contents" / "masterpage0.xml")
     _normalize_masterpage_footer(work_dir / "Contents" / "masterpage1.xml")
+
+
+def _repair_inline_equation_layout_metrics(
+    section_path: Path,
+    canonical_template_path: Path,
+    warnings: QualityWarningCollector,
+) -> None:
+    """최종 section0.xml의 inline equation 박스 크기를 한글 정상 프로파일로 다시 맞춘다."""
+    try:
+        with ZipFile(canonical_template_path, "r") as archive:
+            reference_section_xml = archive.read("Contents/section0.xml")
+        repaired_section_xml = repair_equation_widths(section_path.read_bytes(), reference_section_xml)
+        section_path.write_bytes(repaired_section_xml)
+    except Exception as error:
+        warnings.add("HWPX_EQUATION_LAYOUT_REPAIR_FAILED", f"detail={error}")
 
 
 def _apply_hwpforge_section_roundtrip(

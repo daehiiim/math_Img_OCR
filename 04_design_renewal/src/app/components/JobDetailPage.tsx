@@ -60,6 +60,11 @@ function isExportableRegion(region: Region): boolean {
   );
 }
 
+/** 검증 경고 메시지 개수를 계산한다. */
+function getVerificationWarningCount(regions: Region[]): number {
+  return regions.reduce((total, region) => total + (region.verificationWarnings?.length ?? 0), 0);
+}
+
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
@@ -85,6 +90,7 @@ export function JobDetailPage() {
   const hasSelectedAction =
     executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
   const exportableRegionCount = (job?.regions ?? []).filter(isExportableRegion).length;
+  const verificationWarningCount = getVerificationWarningCount(job?.regions ?? []);
   const canExportHwpx =
     exportableRegionCount > 0 &&
     (job?.status === "completed" || job?.status === "failed" || job?.status === "exported");
@@ -466,6 +472,9 @@ export function JobDetailPage() {
                   <p className="mt-1 text-muted-foreground">
                     선택한 문제 수 기준으로 잔액을 먼저 확인하고, 실행 후 실제 성공한 작업만 차감합니다.
                   </p>
+                  {verificationWarningCount > 0 ? (
+                    <p className="mt-1 text-amber-700">검증 경고 {verificationWarningCount}개가 있어 결과를 다시 확인하세요.</p>
+                  ) : null}
                   {draftRegions !== null && draftRegions !== job.regions ? (
                     <p className="mt-1 text-amber-700">
                       현재 편집 중인 draft 기준 예상 차감입니다.

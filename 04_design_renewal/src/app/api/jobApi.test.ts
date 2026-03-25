@@ -19,6 +19,7 @@ vi.mock("../lib/supabase", () => ({
 }));
 
 import { getJobApi, runPipelineApi } from "./jobApi";
+import { mapBackendJob } from "../store/jobMappers";
 
 describe("jobApi", () => {
   beforeEach(() => {
@@ -225,5 +226,33 @@ describe("jobApi", () => {
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/jobs/job-6/export/hwpx/download");
     expect(result.filename).toBe("생성결과.hwpx");
+  });
+
+  it("preserves verification fields from backend jobs when mapping to store jobs", () => {
+    const mapped = mapBackendJob(
+      {
+        job_id: "job-7",
+        status: "completed",
+        file_name: "sample.png",
+        image_url: "https://signed.example/source.png",
+        image_width: 10,
+        image_height: 10,
+        regions: [
+          {
+            id: "q1",
+            status: "completed",
+            type: "mixed",
+            order: 1,
+            polygon: [],
+            verification_status: "warning",
+            verification_warnings: ["정답 불일치", "해설 재검증 필요"],
+          },
+        ],
+      } as never,
+      null
+    );
+
+    expect(mapped.regions[0].verificationStatus).toBe("warning");
+    expect(mapped.regions[0].verificationWarnings).toEqual(["정답 불일치", "해설 재검증 필요"]);
   });
 });

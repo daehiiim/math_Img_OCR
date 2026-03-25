@@ -4,10 +4,20 @@ from typing import Any
 
 from app.supabase import SupabaseApiError
 
-MARKDOWN_OUTPUT_COLUMN_NAMES = (
+OPTIONAL_REGION_COLUMN_NAMES = (
     "problem_markdown",
     "explanation_markdown",
     "markdown_version",
+    "raw_transcript",
+    "ordered_segments",
+    "question_type",
+    "parsed_choices",
+    "resolved_answer_index",
+    "resolved_answer_value",
+    "answer_confidence",
+    "verification_status",
+    "verification_warnings",
+    "reason_summary",
 )
 
 _markdown_output_columns_available: bool | None = None
@@ -25,17 +35,17 @@ def remember_markdown_output_columns_available(is_available: bool) -> None:
 
 
 def is_markdown_output_schema_error(error: Exception) -> bool:
-    """Markdown 산출 컬럼이 없는 구스키마 오류인지 판별한다."""
+    """확장 region 컬럼이 없는 구스키마 오류인지 판별한다."""
     if not isinstance(error, SupabaseApiError):
         return False
     normalized = str(error).lower()
-    return any(column in normalized for column in MARKDOWN_OUTPUT_COLUMN_NAMES)
+    return any(column in normalized for column in OPTIONAL_REGION_COLUMN_NAMES)
 
 
 def strip_markdown_output_fields(payload: dict[str, Any]) -> dict[str, Any]:
-    """구스키마 저장용 payload에서 Markdown 산출 필드를 제거한다."""
+    """구스키마 저장용 payload에서 확장 region 필드를 제거한다."""
     return {
         key: value
         for key, value in payload.items()
-        if key not in MARKDOWN_OUTPUT_COLUMN_NAMES
+        if key not in OPTIONAL_REGION_COLUMN_NAMES
     }

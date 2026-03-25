@@ -25,6 +25,16 @@ function isExportableRegion(region: Region): boolean {
   );
 }
 
+/** 검증 경고 메시지를 정리해 반환한다. */
+function getVerificationWarnings(region: Region): string[] {
+  return (region.verificationWarnings ?? []).map((warning) => warning.trim()).filter(Boolean);
+}
+
+/** 검증 경고가 있는 영역인지 판단한다. */
+function hasVerificationWarning(region: Region): boolean {
+  return region.verificationStatus === "warning" || region.verificationStatus === "unverified" || getVerificationWarnings(region).length > 0;
+}
+
 /** 문제 탭에 표시할 우선순위 본문을 고른다. */
 function getProblemPreviewValue(region: Region): string | undefined {
   return region.problemMarkdown?.trim() ? region.problemMarkdown : region.ocrText;
@@ -109,6 +119,8 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
     <div className="space-y-4">
       {regions.map((region) => {
         const exportable = isExportableRegion(region);
+        const verificationWarnings = getVerificationWarnings(region);
+        const verificationWarningVisible = hasVerificationWarning(region);
 
         return (
           <Card key={region.id}>
@@ -118,12 +130,19 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
                   <div className="h-3 w-3 rounded-full bg-primary/70" />
                   {region.id}
                 </CardTitle>
-                <Badge
-                  variant={region.status === "completed" || exportable ? "secondary" : "outline"}
-                  className="gap-1 px-[8px] py-[2px]"
-                >
-                  {getRegionStatusLabel(region)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {verificationWarningVisible ? (
+                    <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 px-[8px] py-[2px] text-amber-800">
+                      검증 경고
+                    </Badge>
+                  ) : null}
+                  <Badge
+                    variant={region.status === "completed" || exportable ? "secondary" : "outline"}
+                    className="gap-1 px-[8px] py-[2px]"
+                  >
+                    {getRegionStatusLabel(region)}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
 
@@ -132,6 +151,30 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
                 <p className="text-[12px] text-destructive">
                   영역 처리 {exportable ? "경고" : "실패"}: {region.errorReason || "원인 미상"}
                 </p>
+              </CardContent>
+            ) : null}
+
+            {verificationWarningVisible ? (
+              <CardContent className="pt-0">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="border-amber-300 bg-white px-2 py-0 text-[10px] text-amber-800">
+                      검증 경고
+                    </Badge>
+                    <p className="text-[12px] font-medium text-amber-950">정답과 해설 일치 여부를 다시 확인하세요.</p>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {verificationWarnings.length > 0 ? (
+                      verificationWarnings.map((warning) => (
+                        <p key={warning} className="text-[12px] text-amber-900">
+                          {warning}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="text-[12px] text-amber-900">상세 경고가 제공되지 않았습니다.</p>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             ) : null}
 

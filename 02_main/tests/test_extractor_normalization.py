@@ -104,8 +104,56 @@ def test_analyze_region_with_gpt_preserves_numbered_lines_after_first_line(monke
     assert result["ocr_text"] == "함수 f(x)에 대하여\n1. 첫 번째 조건\n2) 두 번째 조건"
 
 
-def test_generate_explanation_with_gpt_normalizes_math_markup(monkeypatch):
-    """해설 문장은 유지하고 수식 표기만 정규화한다."""
+def test_analyze_region_with_gpt_prefers_ordered_segments_for_raw_and_display_fields(monkeypatch):
+    """ordered segment가 있으면 raw transcript와 표시용 수식 정규화를 함께 유지한다."""
+
+    def fake_post(*args, **kwargs):
+        model_payload = {
+            "ordered_segments": [
+                {"type": "text", "content": "1. 정답은 ", "source_order": 0},
+                {"type": "math", "content": "\\frac{3}{2}", "source_order": 1},
+                {"type": "text", "content": " 이다.\n① ", "source_order": 2},
+                {"type": "math", "content": "1", "source_order": 3},
+                {"type": "text", "content": " ② ", "source_order": 4},
+                {"type": "math", "content": "3/2", "source_order": 5},
+            ],
+            "stylizable_images": [],
+        }
+        return FakeResponse(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(model_payload, ensure_ascii=False),
+                        }
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(extractor.requests, "post", fake_post)
+
+    result = extractor.analyze_region_with_gpt(
+        Path("unused"),
+        b"image-bytes",
+        "mixed",
+        api_key="sk-test",
+    )
+
+    assert result["raw_transcript"] == "1. 정답은 <math>\\frac{3}{2}</math> 이다.\n① <math>1</math> ② <math>3/2</math>"
+    assert result["ocr_text"] == "정답은 <math>3/2</math> 이다.\n① <math>1</math> ② <math>3/2</math>"
+    assert result["ordered_segments"] == [
+        {"type": "text", "content": "정답은 ", "source_order": 0},
+        {"type": "math", "content": "3/2", "source_order": 1},
+        {"type": "text", "content": " 이다.\n① ", "source_order": 2},
+        {"type": "math", "content": "1", "source_order": 3},
+        {"type": "text", "content": " ② ", "source_order": 4},
+        {"type": "math", "content": "3/2", "source_order": 5},
+    ]
+
+
+def test_generate_explanation_with_gpt_returns_structured_answer_payload(monkeypatch):
+    """해설 생성은 검증용 정답 정보와 정규화된 줄 배열을 함께 반환한다."""
 
     def fake_post(*args, **kwargs):
         return FakeResponse(
@@ -113,7 +161,18 @@ def test_generate_explanation_with_gpt_normalizes_math_markup(monkeypatch):
                 "choices": [
                     {
                         "message": {
-                            "content": "1. 따라서 <math>\\triangle ABC</math> 와 <math>\\angle AOB = 30^\\circ</math> 를 사용한다.",
+                            "content": json.dumps(
+                                {
+                                    "explanation_lines": [
+                                        "1. 따라서 <math>\\triangle ABC</math> 와 <math>\\angle AOB = 30^\\circ</math> 를 사용한다."
+                                    ],
+                                    "final_answer_index": 3,
+                                    "final_answer_value": "<math>\\frac{9}{4}</math>",
+                                    "confidence": 0.87,
+                                    "reason_summary": "닮음비를 이용해 값을 결정한다.",
+                                },
+                                ensure_ascii=False,
+                            ),
                         }
                     }
                 ]
@@ -130,4 +189,10 @@ def test_generate_explanation_with_gpt_normalizes_math_markup(monkeypatch):
         api_key="sk-test",
     )
 
-    assert result == "1. 따라서 <math>△ABC</math> 와 <math>∠AOB = 30°</math> 를 사용한다."
+    assert result == {
+        "explanation_lines": ["1. 따라서 <math>△ABC</math> 와 <math>∠AOB = 30°</math> 를 사용한다."],
+        "final_answer_index": 3,
+        "final_answer_value": "<math>9/4</math>",
+        "confidence": 0.87,
+        "reason_summary": "닮음비를 이용해 값을 결정한다.",
+    }

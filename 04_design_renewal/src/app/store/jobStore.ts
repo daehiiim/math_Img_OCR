@@ -28,6 +28,8 @@ export interface Region {
   problemMarkdown?: string;
   explanationMarkdown?: string;
   markdownVersion?: string;
+  verificationStatus?: "verified" | "warning" | "unverified";
+  verificationWarnings?: string[];
   cropUrl?: string;
   imageCropUrl?: string;
   styledImageUrl?: string;
@@ -124,6 +126,8 @@ export function useJobStore() {
                 problemMarkdown: undefined,
                 explanationMarkdown: undefined,
                 markdownVersion: undefined,
+                verificationStatus: undefined,
+                verificationWarnings: undefined,
                 cropUrl: undefined,
                 imageCropUrl: undefined,
                 styledImageUrl: undefined,

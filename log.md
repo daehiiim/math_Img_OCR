@@ -427,3 +427,67 @@
   - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `8 passed`
   - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` -> `built in 3.73s`
 - 이번 변경도 프런트 정적 자산 범위라 백엔드 API, Cloud Run, 환경 변수 변경은 없다. 프런트 재배포만 필요하다.
+
+## 2026-03-23 18:18 KST
+
+- 사용자 피드백대로 첫 번째 15초 자산은 품질 실패였다. root cause는 [build_hero_timelapse_loop.py](/D:/03_PROJECT/05_mathOCR/04_design_renewal/scripts/build_hero_timelapse_loop.py) 가 `0 -> 110` 구간을 `375프레임`으로 늘리면서 프레임 대부분을 광류 보간으로 합성한 점이었다.
+- 실제 계산 기준 출력 `375프레임` 중 `352프레임`, 약 `93.9%` 가 합성 프레임이었고, 이는 별 궤적과 산 윤곽에 잔상을 만들고 재생 cadence도 부자연스럽게 만들었다.
+- 원본 프레임 기반 루프로 아키텍처를 다시 바꿨다. 같은 스크립트는 이제 밝기 컷오프 이후 `usable_end_index=110` 안에서 시작/끝 차이가 가장 작은 자연 루프 구간을 찾고, 그 구간 인덱스를 반복해 15초 자산을 만든다.
+- 실제 선택 구간은 `loop_start_index=1`, `loop_end_index=98`, `loop_duration_frames=97` 이었고, 이후 출력은 더 이상 광류 보간을 사용하지 않는다.
+- [test_build_hero_timelapse_loop.py](/D:/03_PROJECT/05_mathOCR/04_design_renewal/tests/test_build_hero_timelapse_loop.py) 도 `build_output_positions` 검증 대신 원본 루프 인덱스 반복 함수 검증으로 바꿔 실패를 확인한 뒤 통과시켰다.
+- 재생성된 자산은 여전히 `25fps / 15초` 를 유지하고, 샘플 sharpness 도 중간 구간 기준 이전 보간 버전보다 유의미하게 회복됐다.
+- 검증 결과:
+  - `py -3 -m pytest 04_design_renewal/tests/test_build_hero_timelapse_loop.py -q` -> `2 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `8 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` -> `built in 3.82s`
+- 브라우저 확인 기준 새 비디오는 `duration=15`, `loop=true`, `playbackRate=1`, `paused=false` 상태를 유지했고 `hero-timelapse-CFyWIYFJ.webm` 가 실제 재생 소스로 잡혔다.
+
+## 2026-03-23 19:03 KST
+
+- 사용자 스크린샷 기준으로 히어로 배경에 정지된 별 레이어가 남아 있다는 증상을 다시 분리했다. 자산 자체의 광류 보간 문제와 별개로 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 가 별도 `public-home-hero-poster` div를 재생 중에도 계속 유지하는 것이 직접 원인이었다.
+- 회귀 테스트를 먼저 강화해 [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx) 에서 `loadeddata` 이전에는 poster가 보이고, 이후에는 제거되어야 한다는 계약을 추가했고, 현재 구현이 실패하는 것을 확인했다.
+- 이후 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 에 `isVideoReady` 상태를 추가해 `loadeddata` 이후에는 별도 poster div를 unmount 하고, 비디오 오류일 때만 fallback poster가 남도록 수정했다.
+- 검증 결과:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` -> `8 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` -> `built in 3.79s`
+  - Playwright 런타임 계측 기준 `video.readyState=4`, `paused=false`, `currentTime=5.78` 상태에서 `.public-home-hero-poster` 노드가 DOM 에 존재하지 않음을 확인했다.
+- 배포 영향:
+  - 프론트엔드 재배포만 필요하고, 백엔드 환경 변수나 서버 설정 변경은 없다.
+
+## 2026-03-25 10:32 KST
+
+- OCR/HWPX 정합성 강화 계획을 실제 코드에 반영했다. 핵심은 [extractor.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/extractor.py), [orchestrator.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/orchestrator.py), [repository.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/repository.py), [main.py](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py) 경로에 `ordered_segments`, `raw_transcript`, 객관식 정답 검증 메타데이터를 끝까지 흘려보내는 것이다.
+- OCR은 `text_blocks/formulas` 단일 경로에만 의존하지 않고 `ordered_segments`를 우선 사용하도록 바꿨다. plain text는 재작성하지 않고 math segment만 정규화하며, `raw_transcript`에는 모델이 본 원문 순서를 그대로 남긴다.
+- 해설 생성은 자유문자열 대신 구조화 JSON 응답을 기본 계약으로 바꿨다. `explanation_lines`, `final_answer_index`, `final_answer_value`, `confidence`, `reason_summary`를 받고, orchestrator에서 선택지와 결정적으로 대조한다.
+- 객관식에서 정답 번호/값이 선택지와 충돌하거나 답을 확정할 수 없으면 `verification_status=warning`, `verification_warnings`를 저장하고, 해설 본문은 `해설 검증이 필요합니다. 정답과 풀이의 일치 여부를 자동 확인하지 못했습니다.` 로 안전 치환하도록 만들었다.
+- direct HwpForge 경로의 최종 `section0.xml` 폭 재보정 로직과 회귀 테스트도 현재 워크스페이스에 반영된 상태다. [exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/exporter.py), [hwpx_math_layout.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpx_math_layout.py), [test_exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_exporter.py) 기준으로 canonical 샘플을 이용해 짧은 수식 폭을 다시 맞춘다.
+- 프런트도 검증 경고를 표시하도록 연결되어 있다. [jobApi.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/api/jobApi.ts), [jobMappers.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobMappers.ts), [ResultsViewer.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ResultsViewer.tsx), [JobDetailPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.tsx) 에서 warning 상태를 노출한다.
+- DB 스키마도 같이 확장했다. [2026-03-25_ocr_verification_fields.sql](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-03-25_ocr_verification_fields.sql) 을 추가했고, [supabase_saas_init.sql](/D:/03_PROJECT/05_mathOCR/02_main/schemas/supabase_saas_init.sql) 초기 스키마도 같은 컬럼 집합으로 맞췄다.
+- 재발 방지 규칙은 [error_patterns.md](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 에 `ordered_segments/raw_transcript 보존` 과 `객관식 해설 검증 후 경고 치환` 규칙으로 추가했다.
+- 검증 결과:
+  - `py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests -q` -> `164 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/api/jobApi.test.ts src/app/components/ResultsViewer.test.tsx src/app/components/JobDetailPage.test.tsx` -> `24 passed`
+- 배포 영향:
+  - 신규 환경 변수는 없다.
+  - 백엔드 DB 마이그레이션 적용과 백엔드 재배포가 필요하다.
+  - 프런트 변경도 포함되어 있어 프런트 재배포를 같이 하는 편이 안전하다.
+
+## 2026-03-25 10:47 KST
+
+- 사용자 요청대로 [생성결과 (1).hwpx](/D:/03_PROJECT/05_mathOCR/error/생성결과%20(1).hwpx) 와 [생성결과 (1)_answer.hwpx](/D:/03_PROJECT/05_mathOCR/error/생성결과%20(1)_answer.hwpx) 의 `Contents/section0.xml` 을 직접 비교했다.
+- 비교 결과, 문제의 본질은 문단 spacing이 아니라 explanation mixed paragraph의 `hp:equation` 박스 크기였다. 두 파일의 `paraPrIDRef`, `styleIDRef`, `charPrIDRef`, `textWrap`, `textFlow`, `lineMode`, font는 같았고, 실제 차이는 `hp:sz/@width`, `hp:sz/@height`, `hp:equation/@baseLine` 에 집중됐다.
+- bad 파일과 answer 파일의 해설 수식 차이는 다음 패턴으로 고정됐다.
+  - bad: `width=8386`, `height=1125`, `baseLine=85`
+  - answer: script별 width + `height=975`, `baseLine=86`
+- 이 분석을 바탕으로 [hwpx_math_layout.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpx_math_layout.py) 의 후처리를 확장했다. 이제 해설 mixed 문단(`paraPrIDRef=0`, `styleIDRef=0`)의 inline equation은 폭만이 아니라 compact box profile 전체를 보정한다.
+- [exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/exporter.py) 도 legacy/direct 공통으로 같은 보정을 적용하도록 바꿨다. 따라서 HwpForge direct 경로만이 아니라 최종 export bundle 전체에서 같은 박스 프로파일이 적용된다.
+- TDD로 [test_exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_exporter.py) 에 `test_export_hwpx_explanation_inline_equations_use_compact_box_metrics` 를 먼저 추가해, 해설 mixed 수식이 `height=975`, `baseLine=86` 을 가져야 한다는 계약을 실패로 고정한 뒤 통과시켰다.
+- 추가 검증으로 현재 보정 함수를 bad 파일에 직접 적용한 [생성결과 (1)_repaired_by_codex.hwpx](/D:/03_PROJECT/05_mathOCR/error/생성결과%20(1)_repaired_by_codex.hwpx) 를 만들었고, 해설 수식의 `width/height/baseLine` 이 answer 파일과 동일하게 맞춰지는 것을 확인했다.
+- 검증 결과:
+  - `py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests\\test_exporter.py -q` -> `29 passed`
+  - `py -3 -m pytest D:\\03_PROJECT\\05_mathOCR\\02_main\\tests -q` -> `165 passed`
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/api/jobApi.test.ts src/app/components/ResultsViewer.test.tsx src/app/components/JobDetailPage.test.tsx` -> `24 passed`
+- 배포 영향:
+  - 신규 환경 변수는 없다.
+  - 백엔드 재배포는 필요하다.
+  - DB 마이그레이션 필요 여부는 이전 세션의 검증 메타데이터 컬럼 추가와 동일하다. 이번 턴의 HWPX 박스 프로파일 수정 자체는 추가 마이그레이션이 없다.

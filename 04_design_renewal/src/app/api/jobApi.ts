@@ -23,6 +23,8 @@ export interface BackendRegion {
   problem_markdown?: string | null;
   explanation_markdown?: string | null;
   markdown_version?: string | null;
+  verification_status?: "verified" | "warning" | "unverified" | null;
+  verification_warnings?: string[] | null;
   svg_url?: string | null;
   crop_url?: string | null;
   image_crop_url?: string | null;

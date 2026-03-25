@@ -20,6 +20,7 @@ from app.pipeline.figure import (
     render_svg_to_png,
     sanitize_svg,
 )
+from app.pipeline.hwpx_reference_renderer import normalize_choice_value, parse_problem_text
 from app.pipeline.markdown_contract import (
     MARKDOWN_VERSION,
     bridge_legacy_markup_to_markdown,
@@ -30,6 +31,163 @@ from app.pipeline.schema import JobPipelineContext, RegionContext, RegionPipelin
 
 ROOT = Path(__file__).resolve().parents[2]
 _repository_factory: Callable[[], PipelineRepository] | None = None
+EXPLANATION_VERIFICATION_WARNING_TEXT = "해설 검증이 필요합니다. 정답과 풀이의 일치 여부를 자동 확인하지 못했습니다."
+
+
+def _coerce_ordered_segments(raw_segments: Any) -> list[dict[str, Any]]:
+    """저장/응답에 안전한 ordered segment 사전 목록으로 정리한다."""
+    if not isinstance(raw_segments, list):
+        return []
+    segments: list[dict[str, Any]] = []
+    for fallback_order, raw_segment in enumerate(raw_segments):
+        if not isinstance(raw_segment, dict):
+            continue
+        segment_type = raw_segment.get("type")
+        if segment_type not in ("text", "math"):
+            continue
+        try:
+            source_order = int(raw_segment.get("source_order"))
+        except (TypeError, ValueError):
+            source_order = fallback_order
+        segments.append(
+            {
+                "type": segment_type,
+                "content": str(raw_segment.get("content") or ""),
+                "source_order": source_order,
+            }
+        )
+    return sorted(segments, key=lambda segment: segment["source_order"])
+
+
+def _ordered_segments_to_markup(segments: list[dict[str, Any]]) -> str:
+    """ordered segment 목록을 inline math markup 문자열로 합친다."""
+    parts: list[str] = []
+    for segment in segments:
+        if segment["type"] == "math":
+            parts.append(f"<math>{segment['content']}</math>")
+            continue
+        parts.append(segment["content"])
+    return "".join(parts)
+
+
+def _clear_ocr_outputs(region: RegionPipelineContext) -> None:
+    """OCR 재실행 전 원문/문항 메타데이터를 초기화한다."""
+    region.extractor.ocr_text = None
+    region.extractor.mathml = None
+    region.extractor.problem_markdown = None
+    region.extractor.raw_transcript = None
+    region.extractor.ordered_segments = []
+    region.extractor.question_type = None
+    region.extractor.parsed_choices = []
+
+
+def _clear_explanation_outputs(region: RegionPipelineContext) -> None:
+    """해설 재실행 전 검증 메타데이터와 해설 산출물을 초기화한다."""
+    region.extractor.explanation = None
+    region.extractor.explanation_markdown = None
+    region.extractor.resolved_answer_index = None
+    region.extractor.resolved_answer_value = None
+    region.extractor.answer_confidence = None
+    region.extractor.verification_status = None
+    region.extractor.verification_warnings = []
+    region.extractor.reason_summary = None
+
+
+def _coerce_answer_index(value: Any) -> int | None:
+    """모델이 반환한 정답 번호를 1 이상 정수로 정규화한다."""
+    try:
+        resolved = int(value)
+    except (TypeError, ValueError):
+        return None
+    return resolved if resolved > 0 else None
+
+
+def _normalize_explanation_payload(result: Any) -> dict[str, Any]:
+    """구형 문자열 해설과 신형 구조화 해설을 공통 payload로 맞춘다."""
+    if not isinstance(result, dict):
+        text = str(result or "").strip()
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return {
+            "explanation_lines": lines,
+            "final_answer_index": None,
+            "final_answer_value": None,
+            "confidence": None,
+            "reason_summary": None,
+        }
+    lines = result.get("explanation_lines")
+    normalized_lines = [str(line).strip() for line in lines or [] if str(line).strip()]
+    confidence = result.get("confidence")
+    return {
+        "explanation_lines": normalized_lines,
+        "final_answer_index": _coerce_answer_index(result.get("final_answer_index")),
+        "final_answer_value": str(result.get("final_answer_value") or "").strip() or None,
+        "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
+        "reason_summary": str(result.get("reason_summary") or "").strip() or None,
+    }
+
+
+def _store_problem_metadata(region: RegionPipelineContext, analyzed: dict[str, Any]) -> None:
+    """OCR 결과를 region extractor 필드와 객관식 메타데이터에 반영한다."""
+    ordered_segments = _coerce_ordered_segments(analyzed.get("ordered_segments"))
+    problem_source = _ordered_segments_to_markup(ordered_segments) or (analyzed.get("ocr_text") or "")
+    region.extractor.ocr_text = (analyzed.get("ocr_text") or "") or None
+    region.extractor.mathml = (analyzed.get("mathml") or "") or None
+    region.extractor.raw_transcript = (analyzed.get("raw_transcript") or "") or None
+    region.extractor.ordered_segments = ordered_segments
+    region.extractor.problem_markdown = bridge_legacy_markup_to_markdown(problem_source) if problem_source else None
+    parsed_problem = parse_problem_text(problem_source) if problem_source else parse_problem_text("")
+    region.extractor.question_type = "multiple_choice" if parsed_problem.choices is not None else "free_response"
+    region.extractor.parsed_choices = list(parsed_problem.choices or ())
+
+
+def _resolve_multiple_choice_warnings(
+    choices: list[str],
+    answer_index: int | None,
+    answer_value: str | None,
+) -> list[str]:
+    """객관식 정답 번호/값 충돌 여부를 경고 목록으로 계산한다."""
+    warnings: list[str] = []
+    normalized_answer_value = normalize_choice_value(answer_value) if answer_value else None
+    matched_indexes = [index + 1 for index, choice in enumerate(choices) if choice == normalized_answer_value]
+    if not choices:
+        warnings.append("객관식 보기를 복원하지 못했습니다.")
+    if answer_index is not None and not 1 <= answer_index <= len(choices):
+        warnings.append("해설 최종 답 번호가 보기 범위를 벗어났습니다.")
+    if normalized_answer_value and not matched_indexes:
+        warnings.append("해설 최종 답 값이 선택지와 일치하지 않습니다.")
+    if answer_index is not None and matched_indexes and answer_index not in matched_indexes:
+        warnings.append("해설 최종 답 번호와 선택지 값이 서로 일치하지 않습니다.")
+    if answer_index is None and normalized_answer_value is None:
+        warnings.append("해설에서 객관식 정답을 확정하지 못했습니다.")
+    if answer_index is None and len(matched_indexes) > 1:
+        warnings.append("동일한 보기 값이 여러 개라 자동 검증을 확정하지 못했습니다.")
+    return warnings
+
+
+def _store_explanation_metadata(region: RegionPipelineContext, explanation_result: Any) -> None:
+    """해설 구조화 응답을 저장하고 객관식이면 일치 여부를 검증한다."""
+    payload = _normalize_explanation_payload(explanation_result)
+    explanation_text = "\n".join(payload["explanation_lines"]).strip()
+    region.extractor.resolved_answer_index = payload["final_answer_index"]
+    region.extractor.resolved_answer_value = payload["final_answer_value"]
+    region.extractor.answer_confidence = payload["confidence"]
+    region.extractor.reason_summary = payload["reason_summary"]
+    region.extractor.verification_warnings = []
+    if region.extractor.question_type == "multiple_choice":
+        region.extractor.verification_warnings = _resolve_multiple_choice_warnings(
+            region.extractor.parsed_choices,
+            region.extractor.resolved_answer_index,
+            region.extractor.resolved_answer_value,
+        )
+        region.extractor.verification_status = "warning" if region.extractor.verification_warnings else "verified"
+        if region.extractor.verification_status == "warning":
+            explanation_text = EXPLANATION_VERIFICATION_WARNING_TEXT
+    else:
+        region.extractor.verification_status = "verified" if explanation_text else "unverified"
+    region.extractor.explanation = explanation_text or None
+    region.extractor.explanation_markdown = (
+        bridge_legacy_markup_to_markdown(region.extractor.explanation) if region.extractor.explanation else None
+    )
 
 
 def _utc_now() -> str:
@@ -150,12 +308,10 @@ def _reset_region_outputs(
 ) -> None:
     """선택한 액션에 해당하는 산출물만 초기화한다."""
     if do_ocr:
-        region.extractor.ocr_text = None
-        region.extractor.mathml = None
-        region.extractor.problem_markdown = None
+        _clear_ocr_outputs(region)
+        _clear_explanation_outputs(region)
     if do_explanation:
-        region.extractor.explanation = None
-        region.extractor.explanation_markdown = None
+        _clear_explanation_outputs(region)
     _sync_region_markdown_version(region)
     region.extractor.model_used = None
     region.extractor.openai_request_id = None
@@ -251,9 +407,7 @@ def _process_region(
             include_image_detection=do_image_stylize,
         )
         if do_ocr:
-            region.extractor.ocr_text = (analyzed.get("ocr_text") or "") or None
-            region.extractor.mathml = (analyzed.get("mathml") or "") or None
-            region.extractor.problem_markdown = bridge_legacy_markup_to_markdown(region.extractor.ocr_text)
+            _store_problem_metadata(region, analyzed)
             _sync_region_markdown_version(region)
             executed_action_flags["ocr"] = True
         region.extractor.model_used = analyzed.get("model_used")
@@ -271,8 +425,7 @@ def _process_region(
                 )
             except Exception:
                 explanation = "연습장에 풀이를 기록하세요."
-            region.extractor.explanation = explanation or None
-            region.extractor.explanation_markdown = bridge_legacy_markup_to_markdown(region.extractor.explanation)
+            _store_explanation_metadata(region, explanation)
             _sync_region_markdown_version(region)
             executed_action_flags["explanation"] = True
             _save_region_progress(user, job)

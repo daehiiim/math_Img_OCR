@@ -342,6 +342,41 @@ describe("JobDetailPage", () => {
     expect(screen.getByText(/결과가 남은 1개 영역은 HWPX로 내보낼 수 있습니다\./i)).toBeInTheDocument();
   });
 
+  it("검증 경고가 있으면 내보내기 안내 영역에 표시한다", () => {
+    mockJob = {
+      ...mockJob,
+      status: "completed",
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "completed",
+          ocrText: "문제 본문",
+          explanation: "해설 본문",
+          verificationStatus: "warning",
+          verificationWarnings: ["정답 불일치"],
+        },
+      ],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/검증 경고 1개/i)).toBeInTheDocument();
+  });
+
   it("편집 중인 영역 기준으로 예상 차감 크레딧을 다시 계산한다", async () => {
     const user = userEvent.setup();
     mockAuthUser = {

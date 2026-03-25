@@ -33,6 +33,8 @@ function mapBackendRegion(region: BackendJob["regions"][number], fallback?: Regi
     problemMarkdown: region.problem_markdown ?? fallback?.problemMarkdown ?? undefined,
     explanationMarkdown: region.explanation_markdown ?? fallback?.explanationMarkdown ?? undefined,
     markdownVersion: region.markdown_version ?? fallback?.markdownVersion ?? undefined,
+    verificationStatus: region.verification_status ?? fallback?.verificationStatus ?? undefined,
+    verificationWarnings: region.verification_warnings ?? fallback?.verificationWarnings ?? undefined,
     cropUrl: resolveRuntimePath(region.crop_url),
     imageCropUrl: resolveRuntimePath(region.image_crop_url),
     styledImageUrl: resolveRuntimePath(region.styled_image_url),

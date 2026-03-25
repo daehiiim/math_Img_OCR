@@ -68,6 +68,19 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
             problem_markdown="문제 $x$",
             explanation_markdown="설명 $x$",
             markdown_version="mathocr_markdown_bridge_v1",
+            raw_transcript="1. 문제 <math>x</math>",
+            ordered_segments=[
+                {"type": "text", "content": "문제 ", "source_order": 0},
+                {"type": "math", "content": "x", "source_order": 1},
+            ],
+            question_type="multiple_choice",
+            parsed_choices=["1", "2", "3", "4", "5"],
+            resolved_answer_index=2,
+            resolved_answer_value="2",
+            answer_confidence=0.88,
+            verification_status="warning",
+            verification_warnings=["해설 최종 답과 선택지 값이 일치하지 않습니다."],
+            reason_summary="선택지 대조가 필요합니다.",
             model_used="gpt-test",
             openai_request_id="req-123",
         ),
@@ -104,6 +117,19 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
     assert payload["regions"][0]["problem_markdown"] == "문제 $x$"
     assert payload["regions"][0]["explanation_markdown"] == "설명 $x$"
     assert payload["regions"][0]["markdown_version"] == "mathocr_markdown_bridge_v1"
+    assert payload["regions"][0]["raw_transcript"] == "1. 문제 <math>x</math>"
+    assert payload["regions"][0]["ordered_segments"] == [
+        {"type": "text", "content": "문제 ", "source_order": 0},
+        {"type": "math", "content": "x", "source_order": 1},
+    ]
+    assert payload["regions"][0]["question_type"] == "multiple_choice"
+    assert payload["regions"][0]["parsed_choices"] == ["1", "2", "3", "4", "5"]
+    assert payload["regions"][0]["resolved_answer_index"] == 2
+    assert payload["regions"][0]["resolved_answer_value"] == "2"
+    assert payload["regions"][0]["answer_confidence"] == 0.88
+    assert payload["regions"][0]["verification_status"] == "warning"
+    assert payload["regions"][0]["verification_warnings"] == ["해설 최종 답과 선택지 값이 일치하지 않습니다."]
+    assert payload["regions"][0]["reason_summary"] == "선택지 대조가 필요합니다."
     assert payload["regions"][0]["svg_url"].startswith("https://signed.example/")
     assert payload["regions"][0]["crop_url"].startswith("https://signed.example/")
     assert payload["regions"][0]["image_crop_url"].startswith("https://signed.example/")

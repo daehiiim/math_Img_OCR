@@ -78,6 +78,16 @@ class RegionResult(BaseModel):
     problem_markdown: str | None = None
     explanation_markdown: str | None = None
     markdown_version: str | None = None
+    raw_transcript: str | None = None
+    ordered_segments: list[dict[str, object]] = Field(default_factory=list)
+    question_type: Literal["multiple_choice", "free_response"] | None = None
+    parsed_choices: list[str] = Field(default_factory=list)
+    resolved_answer_index: int | None = None
+    resolved_answer_value: str | None = None
+    answer_confidence: float | None = None
+    verification_status: Literal["verified", "warning", "unverified"] | None = None
+    verification_warnings: list[str] = Field(default_factory=list)
+    reason_summary: str | None = None
     svg_url: str | None = None
     crop_url: str | None = None
     image_crop_url: str | None = None
@@ -186,6 +196,16 @@ def _is_schema_mismatch_message(message: str) -> bool:
         "problem_markdown",
         "explanation_markdown",
         "markdown_version",
+        "raw_transcript",
+        "ordered_segments",
+        "question_type",
+        "parsed_choices",
+        "resolved_answer_index",
+        "resolved_answer_value",
+        "answer_confidence",
+        "verification_status",
+        "verification_warnings",
+        "reason_summary",
         "image_crop_path",
         "styled_image_path",
         "styled_image_model",
@@ -263,6 +283,16 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
                 problem_markdown=region.extractor.problem_markdown,
                 explanation_markdown=region.extractor.explanation_markdown,
                 markdown_version=region.extractor.markdown_version,
+                raw_transcript=region.extractor.raw_transcript,
+                ordered_segments=list(region.extractor.ordered_segments or []),
+                question_type=region.extractor.question_type,
+                parsed_choices=list(region.extractor.parsed_choices or []),
+                resolved_answer_index=region.extractor.resolved_answer_index,
+                resolved_answer_value=region.extractor.resolved_answer_value,
+                answer_confidence=region.extractor.answer_confidence,
+                verification_status=region.extractor.verification_status,
+                verification_warnings=list(region.extractor.verification_warnings or []),
+                reason_summary=region.extractor.reason_summary,
                 svg_url=_signed_asset_url(current_user, region.figure.svg_url),
                 crop_url=_signed_asset_url(current_user, region.figure.crop_url),
                 image_crop_url=_signed_asset_url(current_user, region.figure.image_crop_url),

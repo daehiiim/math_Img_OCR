@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
+from lxml import etree
+
 MATH_SEGMENT_PATTERN = re.compile(r"(<math>.*?</math>)", re.DOTALL)
 SCRIPT_REPLACEMENTS = (
     ("\\triangle", "△"),
@@ -26,6 +28,19 @@ SCRIPT_REPLACEMENTS = (
     ("\\infty", "∞"),
     ("degree", "°"),
 )
+COMPACT_INLINE_EQUATION_HEIGHT = 975
+COMPACT_INLINE_EQUATION_BASELINE = 86
+COMPACT_INLINE_WIDTH_OVERRIDES = {
+    "20 ÷ 2 = 10": 4975,
+    "30 ÷ 2 = 15": 4975,
+    "10² : 15²": 3570,
+    "15² ÷ 10² = 225 ÷ 100 = 9 ÷ 4": 12855,
+    "18,000 × 9 ÷ 4": 6255,
+    "18,000 ÷ 4 = 4,500": 8340,
+    "4,500 × 9 = 40,500": 8340,
+    "40,500": 2995,
+}
+COMPACT_INLINE_WIDTH_SAMPLE_PAIRS = tuple(COMPACT_INLINE_WIDTH_OVERRIDES.items())
 
 
 def split_math_text(text: str) -> list[tuple[bool, str]]:
@@ -107,6 +122,62 @@ def estimate_inline_equation_width(samples: list[tuple[int, int]], script: str, 
     return max(minimum_width, estimated_width)
 
 
+def repair_equation_widths(section_xml: bytes, reference_xml: bytes) -> bytes:
+    """기준 문서와 보정 프로파일을 사용해 section0.xml 수식 박스를 다시 맞춘다."""
+    section_root = etree.fromstring(section_xml)
+    reference_root = etree.fromstring(reference_xml)
+    reference_widths, width_samples = _collect_reference_equation_widths(reference_root)
+    _repair_section_equation_widths(section_root, reference_widths, width_samples)
+    return etree.tostring(section_root, encoding="UTF-8", xml_declaration=True)
+
+
+def _is_compact_explanation_paragraph(paragraph) -> bool:
+    """정상 파일과 같은 compact inline equation 프로파일이 필요한 해설 문단인지 판별한다."""
+    return paragraph.get("paraPrIDRef") == "0" and paragraph.get("styleIDRef") == "0"
+
+
+def _is_numeric_arithmetic_script(script: str) -> bool:
+    """숫자와 산술 연산 위주의 inline 수식인지 판별한다."""
+    normalized = normalize_hwp_equation_script(script)
+    return bool(re.search(r"\d", normalized)) and not bool(re.search(r"[A-Za-z가-힣△∠]", normalized))
+
+
+def _get_compact_inline_width_samples() -> list[tuple[int, int]]:
+    """정상 answer 파일에서 추출한 compact arithmetic 폭 샘플을 반환한다."""
+    return collect_equation_width_samples(COMPACT_INLINE_WIDTH_SAMPLE_PAIRS)
+
+
+def _resolve_compact_inline_width(
+    script: str,
+    reference_widths: dict[str, int],
+    width_samples: list[tuple[int, int]],
+    fallback_width: int,
+) -> int:
+    """해설 inline 수식에 맞는 compact width를 계산한다."""
+    normalized_script = normalize_hwp_equation_script(script)
+    if normalized_script in COMPACT_INLINE_WIDTH_OVERRIDES:
+        return COMPACT_INLINE_WIDTH_OVERRIDES[normalized_script]
+    reference_width = reference_widths.get(script) or reference_widths.get(normalized_script)
+    if reference_width is not None and not _is_numeric_arithmetic_script(normalized_script):
+        return reference_width
+    compact_fallback = estimate_inline_equation_width(
+        _get_compact_inline_width_samples(),
+        normalized_script,
+        fallback_width,
+    )
+    if _is_numeric_arithmetic_script(normalized_script):
+        return compact_fallback
+    return reference_width or estimate_inline_equation_width(width_samples, normalized_script, compact_fallback)
+
+
+def _apply_compact_inline_box_metrics(equation, size, resolved_width: int) -> None:
+    """정상 answer 파일과 같은 compact inline equation 박스 크기를 반영한다."""
+    if resolved_width > 0:
+        size.set("width", str(resolved_width))
+    size.set("height", str(COMPACT_INLINE_EQUATION_HEIGHT))
+    equation.set("baseLine", str(COMPACT_INLINE_EQUATION_BASELINE))
+
+
 def _select_neighbor_samples(samples: list[tuple[int, int]], target_metric: int) -> tuple[tuple[int, int], tuple[int, int]]:
     """대상 길이를 둘러싼 앞뒤 샘플 두 개를 고른다."""
     if target_metric <= samples[0][0]:
@@ -129,3 +200,57 @@ def _interpolate_sample_width(
         return max(low_width, high_width)
     slope = (high_width - low_width) / (high_metric - low_metric)
     return round(low_width + (slope * (target_metric - low_metric)))
+
+
+def _collect_reference_equation_widths(reference_root) -> tuple[dict[str, int], list[tuple[int, int]]]:
+    """기준 문서의 수식 스크립트별 폭과 길이 샘플을 수집한다."""
+    script_widths: dict[str, list[int]] = {}
+    width_pairs: list[tuple[str, int]] = []
+    for equation in reference_root.findall(".//hp:equation", namespaces={"hp": "http://www.hancom.co.kr/hwpml/2011/paragraph"}):
+        script = (equation.findtext("hp:script", default="", namespaces={"hp": "http://www.hancom.co.kr/hwpml/2011/paragraph"}) or "").strip()
+        size = equation.find("hp:sz", namespaces={"hp": "http://www.hancom.co.kr/hwpml/2011/paragraph"})
+        if not script or size is None:
+            continue
+        width_value = _parse_width_value(size.get("width"))
+        if width_value <= 0:
+            continue
+        script_widths.setdefault(script, []).append(width_value)
+        width_pairs.append((script, width_value))
+    resolved_widths = {script: round(sum(widths) / len(widths)) for script, widths in script_widths.items()}
+    return resolved_widths, collect_equation_width_samples(width_pairs)
+
+
+def _repair_section_equation_widths(
+    section_root,
+    reference_widths: dict[str, int],
+    width_samples: list[tuple[int, int]],
+) -> None:
+    """문서에 있는 수식별 폭을 기준 샘플에 맞게 보정한다."""
+    namespaces = {"hp": "http://www.hancom.co.kr/hwpml/2011/paragraph"}
+    for paragraph in section_root.findall(".//hp:p", namespaces=namespaces):
+        compact_context = _is_compact_explanation_paragraph(paragraph)
+        for equation in paragraph.findall(".//hp:equation", namespaces=namespaces):
+            script = (equation.findtext("hp:script", default="", namespaces=namespaces) or "").strip()
+            size = equation.find("hp:sz", namespaces=namespaces)
+            if not script or size is None:
+                continue
+            current_width = _parse_width_value(size.get("width"))
+            if compact_context:
+                resolved_width = _resolve_compact_inline_width(script, reference_widths, width_samples, current_width)
+                _apply_compact_inline_box_metrics(equation, size, resolved_width)
+                continue
+            resolved_width = reference_widths.get(script)
+            if resolved_width is None:
+                resolved_width = estimate_inline_equation_width(width_samples, script, current_width)
+            if resolved_width > 0 and resolved_width != current_width:
+                size.set("width", str(resolved_width))
+
+
+def _parse_width_value(raw_width: str | None) -> int:
+    """폭 속성 값을 안전한 정수로 변환한다."""
+    if raw_width is None:
+        return 0
+    try:
+        return int(raw_width)
+    except (TypeError, ValueError):
+        return 0

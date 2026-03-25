@@ -1,8 +1,11 @@
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, TypedDict
 
 from pydantic import BaseModel, Field
 
 RegionType = Literal["text", "diagram", "mixed"]
+OrderedSegmentType = Literal["text", "math"]
+QuestionType = Literal["multiple_choice", "free_response"]
+VerificationStatus = Literal["verified", "warning", "unverified"]
 
 
 class RegionContext(BaseModel):
@@ -14,6 +17,14 @@ class RegionContext(BaseModel):
     order: int
 
 
+class OrderedSegment(TypedDict):
+    """OCR 원문 순서를 유지하기 위한 text/math segment 사전을 정의한다."""
+
+    type: OrderedSegmentType
+    content: str
+    source_order: int
+
+
 class ExtractorContext(BaseModel):
     """OCR과 해설 생성 결과를 보관한다."""
 
@@ -23,6 +34,16 @@ class ExtractorContext(BaseModel):
     problem_markdown: Optional[str] = None
     explanation_markdown: Optional[str] = None
     markdown_version: Optional[str] = None
+    raw_transcript: Optional[str] = None
+    ordered_segments: List[OrderedSegment] = Field(default_factory=list)
+    question_type: Optional[QuestionType] = None
+    parsed_choices: List[str] = Field(default_factory=list)
+    resolved_answer_index: Optional[int] = None
+    resolved_answer_value: Optional[str] = None
+    answer_confidence: Optional[float] = None
+    verification_status: Optional[VerificationStatus] = None
+    verification_warnings: List[str] = Field(default_factory=list)
+    reason_summary: Optional[str] = None
     model_used: Optional[str] = None
     openai_request_id: Optional[str] = None
 

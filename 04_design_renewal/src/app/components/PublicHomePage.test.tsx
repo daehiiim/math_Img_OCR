@@ -151,6 +151,12 @@ describe("PublicHomePage", () => {
       "--hero-video-opacity": "0.9",
     });
 
+    expect(container.querySelector(".public-home-hero-poster")).toBeInTheDocument();
+
+    fireEvent.loadedData(heroVideo);
+
+    expect(container.querySelector(".public-home-hero-poster")).not.toBeInTheDocument();
+
     fireEvent.loadedMetadata(heroVideo);
 
     expect(heroVideo.currentTime).toBeCloseTo(0);

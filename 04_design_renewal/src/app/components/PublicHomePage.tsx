@@ -107,11 +107,15 @@ function ActionButtons({ alignCenter = false, onPricing, onTry }: ActionButtonsP
 /** 히어로 섹션 전용 배경 포스터와 조건부 비디오 레이어를 렌더링한다. */
 function HeroBackgroundMedia() {
   const [hasVideoError, setHasVideoError] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const fallbackReason = hasVideoError ? "video-unavailable" : null;
+  const shouldShowPoster = hasVideoError || !isVideoReady;
 
   return (
     <div className="public-home-hero-media" aria-hidden="true" data-hero-media-fallback={fallbackReason ?? undefined} style={heroMediaVisualTokens}>
-      <div className="public-home-hero-poster" style={{ backgroundImage: `url(${heroTimelapsePoster})` }} />
+      {shouldShowPoster ? (
+        <div className="public-home-hero-poster" style={{ backgroundImage: `url(${heroTimelapsePoster})` }} />
+      ) : null}
       {!hasVideoError ? (
         <video
           autoPlay
@@ -122,6 +126,7 @@ function HeroBackgroundMedia() {
           aria-hidden="true"
           className="public-home-hero-video"
           poster={heroTimelapsePoster}
+          onLoadedData={() => setIsVideoReady(true)}
           onError={() => setHasVideoError(true)}
         >
           <source src={heroTimelapseWebm} type="video/webm" />

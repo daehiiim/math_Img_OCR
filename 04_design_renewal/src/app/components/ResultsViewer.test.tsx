@@ -157,4 +157,17 @@ describe("ResultsViewer", () => {
     expect(screen.getByRole("tab", { name: /ocr 결과/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /해설/i })).toBeInTheDocument();
   });
+
+  it("검증 경고가 있으면 결과 카드에 경고 영역을 표시한다", () => {
+    const region = makeRegion({
+      verificationStatus: "warning",
+      verificationWarnings: ["정답 불일치", "해설 재검증 필요"],
+    });
+
+    render(<ResultsViewer regions={[region]} />);
+
+    expect(screen.getAllByText("검증 경고")).toHaveLength(2);
+    expect(screen.getByText("정답 불일치")).toBeInTheDocument();
+    expect(screen.getByText("해설 재검증 필요")).toBeInTheDocument();
+  });
 });

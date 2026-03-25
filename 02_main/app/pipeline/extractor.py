@@ -7,11 +7,11 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import requests
 
 from app.config import SUPPORTED_NANO_BANANA_PROMPT_VERSIONS, get_settings
-from app.pipeline.schema import ExtractorContext
 
 logger = logging.getLogger(__name__)
 SUPPORTED_STYLIZABLE_IMAGE_KINDS = {"geometry", "illustration", "generic"}
@@ -266,6 +266,105 @@ def _normalize_explanation_text(text: str) -> str:
     return _normalize_math_markup_text(text)
 
 
+def _coerce_int(value: Any, fallback: int) -> int:
+    """정수형 source order를 안전하게 복원한다."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _coerce_ordered_segments(raw_segments: Any) -> list[dict[str, Any]]:
+    """모델 응답의 ordered segment를 정렬 가능한 사전 목록으로 정리한다."""
+    if not isinstance(raw_segments, list):
+        return []
+    segments: list[dict[str, Any]] = []
+    for fallback_order, raw_segment in enumerate(raw_segments):
+        if not isinstance(raw_segment, dict):
+            continue
+        segment_type = raw_segment.get("type")
+        if segment_type not in ("text", "math"):
+            continue
+        segments.append(
+            {
+                "type": segment_type,
+                "content": str(raw_segment.get("content") or ""),
+                "source_order": _coerce_int(raw_segment.get("source_order"), fallback_order),
+            }
+        )
+    return sorted(segments, key=lambda segment: segment["source_order"])
+
+
+def _wrap_segment_content(segment_type: str, content: str) -> str:
+    """segment 타입에 맞는 직렬화 문자열을 만든다."""
+    if segment_type == "math":
+        return f"<math>{content}</math>"
+    return content
+
+
+def _normalize_ordered_segments(raw_segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """ordered segment의 평문은 보존하고 math만 정규화한다."""
+    normalized_segments: list[dict[str, Any]] = []
+    stripped_first_problem_number = False
+    for segment in raw_segments:
+        content = segment["content"].replace("\r\n", "\n")
+        if segment["type"] == "math":
+            normalized_content = _normalize_math_expression(content)
+        else:
+            normalized_content = content
+            if normalized_content.strip() and not stripped_first_problem_number:
+                normalized_content = _strip_problem_number_prefix(normalized_content)
+                stripped_first_problem_number = True
+        normalized_segments.append(
+            {
+                "type": segment["type"],
+                "content": normalized_content,
+                "source_order": segment["source_order"],
+            }
+        )
+    return normalized_segments
+
+
+def _join_segment_text(segments: list[dict[str, Any]]) -> str:
+    """ordered segment 목록을 inline math markup 문자열로 다시 합친다."""
+    return "".join(_wrap_segment_content(segment["type"], segment["content"]) for segment in segments)
+
+
+def _extract_ordered_segment_payload(parsed: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None]:
+    """ordered segment가 있으면 raw transcript와 표시용 본문을 함께 복원한다."""
+    raw_segments = _coerce_ordered_segments(parsed.get("ordered_segments"))
+    if not raw_segments:
+        return None, [], None
+    normalized_segments = _normalize_ordered_segments(raw_segments)
+    return _join_segment_text(raw_segments), normalized_segments, _join_segment_text(normalized_segments)
+
+
+def _build_fallback_raw_transcript(text_blocks: list[str]) -> str | None:
+    """구스키마 응답에서도 원문 추적용 transcript를 최대한 남긴다."""
+    joined_text = chr(10).join(text_blocks).strip()
+    return joined_text or None
+
+
+def _normalize_explanation_payload(parsed: dict[str, Any]) -> dict[str, Any]:
+    """구조화 해설 응답을 검증 필드까지 포함한 정규화 dict로 바꾼다."""
+    raw_lines = parsed.get("explanation_lines")
+    normalized_lines: list[str] = []
+    if isinstance(raw_lines, list):
+        normalized_lines = [_normalize_explanation_text(str(line).strip()) for line in raw_lines if str(line).strip()]
+    final_answer_value = parsed.get("final_answer_value")
+    normalized_answer_value = None
+    if isinstance(final_answer_value, str) and final_answer_value.strip():
+        normalized_answer_value = _normalize_explanation_text(final_answer_value.strip())
+    confidence = parsed.get("confidence")
+    return {
+        "explanation_lines": normalized_lines,
+        "final_answer_index": _coerce_int(parsed.get("final_answer_index"), 0) or None,
+        "final_answer_value": normalized_answer_value,
+        "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
+        "reason_summary": str(parsed.get("reason_summary") or "").strip() or None,
+    }
+
+
 def _raise_nano_banana_prompt_asset_error(error_code: str, asset_path: Path, error: Exception | None = None) -> None:
     """프롬프트 자산 로딩 실패를 로그와 고정 에러 문자열로 남긴다."""
     logger.error("Nano Banana prompt asset error code=%s path=%s error=%s", error_code, asset_path, error)
@@ -382,6 +481,7 @@ def analyze_region_with_gpt(
     include_ocr: bool = True,
     include_image_detection: bool = False,
 ) -> dict:
+    """영역 이미지에서 OCR 원문, ordered segment, 시각 요소 bbox를 함께 추출한다."""
     resolved_api_key = api_key or _get_openai_api_key(root_path)
     model = "gpt-5.2"
     base_url = _get_openai_base_url(root_path)
@@ -407,12 +507,16 @@ Your task is to:
 
 A) Text and Formulas
 - Extract the complete text exactly as it appears in the image.
-- Preserve line breaks.
-- Convert all mathematical formulas, numbers, and symbols into "Hancom Office Equation Script (HWP Equation Script)" syntax.
-- STRICTLY wrap all HWP Equation Script formulas within `<math>...</math>` tags.
-- For example: `<math>2x + 3 = 7</math>`, or `<math>{x+1} over {x-1}</math>`, or `<math>sqrt {b^2 - 4ac}</math>`.
-- Do NOT use LaTeX syntax (e.g., no $...$, no \(...\), no \[...\], no \angle, no \circ, no \frac).
-- Do NOT separate formulas from the main text; output them seamlessly inline.
+- Preserve line breaks, punctuation, numbers, spacing intent, and answer choice markers.
+- Return the full reading order as `ordered_segments`.
+- Each segment must be either:
+    {"type":"text","content":"exact raw text","source_order":0}
+  or
+    {"type":"math","content":"formula only","source_order":1}
+- For `math` segments, keep the exact recognized formula content without `<math>` wrappers in the JSON field.
+- Do NOT rewrite plain text.
+- You may normalize formula syntax only enough to be representable in Hancom Office Equation Script.
+- Also fill the legacy `text_blocks` and `formulas` arrays for backward compatibility.
 
 
 C) Mathematical Diagrams
@@ -443,6 +547,10 @@ C) Mathematical Diagrams
 Return strictly in this JSON structure:
 
 {
+  "ordered_segments": [
+    {"type": "text", "content": "text before formula ", "source_order": 0},
+    {"type": "math", "content": "2x + 3 = 7", "source_order": 1}
+  ],
   "text_blocks": ["text paragraph with inline <math>formulas</math>", "another paragraph"],
   "formulas": ["inline <math>formula1</math>", "display <math>formula2</math>"],
   "stylizable_images": [{"bbox": [0, 0, 100, 80], "kind": "geometry"}]
@@ -493,9 +601,10 @@ Now process the image."""
     content = _read_chat_content(response.json())
     parsed = _extract_json_object(content)
 
-    text_blocks = parsed.get("text_blocks") or []
+    raw_ordered_transcript, ordered_segments, ordered_ocr_text = _extract_ordered_segment_payload(parsed)
+    text_blocks = [str(value).strip() for value in (parsed.get("text_blocks") or []) if str(value).strip()]
     formulas = parsed.get("formulas") or []
-    ocr_text = _normalize_ocr_text(chr(10).join([str(v).strip() for v in text_blocks if str(v).strip()]))
+    ocr_text = ordered_ocr_text or _normalize_ocr_text(chr(10).join(text_blocks))
     mathml = _normalize_math_markup_text(chr(10).join([str(v).strip() for v in formulas if str(v).strip()]))
     has_stylizable_image, image_bbox, image_kind = _extract_stylizable_image(parsed)
 
@@ -508,6 +617,8 @@ Now process the image."""
     return {
         "ocr_text": ocr_text if include_ocr else "",
         "mathml": mathml if include_ocr else "",
+        "raw_transcript": raw_ordered_transcript or _build_fallback_raw_transcript(text_blocks),
+        "ordered_segments": ordered_segments,
         "has_stylizable_image": has_stylizable_image if include_image_detection else False,
         "image_bbox": image_bbox if include_image_detection else None,
         "image_kind": image_kind if include_image_detection and has_stylizable_image else None,
@@ -522,7 +633,8 @@ def generate_explanation_with_gpt(
     ocr_text: str,
     mathml: str,
     api_key: str | None = None,
-) -> str:
+) -> dict[str, Any]:
+    """해설 본문과 객관식 검증용 최종 정답 정보를 구조화 JSON으로 생성한다."""
     resolved_api_key = api_key or _get_openai_api_key(root_path)
     model = "gpt-5.2"
     base_url = _get_openai_base_url(root_path)
@@ -532,10 +644,14 @@ def generate_explanation_with_gpt(
 
     prompt = (
         "Write a concise Korean math solution explanation from OCR text and image context. "
-        "Provide 4-8 sentences with key solving steps. "
-        "Convert all mathematical formulas, numbers, and symbols into 'Hancom Office Equation Script (HWP Equation Script)' syntax, and strictly wrap them within `<math>...</math>` tags. "
-        "For example: `<math>2x + 3 = 7</math>`. Do NOT use LaTeX syntax, including $...$ and LaTeX-style inline/display delimiters.\n"
-        "Output ONLY the Korean explanation text.\n"
+        "Return a strict JSON object with these keys only: "
+        "`explanation_lines`, `final_answer_index`, `final_answer_value`, `confidence`, `reason_summary`. "
+        "`explanation_lines` must be a list of 4-8 concise Korean lines. "
+        "`final_answer_index` must be the multiple-choice answer number when available, otherwise null. "
+        "`final_answer_value` must be the final answer text or formula when available, otherwise null. "
+        "`confidence` must be a number between 0 and 1 when available, otherwise null. "
+        "Convert mathematical formulas into Hancom Office Equation Script and strictly wrap formulas with `<math>...</math>` tags. "
+        "Do not use LaTeX delimiters. Do not return markdown fences.\n"
         + "OCR text: " + (ocr_text or "") + "\n"
         + "MathML: " + (mathml or "")
     )
@@ -544,7 +660,7 @@ def generate_explanation_with_gpt(
         "model": model,
         "temperature": 0.2,
         "messages": [
-            {"role": "system", "content": "Output plain Korean explanation text only."},
+            {"role": "system", "content": "Return strict JSON object only."},
             {
                 "role": "user",
                 "content": [
@@ -564,7 +680,8 @@ def generate_explanation_with_gpt(
     if response.status_code >= 400:
         raise ValueError(f"OpenAI explain API error {response.status_code}: {response.text[:400]}")
 
-    return _normalize_explanation_text(_read_chat_content(response.json()).strip())
+    content = _read_chat_content(response.json()).strip()
+    return _normalize_explanation_payload(_extract_json_object(content))
 
 
 def generate_styled_image_with_nano_banana(

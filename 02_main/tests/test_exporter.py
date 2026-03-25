@@ -591,6 +591,81 @@ def test_export_hwpx_explanation_inline_equations_use_compact_width_for_short_sc
     assert widths_by_script["ADE"] < widths_by_script["ANGLE ABC= ANGLE ADE"]
 
 
+def test_export_hwpx_explanation_inline_equations_use_compact_box_metrics(tmp_path, monkeypatch):
+    """해설 mixed 수식은 한글이 재계산한 compact 박스 크기로 저장돼야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+    hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
+    paragraphs = direct_paragraphs(read_archive_xml(hwpx_path, "Contents/section0.xml"))
+
+    explanation_equations = []
+    for paragraph in paragraphs:
+        if paragraph.get("paraPrIDRef") == "0" and paragraph.get("styleIDRef") == "0":
+            explanation_equations.extend(paragraph.findall(".//hp:equation", NS))
+
+    assert explanation_equations
+    assert all(node.find("hp:sz", NS).get("height") == "975" for node in explanation_equations)
+    assert all(node.get("baseLine") == "86" for node in explanation_equations)
+
+
+def test_export_hwpx_repairs_direct_hwpforge_widths_using_canonical_samples(tmp_path, monkeypatch):
+    """direct HwpForge 결과가 장문 폭으로 풀리면 canonical 샘플 기준으로 다시 보정해야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+
+    class FakeSettings:
+        """직접 writer 강제 실행용 테스트 설정을 제공한다."""
+
+        hwpx_skill_dir = None
+        hwpx_export_engine = "hwpforge"
+        hwpforge_mcp_path = "C:/tooling/hwpforge-mcp.exe"
+
+    def fake_direct_writer(
+        root_path: Path,
+        job,
+        bindata_dir: Path,
+        output_dir: Path,
+        year: str,
+        warnings,
+        runtime_path: str | None,
+        app_root: Path,
+    ):
+        """width가 과도하게 큰 section0.xml을 의도적으로 만든다."""
+        output_dir.mkdir(parents=True, exist_ok=True)
+        target_path = output_dir / "section0.direct.xml"
+        with ZipFile(STYLE_GUIDE_HWPX_PATH, "r") as archive:
+            section_root = etree.fromstring(archive.read("Contents/section0.xml"))
+        for equation in section_root.findall(".//hp:equation", NS):
+            size = equation.find("hp:sz", NS)
+            if size is not None:
+                size.set("width", "8386")
+        target_path.write_bytes(etree.tostring(section_root, encoding="UTF-8", xml_declaration=True))
+        return target_path, []
+
+    monkeypatch.setattr(module, "get_settings", lambda _root: FakeSettings())
+    monkeypatch.setattr(module, "build_section_via_hwpforge", fake_direct_writer)
+    monkeypatch.setattr(module, "inspect_and_validate_hwpx_via_hwpforge", lambda *_args: None)
+
+    hwpx_path = module.export_hwpx(root_path, make_reference_like_job(image_relative_path.as_posix()), export_dir)
+    generated_section = read_archive_xml(hwpx_path, "Contents/section0.xml")
+    style_section = read_style_guide_xml("Contents/section0.xml")
+    generated_widths = {
+        node.findtext("hp:script", default="", namespaces=NS): int(node.find("hp:sz", NS).get("width"))
+        for node in generated_section.findall(".//hp:equation", NS)
+    }
+    style_widths = {
+        node.findtext("hp:script", default="", namespaces=NS): int(node.find("hp:sz", NS).get("width"))
+        for node in style_section.findall(".//hp:equation", NS)
+    }
+
+    assert generated_widths["ABC"] == style_widths["ABC"]
+    assert generated_widths["ADE"] == style_widths["ADE"]
+    assert generated_widths["ABC"] < generated_widths["ANGLE  BAC`=` ANGLE DAE"]
+    assert generated_widths["ADE"] < generated_widths["ANGLE  ABC`=` ANGLE  ADE"]
+
+
 def test_export_hwpx_renders_current_year_and_current_page_only_footer(tmp_path, monkeypatch):
     """연도는 현재값으로 치환하고 footer는 현재 페이지만 남겨야 한다."""
     module = load_exporter_module()

@@ -22,12 +22,10 @@ def test_find_brightness_cutoff_index_detects_first_bright_spike():
     assert cutoff_index == 5
 
 
-def test_build_output_positions_spans_full_source_range():
-    """출력 타임라인은 소스 구간 처음과 끝을 모두 포함해야 한다."""
+def test_build_repeated_frame_indices_reuses_native_loop_frames():
+    """출력 타임라인은 원본 루프 구간 인덱스를 반복 사용해야 한다."""
     module = load_loop_builder_module()
 
-    positions = module.build_output_positions(start_index=10, end_index=14, output_frame_count=9)
+    indices = module.build_repeated_frame_indices(start_index=10, end_index=14, output_frame_count=11)
 
-    assert positions[0] == 10
-    assert positions[-1] == 14
-    assert positions[4] == 12
+    assert indices == [10, 11, 12, 13, 10, 11, 12, 13, 10, 11, 12]

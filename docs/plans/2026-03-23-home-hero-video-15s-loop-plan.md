@@ -4,7 +4,7 @@
 
 **Goal:** 공개 홈 히어로 배경 비디오를 밝은 구간 없는 15초 루프 자산으로 교체한다.
 
-**Architecture:** 원본 비디오 분석과 자산 생성은 별도 Python 스크립트로 처리하고, 프런트는 새 자산 참조와 단순 `loop` 계약만 유지한다. 테스트는 먼저 새 계약을 실패로 고정한 뒤 최소 구현으로 통과시킨다.
+**Architecture:** 원본 비디오 분석과 자산 생성은 별도 Python 스크립트로 처리하고, 프런트는 새 자산 참조와 단순 `loop` 계약만 유지한다. 자산 생성은 자연스럽게 이어지는 원본 프레임 구간을 찾아 반복 배치하는 방식으로 구현하고, 광류 보간은 사용하지 않는다.
 
 **Tech Stack:** Python, OpenCV, FFmpeg, React, TypeScript, Vitest, Vite
 
@@ -46,7 +46,8 @@ Expected: 파일 없음 또는 실행 불가
 
 - 원본 [star-timelapse.mp4](/D:/03_PROJECT/05_mathOCR/04_new_design/star-timelapse.mp4) 를 읽는다.
 - 어두운 구간 후보를 분석한다.
-- 보간된 15초 시퀀스를 임시 프레임 시퀀스로 만든다.
+- 시작/끝 프레임 차이가 작은 자연 루프 구간을 찾는다.
+- 해당 원본 프레임 구간 인덱스를 반복해 15초 시퀀스를 만든다.
 - `ffmpeg` 를 호출해 [hero-timelapse.mp4](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/assets/home/hero-timelapse.mp4), [hero-timelapse.webm](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/assets/home/hero-timelapse.webm), [hero-timelapse-poster.jpg](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/assets/home/hero-timelapse-poster.jpg) 를 재생성한다.
 - 예상 가능한 에러와 사용자 메시지를 한국어 상수로 분리한다.
 
