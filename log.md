@@ -491,3 +491,24 @@
   - 신규 환경 변수는 없다.
   - 백엔드 재배포는 필요하다.
   - DB 마이그레이션 필요 여부는 이전 세션의 검증 메타데이터 컬럼 추가와 동일하다. 이번 턴의 HWPX 박스 프로파일 수정 자체는 추가 마이그레이션이 없다.
+
+## 2026-03-25 11:19 KST
+
+- Cloud Run revision `mathocr-00023-s2d` startup 실패 root cause를 확정했다. stderr 기준 `pydantic.errors.PydanticUserError: Please use typing_extensions.TypedDict instead of typing.TypedDict on Python < 3.12.` 였고, 직접 원인은 [schema.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/schema.py) 의 `OrderedSegment` 가 `typing.TypedDict` 를 사용한 점이었다.
+- TDD로 [test_pipeline_schema.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_pipeline_schema.py) 를 먼저 추가했다. `ExtractorContext.model_rebuild(force=True)` 를 Pydantic `_SUPPORTS_TYPEDDICT=False` 호환 분기에서 실행해 현재 구현이 실패하는 것을 RED로 고정했다.
+- 이후 [schema.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/schema.py) 를 `typing_extensions.TypedDict` 로 교체하고, [requirements.txt](/D:/03_PROJECT/05_mathOCR/02_main/requirements.txt) 에 `typing-extensions==4.15.0` 을 직접 명시했다.
+- 재발 방지 규칙을 [error_patterns.md](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 에 추가했다.
+- 검증 결과:
+  - `py -3 -m pytest 02_main/tests/test_pipeline_schema.py -q` -> `1 passed`
+  - `py -3 -m pytest 02_main/tests/test_job_response_fields.py -q` -> `7 passed`
+  - `_SUPPORTS_TYPEDDICT=False` 조건에서 `ExtractorContext.model_rebuild(force=True)` -> `True`
+- 로컬 Docker 데몬이 꺼져 있어 루트 Dockerfile 컨테이너 스모크는 이 세션에서 직접 실행하지 못했다.
+- 운영 재배포를 수행했다: `gcloud run deploy mathocr --source . --region us-central1 --project sapient-stacker-468504-r6 --quiet`
+- 운영 검증 결과:
+  - 새 revision `mathocr-00024-2rj` 가 ready 상태로 100% traffic을 받고 있다.
+  - Cloud Run system log에 `Default STARTUP TCP probe succeeded` 와 `Uvicorn running on http://0.0.0.0:8080` 가 기록됐다.
+  - `curl https://mathocr-146126176673.us-central1.run.app/billing/catalog` 기준 `200` 과 plan payload를 확인했다.
+- 배포 영향:
+  - 신규 환경 변수는 없다.
+  - 백엔드 재배포는 완료했다.
+  - 검증 메타데이터 컬럼용 DB 마이그레이션과 실제 HWPX 수동 QA는 여전히 남아 있다.
