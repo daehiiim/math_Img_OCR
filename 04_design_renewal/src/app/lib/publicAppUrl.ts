@@ -4,9 +4,12 @@ const LOCAL_APP_HOSTNAMES = ["localhost", "127.0.0.1", "0.0.0.0"] as const;
 
 type PublicAppRuntimeConfig = typeof globalThis & {
   __MATH_OCR_PUBLIC_APP_URL__?: string;
+  __MATH_OCR_SITE_URL__?: string;
   process?: {
     env?: {
       APP_URL?: string;
+      NEXT_PUBLIC_SITE_URL?: string;
+      SITE_URL?: string;
     };
   };
 };
@@ -24,9 +27,24 @@ function normalizePublicAppUrl(value: string): string {
 
 // 런타임 override, process env, Vite define 순서로 공개 앱 URL을 읽는다.
 function getConfiguredPublicAppUrl(): string {
+  const siteRuntimeValue = getRuntimeConfig().__MATH_OCR_SITE_URL__;
+  if (typeof siteRuntimeValue === "string" && siteRuntimeValue.trim()) {
+    return normalizePublicAppUrl(siteRuntimeValue);
+  }
+
   const runtimeValue = getRuntimeConfig().__MATH_OCR_PUBLIC_APP_URL__;
   if (typeof runtimeValue === "string" && runtimeValue.trim()) {
     return normalizePublicAppUrl(runtimeValue);
+  }
+
+  const siteValue = getRuntimeConfig().process?.env?.SITE_URL;
+  if (typeof siteValue === "string" && siteValue.trim()) {
+    return normalizePublicAppUrl(siteValue);
+  }
+
+  const nextSiteValue = getRuntimeConfig().process?.env?.NEXT_PUBLIC_SITE_URL;
+  if (typeof nextSiteValue === "string" && nextSiteValue.trim()) {
+    return normalizePublicAppUrl(nextSiteValue);
   }
 
   const processValue = getRuntimeConfig().process?.env?.APP_URL;

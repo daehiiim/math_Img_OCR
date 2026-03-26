@@ -63,7 +63,7 @@ function mapSupabaseUser(user: SupabaseUser) {
     user.user_metadata.full_name ??
     user.user_metadata.name ??
     email.split("@")[0] ??
-    "Math OCR 사용자";
+    "MathHWP 사용자";
 
   return readStoredProfile(email) ?? createDefaultProfile(displayName, email);
 }

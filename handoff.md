@@ -1,32 +1,29 @@
 Done
-- `04_design_renewal` 전역 라우트에 Microsoft Clarity(`w1jgubofnf`) 를 추가했고 `TrackingLayout` 에서 `ClarityTracker` 와 `GoogleAnalyticsTracker` 를 함께 마운트했다.
-- `04_design_renewal` AdSense(`ca-pub-4088422118336195`) 로더를 [`index.html`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html) head 직접 삽입으로 교체했고 검증 테스트를 고정했다.
-- `04_design_renewal` Google Analytics(`G-SM6ETGCFGP`) 를 [`index.html`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html) `<head>` 바로 다음에 가이드 원문 그대로 삽입했고, `GoogleAnalyticsTracker` 는 SPA 라우트 변경 추적만 담당하도록 정리했다.
-- Clarity 운영 수집은 정상(`b.clarity.ms/collect` 204)으로 확인돼 이번 턴에는 코드 변경하지 않았다.
+- `04_design_renewal` 비홈 라우트(`/login`, `/pricing`, `/payment/:planId`, `/connect-openai`, `/new`, `/workspace`, `/workspace/job/:jobId`, `*`)와 shell(`AuthLayout`, `StudioLayout`, `Layout`, `AppSidebar`, `AccountSheet`)을 shared shadcn 조합 기준으로 리팩터했다.
+- `src/app/components/shared/*` 에 `PageIntro`, `StatusPanel`, `UserCreditPill`, `PlanCard`, `CheckoutSummaryCard`, `PaymentMethodSelector`, `ExecutionOptionsPanel`, `RegionWorkspaceShell`, `JobListItemCard`, `PipelineProgressHeader`, `ResultRegionCard` 를 추가했다.
+- `npm run test:run` 138개 테스트와 `npm run build` 가 통과했다.
 
 In Progress
-- 최우선 과제: 프런트 재배포로 GA4/Clarity/AdSense 운영 반영
-- 진행 상태: [index.html](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html), [GoogleAnalyticsTracker.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/GoogleAnalyticsTracker.tsx), [googleAnalytics.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/googleAnalytics.ts), [googleAnalyticsPlacement.test.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/googleAnalyticsPlacement.test.ts), [GoogleAnalyticsTracker.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/GoogleAnalyticsTracker.test.tsx) 반영 완료. `npm run test:run -- src/app/googleAnalyticsPlacement.test.ts src/app/components/GoogleAnalyticsTracker.test.tsx src/app/adsensePlacement.test.ts` 와 `npm run build` 는 통과했고 아직 운영 프런트 재배포는 하지 않았다.
-- 다음 단계: 운영 프런트를 재배포한 뒤 실제 사이트에서 페이지 소스의 GA 스니펫, `https://www.google-analytics.com/g/collect?...tid=G-SM6ETGCFGP`, `https://www.clarity.ms/tag/w1jgubofnf`, `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4088422118336195` 를 확인한다.
+- 최우선 과제: 비홈 페이지 UI 리팩터 후 수동 smoke QA와 배포 판단
+- 진행 상태: 라우트/API/store/query 계약은 유지했고, 공유 presentation layer로 렌더링만 정리했다. 다음 단계는 `/login`, `/pricing`, `/payment/:planId`, `/connect-openai`, `/new`, `/workspace`, `/workspace/job/:jobId`, `*` 에서 실제 브라우저 상호작용과 반응형 포커스 이동을 확인하는 것이다.
 
 Next
-- HWPX 실문서 수동 QA
-- `02_main/schemas/2026-03-25_ocr_verification_fields.sql` 운영 적용
-- 프런트 재배포 후 GA4/Clarity/AdSense 운영 수집 확인
+- 비홈 라우트 8개 수동 시각 QA
+- auth/billing redirect (`returnTo`, `resumeDraft`, `checkout`, `checkout_id`) 실브라우저 점검
+- 운영 프런트 재배포 필요 여부 결정 및 기존 SEO/analytics 반영분과 함께 묶어서 확인
 
 Related Files
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\index.html`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\GoogleAnalyticsTracker.tsx`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\GoogleAnalyticsTracker.test.tsx`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\googleAnalyticsPlacement.test.ts`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\adsensePlacement.test.ts`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\ClarityTracker.tsx`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\ClarityTracker.test.tsx`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\lib\googleAnalytics.ts`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\lib\microsoftClarity.ts`
-- `D:\03_PROJECT\05_mathOCR\docs\plans\2026-03-26-clarity-tracker-design.md`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\shared\`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\LoginPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PricingPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\PaymentPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\OpenAiConnectionPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\NewJobPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\DashboardPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\JobDetailPage.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\ResultsViewer.tsx`
 
 Last State
-- 신규 환경 변수와 백엔드 변경은 없다.
-- Clarity 는 루트 라우트 레이아웃에서 전역 주입되고, AdSense 와 GA4 는 공급자 요구에 맞춰 배포 HTML head 에 직접 삽입된다.
-- 실제 사이트 반영에는 프런트 정적 배포가 한 번 더 필요하다.
+- 홈/랜딩 `PublicHomePage.tsx` 와 route contract 는 건드리지 않았다.
+- backend/env 계약 변경은 없고 배포 환경 영향도 없다.
+- build 경고는 기존 번들 크기 경고만 남아 있으며 테스트/빌드 실패는 없다.

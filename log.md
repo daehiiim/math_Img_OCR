@@ -621,6 +621,31 @@
   - 신규 환경 변수와 백엔드 변경은 없다.
   - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트의 GA4 `g/collect` 전송이 반영된다.
 
+## 2026-03-26 13:15 KST
+
+- 사용자 요청에 맞춰 `04_design_renewal` 프런트를 Vite SPA 기준 SEO 구조로 정리했다.
+- 아키텍처 변경:
+  - [siteSeo.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.ts)에 canonical URL, 라우트 메타, JSON-LD, `robots.txt`, `sitemap.xml` 생성 규칙을 모았다.
+  - [SeoManager.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/SeoManager.tsx)를 `TrackingLayout` 최상단에 연결해 라우트 변경 시 title/description/canonical/OG/Twitter/robots/JSON-LD를 갱신하도록 했다.
+  - [seoVitePlugin.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/seoVitePlugin.ts)를 추가해 build/dev에서 `robots.txt`, `sitemap.xml`을 HTML fallback이 아닌 실제 루트 파일로 제공하도록 했다.
+  - [publicAppUrl.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/publicAppUrl.ts)는 `SITE_URL`, `NEXT_PUBLIC_SITE_URL`, `APP_URL` 우선순위를 함께 읽도록 확장했다.
+- UX/콘텐츠 변경:
+  - [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)를 `MathHWP` 브랜드 기준으로 재작성했다.
+  - 단일 H1, 소개 문단, 기능/형식/활용 사례/FAQ/개인정보 가이드, 크롤 가능한 내부 링크를 추가했다.
+  - 외부 `googleusercontent` 이미지를 제거하고 로컬 자산만 사용하도록 바꿨다.
+  - [index.html](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html)에 홈 기본 메타와 JS 이전 정적 fallback 콘텐츠를 넣었다.
+  - [favicon.svg](/D:/03_PROJECT/05_mathOCR/04_design_renewal/public/favicon.svg), [og-image.svg](/D:/03_PROJECT/05_mathOCR/04_design_renewal/public/og-image.svg)를 추가했다.
+  - 로그인/가격/작업실의 공개 브랜드 표기도 `MathHWP`로 정리했다.
+- 문서화:
+  - [docs/seo.md](/D:/03_PROJECT/05_mathOCR/docs/seo.md)에 환경 변수, Search Console 후속 작업, 새 페이지 메타 추가 절차를 기록했다.
+- 검증 결과:
+  - `npm run test:run -- src/app/seo/siteSeo.test.ts src/app/components/SeoManager.test.tsx src/app/components/PublicHomePage.test.tsx src/app/lib/publicAppUrl.test.ts` -> `22 passed`
+  - `npm run test:run` -> `134 passed`
+  - `npm run build` -> production build 성공, `dist/robots.txt`, `dist/sitemap.xml`, `dist/index.html` canonical 메타 확인
+- 배포 영향:
+  - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트에 SEO 메타/루트 파일이 반영된다.
+  - 신규 선택형 환경 변수 `SITE_URL`, `NEXT_PUBLIC_SITE_URL`, `GOOGLE_SITE_VERIFICATION`, `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`, `VITE_GOOGLE_SITE_VERIFICATION` 을 사용할 수 있다.
+
 ## 2026-03-26 11:08 KST
 
 - 사용자 요청에 맞춰 Google 가이드와 정확히 일치하는 정적 GA4 스니펫을 [index.html](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html) 의 `<head>` 바로 다음에 그대로 추가했다.
@@ -637,3 +662,40 @@
 - 배포 영향:
   - 신규 환경 변수와 백엔드 변경은 없다.
   - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트에 정적 Google 태그 스니펫이 반영된다.
+
+## 2026-03-26 15:05 KST
+
+- 코드베이스 빠른 온보딩용 [manual.md](/D:/03_PROJECT/05_mathOCR/manual.md) 를 새로 작성했다.
+- 문서 범위는 운영 기준 디렉터리인 [02_main](/D:/03_PROJECT/05_mathOCR/02_main) 과 [04_design_renewal](/D:/03_PROJECT/05_mathOCR/04_design_renewal) 중심으로 제한했고, [04_new_design](/D:/03_PROJECT/05_mathOCR/04_new_design) 는 실험 영역으로만 분리 표기했다.
+- 문서에는 아래 항목만 압축해 정리했다.
+  - 시스템 개요와 핵심 사용 사례
+  - 백엔드/프런트 아키텍처와 핵심 모듈 책임
+  - 로그인, 작업 실행, HWPX export, 결제 흐름
+  - OCR, HWPX, billing, SEO/build 파이프라인
+  - 안전한 수정 지점과 기술 스택
+- 검증 결과:
+  - `py -3 C:\Users\user\.codex\skills\generate-manual-md\scripts\validate_manual_structure.py D:\03_PROJECT\05_mathOCR\manual.md` -> `manual.md structure is valid.`
+- 배포 영향:
+  - 문서 추가만 있어 백엔드/프런트 배포 환경 변경은 없다.
+
+## 2026-03-26 14:40 KST
+
+- 사용자 요청에 맞춰 코드베이스를 역분석해 `manual.md`를 생성하는 전역 스킬 [SKILL.md](/C:/Users/user/.codex/skills/generate-manual-md/SKILL.md) 를 새로 만들었다.
+- 스킬 설계 결정:
+  - 설치 위치는 전역 경로 `C:\Users\user\.codex\skills\generate-manual-md` 로 고정했다.
+  - 출력은 `Overview -> System Architecture -> Core Modules -> Data Flow -> Key Pipelines -> Extension Points -> Tech Stack` 7개 섹션으로 강제했다.
+  - 분석 워크플로는 `Structure Scanner`, `Module Analyzer`, `Flow Extractor`, `Pipeline Mapper`, `Synthesizer` 5개 서브에이전트 역할로 분리했다.
+- 보조 자산:
+  - [manual-template.md](/C:/Users/user/.codex/skills/generate-manual-md/references/manual-template.md) 에 엄격한 마크다운 골격을 추가했다.
+  - [validate_manual_structure.py](/C:/Users/user/.codex/skills/generate-manual-md/scripts/validate_manual_structure.py) 로 섹션 순서와 모듈/파이프라인 블록 구조를 검증하도록 했다.
+- 검증 결과:
+  - `py C:\Users\user\.codex\skills\.system\skill-creator\scripts\quick_validate.py C:\Users\user\.codex\skills\generate-manual-md` -> `Skill is valid!`
+  - `py C:\Users\user\.codex\skills\generate-manual-md\scripts\validate_manual_structure.py C:\Users\user\.codex\skills\generate-manual-md\references\manual-template.md` -> `manual.md structure is valid.`
+- 배포 영향:
+  - 애플리케이션 런타임, 백엔드 환경 변수, 프런트 배포에는 영향이 없다.
+## 2026-03-26 16:08:01
+- `04_design_renewal` 비홈 페이지 shadcn/ui 리팩터 계획을 실행했다.
+- `src/app/components/shared/` 아래에 공통 presentation component 10종을 추가해 페이지/레이아웃 조합을 표준화했다.
+- `/login`, `/pricing`, `/payment/:planId`, `/connect-openai`, `/new`, `/workspace`, `/workspace/job/:jobId`, `*` 와 `AuthLayout`, `StudioLayout`, `Layout`, `AppSidebar`, `AccountSheet`, `ResultsViewer` 를 shared component 기준으로 재구성했다.
+- auth, billing, store, route query 계약은 유지했고 기존 테스트가 보는 문구와 경로도 유지했다.
+- 검증: `npm run test:run` 138 passed, `npm run build` 통과. 빌드에는 기존과 동일한 chunk size warning만 남았다.

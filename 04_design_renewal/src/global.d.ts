@@ -1,5 +1,7 @@
 declare const __MATH_OCR_VITE_API_BASE__: string;
 declare const __MATH_OCR_PUBLIC_APP_URL__: string;
+declare const __MATH_OCR_SITE_URL__: string;
+declare const __MATH_OCR_GOOGLE_SITE_VERIFICATION__: string;
 
 interface ImportMetaEnv {
   readonly VITE_LOCAL_UI_MOCK?: string;

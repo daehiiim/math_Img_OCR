@@ -52,6 +52,7 @@ describe("PaymentPage", () => {
       { plan_id: "pro", title: "Pro", amount: 19000, currency: "krw", credits: 200 },
     ]);
     getCheckoutSessionStatusApiMock.mockReset();
+    delete (globalThis as { __MATH_OCR_SITE_URL__?: string }).__MATH_OCR_SITE_URL__;
     delete (globalThis as { __MATH_OCR_PUBLIC_APP_URL__?: string }).__MATH_OCR_PUBLIC_APP_URL__;
   });
 
@@ -103,7 +104,7 @@ describe("PaymentPage", () => {
 
   it("checkout 리다이렉트 URL을 공개 앱 URL 기준으로 생성한다", async () => {
     const user = userEvent.setup();
-    (globalThis as { __MATH_OCR_PUBLIC_APP_URL__?: string }).__MATH_OCR_PUBLIC_APP_URL__ =
+    (globalThis as { __MATH_OCR_SITE_URL__?: string }).__MATH_OCR_SITE_URL__ =
       "https://mathtohwp.vercel.app/";
     createCheckoutSessionApiMock.mockRejectedValueOnce(new Error("checkout blocked"));
 
@@ -129,7 +130,7 @@ describe("PaymentPage", () => {
 
   it("customer portal return URL을 공개 앱 URL 기준으로 생성한다", async () => {
     const user = userEvent.setup();
-    (globalThis as { __MATH_OCR_PUBLIC_APP_URL__?: string }).__MATH_OCR_PUBLIC_APP_URL__ =
+    (globalThis as { __MATH_OCR_SITE_URL__?: string }).__MATH_OCR_SITE_URL__ =
       "https://mathtohwp.vercel.app/";
     getCheckoutSessionStatusApiMock.mockResolvedValue({
       checkout_id: "chk_test_123",

@@ -1,29 +1,102 @@
 import { useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation } from "react-router";
 import { motion } from "motion/react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  KeyRound,
-  ShieldCheck,
-  Sparkles,
-  WalletCards,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, KeyRound, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
 import { OpenAiKeyForm } from "./OpenAiKeyForm";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Separator } from "./ui/separator";
+import { PageIntro } from "./shared/PageIntro";
 
+/** 연결 안내 항목을 아이콘 카드 한 줄로 렌더링한다. */
+function ConnectionBenefit({
+  icon: Icon,
+  text,
+}: {
+  icon: typeof Sparkles;
+  text: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+      <Icon className="shrink-0 text-foreground" />
+      <span>{text}</span>
+    </div>
+  );
+}
+
+/** OpenAI 연결 완료 상태의 관리 카드를 렌더링한다. */
+function ConnectedState({
+  maskedKey,
+  returnTo,
+  onConnect,
+  onDisconnect,
+}: {
+  maskedKey?: string | null;
+  returnTo: string;
+  onConnect: (apiKey: string) => Promise<void>;
+  onDisconnect: () => Promise<void>;
+}) {
+  return (
+    <Card>
+      <CardHeader className="items-center text-center">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><CheckCircle2 /></div>
+        <CardTitle>OpenAI 연결 완료</CardTitle>
+        <Badge variant="secondary">사용자 key 연결됨</Badge>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <Alert><AlertDescription>사용자 소유 키로 OCR과 해설을 처리합니다. 이미지 생성은 계정 크레딧을 계속 사용합니다.</AlertDescription></Alert>
+        <div className="rounded-xl border bg-muted/30 p-4"><p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Connected Key</p><p className="mt-2 font-mono text-sm text-foreground">{maskedKey ?? "연결됨"}</p></div>
+        <OpenAiKeyForm title="OpenAI key 다시 저장" description="오입력한 key도 이 화면에서 바로 덮어써 수정할 수 있습니다." submitLabel="OpenAI key 다시 저장" maskedKey={maskedKey} onSubmit={onConnect} />
+        <Separator />
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button asChild className="flex-1"><Link to={returnTo}>이전 화면으로 이동<ArrowRight data-icon="inline-end" /></Link></Button>
+          <Button type="button" variant="outline" className="flex-1" onClick={() => void onDisconnect()}>연결 해제</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** OpenAI 미연결 상태의 연결 안내와 입력 폼을 렌더링한다. */
+function DisconnectedState({
+  error,
+  returnTo,
+  onConnect,
+}: {
+  error: string | null;
+  returnTo: string;
+  onConnect: (apiKey: string) => Promise<void>;
+}) {
+  return (
+    <Card>
+      <CardHeader className="items-center text-center">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-muted text-foreground"><KeyRound /></div>
+        <CardTitle>OpenAI API key 연결</CardTitle>
+        <Badge variant="outline">연결 필요</Badge>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <Alert><AlertDescription>OpenAI API key를 연결하면 OCR과 해설은 사용자 소유 키로 처리할 수 있습니다. 이미지 생성은 별도 크레딧이 필요합니다.</AlertDescription></Alert>
+        <div className="space-y-3"><ConnectionBenefit icon={Sparkles} text="OCR과 해설은 사용자 OpenAI key로 처리" /><ConnectionBenefit icon={ShieldCheck} text="이미지 생성은 크레딧이 필요" /><ConnectionBenefit icon={WalletCards} text="연결하지 않으면 모든 작업에 크레딧 사용" /></div>
+        <OpenAiKeyForm title="OpenAI API key 연결" description="저장된 key는 서버에서 암호화되며, 화면에는 마스킹 정보만 남습니다." submitLabel="OpenAI 연결" onSubmit={onConnect} />
+        {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+        <Separator />
+        <Button asChild variant="outline" className="w-full"><Link to={returnTo ? `/pricing?returnTo=${encodeURIComponent(returnTo)}` : "/pricing"}>크레딧 구매로 이동</Link></Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** OpenAI key 연결, 재등록, 해제를 공통 카드 패턴으로 렌더링한다. */
 export function OpenAiConnectionPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { user, connectOpenAi, disconnectOpenAi } = useAuth();
   const isConnected = user?.openAiConnected ?? false;
   const [error, setError] = useState<string | null>(null);
-  const returnTo = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return params.get("returnTo") || "/new";
-  }, [location.search]);
+  const returnTo = useMemo(() => new URLSearchParams(location.search).get("returnTo") || "/new", [location.search]);
 
   const handleConnect = async (apiKey: string) => {
     try {
@@ -37,120 +110,10 @@ export function OpenAiConnectionPage() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="w-full max-w-[440px]"
-    >
-      <button
-        onClick={() => navigate(returnTo)}
-        className="mb-6 flex items-center gap-1.5 text-[13px] text-[#71717a] transition-colors hover:text-[#111] cursor-pointer"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        새 작업으로 돌아가기
-      </button>
-
-      <div className="rounded-2xl border border-black/[0.04] bg-white p-8 text-center shadow-[0_2px_20px_rgba(0,0,0,0.06)]">
-        <div
-          className={`mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl ${
-            isConnected ? "bg-[#f2f8f4]" : "bg-[#faf7f1]"
-          }`}
-        >
-          {isConnected ? (
-            <CheckCircle2 className="h-7 w-7 text-emerald-600" />
-          ) : (
-            <KeyRound className="h-7 w-7 text-[#111]" />
-          )}
-        </div>
-
-        <h1 className="mb-3 text-[22px] tracking-[-0.02em] text-[#111]">
-          {isConnected ? "OpenAI 연결 완료" : "OpenAI API key 연결"}
-        </h1>
-
-        {isConnected ? (
-          <>
-            <p className="mb-6 text-[14px] leading-relaxed text-[#71717a]">
-              사용자 소유 키로 OCR과 해설을 처리합니다. 이미지 생성은 계정 크레딧을 계속 사용합니다.
-            </p>
-            <div className="mb-6 rounded-xl bg-[#fafaf8] p-4 text-left">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-[#9b948c]">
-                Connected Key
-              </p>
-              <p className="mt-2 font-mono text-[13px] text-[#111]">
-                {user?.openAiMaskedKey ?? "연결됨"}
-              </p>
-            </div>
-            <div className="mb-6">
-              <OpenAiKeyForm
-                title="OpenAI key 다시 저장"
-                description="오입력한 key도 이 화면에서 바로 덮어써 수정할 수 있습니다."
-                submitLabel="OpenAI key 다시 저장"
-                maskedKey={user?.openAiMaskedKey}
-                onSubmit={handleConnect}
-              />
-            </div>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => navigate(returnTo)}
-                className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#111] text-[14px] text-white transition-all hover:bg-[#222]"
-              >
-                새 작업으로 이동
-                <ArrowRight className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => void disconnectOpenAi()}
-                className="text-[13px] text-[#a1a1aa] transition-colors hover:text-red-500"
-              >
-                연결 해제
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="mb-7 text-[14px] leading-relaxed text-[#71717a]">
-              OpenAI API key를 연결하면 OCR과 해설은 사용자 소유 키로 처리할 수 있습니다.
-              이미지 생성은 별도 크레딧이 필요합니다.
-            </p>
-
-            <div className="mb-6 space-y-2.5 text-left">
-              {[
-                { icon: Sparkles, text: "OCR과 해설은 사용자 OpenAI key로 처리" },
-                { icon: ShieldCheck, text: "이미지 생성은 크레딧이 필요" },
-                { icon: WalletCards, text: "연결하지 않으면 모든 작업에 크레딧 사용" },
-              ].map((item) => (
-                <div
-                  key={item.text}
-                  className="flex items-center gap-2.5 rounded-lg bg-[#faf7f1] px-4 py-3"
-                >
-                  <item.icon className="h-4 w-4 shrink-0 text-[#111]" />
-                  <span className="text-[13px] text-[#4b4b4b]">{item.text}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mb-3 rounded-xl border border-[#ebe6df] bg-[#fcfbf8] p-3 text-left">
-              <OpenAiKeyForm
-                title="OpenAI API key 연결"
-                description="저장된 key는 서버에서 암호화되며, 화면에는 마스킹 정보만 남습니다."
-                submitLabel="OpenAI 연결"
-                onSubmit={handleConnect}
-              />
-            </div>
-            {error && <p className="mb-4 text-left text-[12px] text-red-500">{error}</p>}
-
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() =>
-                  navigate(returnTo ? `/pricing?returnTo=${encodeURIComponent(returnTo)}` : "/pricing")
-                }
-                className="flex h-11 items-center justify-center rounded-lg border border-[#e4e4e7] bg-white text-[14px] text-[#111] transition-colors hover:bg-[#fafafa]"
-              >
-                크레딧 구매로 이동
-              </button>
-            </div>
-          </>
-        )}
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }} className="w-full max-w-2xl">
+      <div className="space-y-6">
+        <PageIntro title={isConnected ? "OpenAI 연결 관리" : "OpenAI API key 연결"} description="OCR, 해설, 이미지 생성의 과금 경계를 바꾸지 않고 key 연결 상태만 관리합니다." backHref={returnTo} backLabel="이전 화면으로 돌아가기" />
+        {isConnected ? <ConnectedState maskedKey={user?.openAiMaskedKey} returnTo={returnTo} onConnect={handleConnect} onDisconnect={disconnectOpenAi} /> : <DisconnectedState error={error} returnTo={returnTo} onConnect={handleConnect} />}
       </div>
     </motion.div>
   );

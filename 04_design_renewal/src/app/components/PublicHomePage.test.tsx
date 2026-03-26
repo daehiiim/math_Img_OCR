@@ -56,43 +56,44 @@ describe("PublicHomePage", () => {
     mockHeroMediaEnvironment({ allowMotion: true, isDesktop: true });
   });
 
-  it("다크 랜딩 카피와 주요 섹션을 노출한다", () => {
+  it("검색 의도형 소개와 주요 섹션을 노출한다", () => {
     render(
       <MemoryRouter>
         <PublicHomePage />
       </MemoryRouter>
     );
 
-    expect(screen.queryByRole("banner")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Math OCR")).toHaveLength(1);
-    expect(screen.getByRole("heading", { name: /수학\s*수식을\s*HWPX로,\s*완벽한\s*감각으로\./ })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /수학문제 직접 타이핑하느라\s*힘들지 않았나요\?/ })).toBeInTheDocument();
-    expect(screen.getByText("사진을 올리세요")).toBeInTheDocument();
-    expect(screen.getByText("결과를 확인하세요")).toBeInTheDocument();
-    expect(screen.getByText("당신의 작업 방식을")).toBeInTheDocument();
-    expect(screen.getByText("혁신할 준비가 되셨나요?")).toBeInTheDocument();
-    expect(screen.queryByText("무료로 이용하세요")).not.toBeInTheDocument();
-    expect(screen.queryByText("Photo to HWPX")).not.toBeInTheDocument();
-    expect(screen.queryByText("사진에서 구조를 읽고, 최종 결과를 HWPX까지 연결하는 수학 OCR 워크플로우.")).not.toBeInTheDocument();
-    expect(screen.queryByText("문제 사진이 곧,")).not.toBeInTheDocument();
+    expect(screen.getByRole("banner")).toBeInTheDocument();
+    expect(screen.getAllByText("MathHWP").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("heading", {
+        name: "수식 OCR로 이미지 수식을 편집 가능한 한글 수식으로 바꾸는 MathHWP",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/MathHWP는 수학 OCR, 수식 이미지 변환, 수식 한글 변환 워크플로를 하나의 작업실에서 연결합니다\./)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "수학 OCR이 필요한 순간마다 바로 쓰는 핵심 기능" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "입력 형식과 결과물을 한눈에 확인하세요" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "학생, 교사, 문서 작성자에게 맞는 활용 방식" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "자주 묻는 질문" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "업로드 전 확인할 개인정보·작업 가이드" })).toBeInTheDocument();
+    expect(screen.getByText("PDF 수식 OCR도 가능한가요?")).toBeInTheDocument();
   });
 
-  it("중앙 하이라이트 헤드라인은 원하는 두 줄 구조를 명시한다", () => {
+  it("홈 헤더와 CTA는 크롤 가능한 링크를 제공한다", () => {
     render(
       <MemoryRouter>
         <PublicHomePage />
       </MemoryRouter>
     );
 
-    const featureHeading = screen.getByRole("heading", { name: /수학문제 직접 타이핑하느라\s*힘들지 않았나요\?/ });
-    const headingLines = featureHeading.querySelectorAll("span");
-
-    expect(headingLines).toHaveLength(2);
-    expect(headingLines[0]).toHaveTextContent("수학문제 직접 타이핑하느라");
-    expect(headingLines[0]).toHaveClass("block", "md:whitespace-nowrap");
-    expect(headingLines[1]).toHaveTextContent("힘들지 않았나요?");
-    expect(headingLines[1]).toHaveClass("block");
-    expect(featureHeading).toHaveClass("break-keep");
+    expect(screen.getByRole("link", { name: "기능" })).toHaveAttribute("href", "#features");
+    expect(screen.getByRole("link", { name: "지원 형식" })).toHaveAttribute("href", "#formats");
+    expect(screen.getByRole("link", { name: "FAQ" })).toHaveAttribute("href", "#faq");
+    expect(screen.getAllByRole("link", { name: "수식 변환 시작" })[0]).toHaveAttribute("href", "/new");
+    expect(screen.getAllByRole("link", { name: "가격 보기" })[0]).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: "로그인" })).toHaveAttribute("href", "/login");
   });
 
   it("현재 서비스 흐름에 맞는 CTA와 이미지 자산을 노출한다", () => {
@@ -102,22 +103,20 @@ describe("PublicHomePage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getAllByRole("button", { name: "사용해보기" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "가격 보기" })).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: "로그인" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "수식 변환 시작" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "가격 보기" })).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "로그인" })).toBeInTheDocument();
 
-    const sourceImage = screen.getByAltText("원본 이미지");
-    const resultImage = screen.getByAltText("OCR 결과");
-    const featureImage = screen.getByAltText("디지털 작업 공간");
+    const sourceImage = screen.getByAltText("원본 수학 문제 이미지");
+    const resultImage = screen.getByAltText("OCR 이후 편집 가능한 HWPX 결과 미리보기");
 
     expect(sourceImage).toHaveAttribute("src", expect.stringContaining("home-source-problem"));
     expect(sourceImage).toHaveClass("object-contain");
     expect(resultImage).toHaveAttribute("src", expect.stringContaining("home-ocr-result"));
     expect(resultImage).toHaveClass("object-contain");
-    expect(featureImage).toHaveClass("object-cover");
-    expect(featureImage).not.toHaveClass("object-contain");
+    expect(sourceImage).toHaveAttribute("loading", "lazy");
+    expect(resultImage).toHaveAttribute("loading", "lazy");
     expect(container.querySelector(".public-home-hero-noise")).not.toBeInTheDocument();
-    expect(screen.queryByAltText("출력 형식")).not.toBeInTheDocument();
   });
 
   it("히어로 장식 비디오는 환경과 무관하게 렌더되고 기본 루프 재생을 유지한다", async () => {
@@ -192,7 +191,22 @@ describe("PublicHomePage", () => {
     expect(container.querySelector("video")).toBeInTheDocument();
   });
 
-  it("히어로와 하단 CTA가 기존 목적지로 이동한다", async () => {
+  it("FAQ와 개인정보 안내 문구를 노출한다", () => {
+    render(
+      <MemoryRouter>
+        <PublicHomePage />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByText("직접 PDF 업로드는 아직 지원하지 않지만, PDF 페이지를 이미지로 추출하면 같은 수식 OCR 흐름으로 작업할 수 있습니다.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("파일 선택과 영역 지정은 로그인 없이 진행하고, 파이프라인 실행 직전에만 로그인합니다.")
+    ).toBeInTheDocument();
+  });
+
+  it("링크 CTA를 클릭해도 기존 목적지로 이동한다", async () => {
     const user = userEvent.setup();
 
     render(
@@ -201,26 +215,13 @@ describe("PublicHomePage", () => {
       </MemoryRouter>
     );
 
-    const heroTryButton = screen.getAllByRole("button", { name: "사용해보기" })[0];
-    const heroPricingButton = screen.getAllByRole("button", { name: "가격 보기" })[0];
+    const heroTryLink = screen.getAllByRole("link", { name: "수식 변환 시작" })[0];
+    const heroPricingLink = screen.getAllByRole("link", { name: "가격 보기" })[0];
 
-    await user.click(heroTryButton);
-    await user.click(heroPricingButton);
+    await user.click(heroTryLink);
+    await user.click(heroPricingLink);
 
-    expect(mockNavigate).toHaveBeenCalledWith("/new");
-    expect(mockNavigate).toHaveBeenCalledWith("/pricing");
-  });
-
-  it("외부 이미지가 실패하면 fallback 플레이스홀더를 보여준다", () => {
-    render(
-      <MemoryRouter>
-        <PublicHomePage />
-      </MemoryRouter>
-    );
-
-    fireEvent.error(screen.getByAltText("디지털 작업 공간"));
-
-    expect(screen.getByAltText("Error loading image")).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
 

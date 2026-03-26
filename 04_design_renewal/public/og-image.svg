@@ -1,0 +1,28 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#05080B"/>
+  <rect x="38" y="38" width="1124" height="554" rx="32" fill="url(#paint0_linear)" stroke="rgba(255,255,255,0.08)"/>
+  <circle cx="230" cy="168" r="170" fill="url(#paint1_radial)" fill-opacity="0.4"/>
+  <circle cx="980" cy="122" r="140" fill="url(#paint2_radial)" fill-opacity="0.28"/>
+  <text x="90" y="136" fill="#E8EDF5" font-size="28" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif" font-weight="700" letter-spacing="7">MATHHWP</text>
+  <text x="90" y="256" fill="white" font-size="68" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif" font-weight="800">수식 OCR로 이미지 수식을</text>
+  <text x="90" y="338" fill="white" font-size="68" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif" font-weight="800">편집 가능한 한글 수식으로</text>
+  <text x="90" y="420" fill="white" font-size="68" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif" font-weight="800">바꾸는 MathHWP</text>
+  <text x="90" y="494" fill="#D7DEE8" font-size="28" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif">수학 OCR · 수식 이미지 변환 · 수식 한글 변환 workflow</text>
+  <rect x="780" y="408" width="300" height="102" rx="24" fill="#111820" stroke="rgba(255,255,255,0.12)"/>
+  <text x="824" y="458" fill="#F9FBFF" font-size="30" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif" font-weight="700">PNG · JPG · JPEG</text>
+  <text x="824" y="495" fill="#C7D0DB" font-size="22" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif">편집 가능한 HWPX 흐름</text>
+  <defs>
+    <linearGradient id="paint0_linear" x1="82" y1="52" x2="1084" y2="568" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111820"/>
+      <stop offset="1" stop-color="#090D11"/>
+    </linearGradient>
+    <radialGradient id="paint1_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(230 168) rotate(90) scale(170)">
+      <stop stop-color="#DCE6F3"/>
+      <stop offset="1" stop-color="#DCE6F3" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="paint2_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(980 122) rotate(90) scale(140)">
+      <stop stop-color="#A8B8C9"/>
+      <stop offset="1" stop-color="#A8B8C9" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

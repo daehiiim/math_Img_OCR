@@ -17,11 +17,13 @@ import { PaymentPage } from "./components/PaymentPage";
 import { PublicHomePage } from "./components/PublicHomePage";
 import { ClarityTracker } from "./components/ClarityTracker";
 import { GoogleAnalyticsTracker } from "./components/GoogleAnalyticsTracker";
+import { SeoManager } from "./components/SeoManager";
 
 // 모든 브라우저 라우트에 전역 추적기를 공통 연결한다.
 function TrackingLayout() {
   return (
     <>
+      <SeoManager />
       <ClarityTracker />
       <GoogleAnalyticsTracker />
       <Outlet />

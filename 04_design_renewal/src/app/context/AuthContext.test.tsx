@@ -91,6 +91,7 @@ describe("AuthContext", () => {
     saveOpenAiKeyApiMock.mockReset();
     deleteOpenAiKeyApiMock.mockReset();
     supabaseState.hasSupabaseAuth = true;
+    delete (globalThis as { __MATH_OCR_SITE_URL__?: string }).__MATH_OCR_SITE_URL__;
     delete (globalThis as { __MATH_OCR_PUBLIC_APP_URL__?: string }).__MATH_OCR_PUBLIC_APP_URL__;
     vi.unstubAllEnvs();
     window.localStorage.clear();
@@ -98,7 +99,7 @@ describe("AuthContext", () => {
 
   it("Google OAuth redirectTo를 공개 앱 URL 기준으로 보낸다", async () => {
     const user = userEvent.setup();
-    (globalThis as { __MATH_OCR_PUBLIC_APP_URL__?: string }).__MATH_OCR_PUBLIC_APP_URL__ =
+    (globalThis as { __MATH_OCR_SITE_URL__?: string }).__MATH_OCR_SITE_URL__ =
       "https://mathtohwp.vercel.app/";
 
     render(
