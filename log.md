@@ -620,3 +620,20 @@
 - 배포 영향:
   - 신규 환경 변수와 백엔드 변경은 없다.
   - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트의 GA4 `g/collect` 전송이 반영된다.
+
+## 2026-03-26 11:08 KST
+
+- 사용자 요청에 맞춰 Google 가이드와 정확히 일치하는 정적 GA4 스니펫을 [index.html](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html) 의 `<head>` 바로 다음에 그대로 추가했다.
+- 아키텍처 조정:
+  - [GoogleAnalyticsTracker.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/GoogleAnalyticsTracker.tsx) 는 더 이상 `gtag.js` 로더나 `config` 를 런타임에 주입하지 않는다.
+  - 초기 진입 집계는 정적 스니펫에 맡기고, SPA 라우트 변경 시점에만 `page_view` 를 수동 전송하도록 책임을 축소했다.
+  - [googleAnalytics.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/googleAnalytics.ts) 에서 정적 삽입 후 불필요해진 동적 로더/초기화 코드를 제거했다.
+- 검증 보강:
+  - [googleAnalyticsPlacement.test.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/googleAnalyticsPlacement.test.ts) 를 추가해 배포 HTML head 바로 다음에 가이드 원문 스니펫이 들어가는 계약을 고정했다.
+  - [GoogleAnalyticsTracker.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/GoogleAnalyticsTracker.test.tsx) 는 정적 스니펫이 이미 존재하는 상황을 재현해, 첫 진입 중복 없이 라우트 변경 때만 `page_view` 가 적재되는지 검증하도록 갱신했다.
+- 검증 결과:
+  - `npm run test:run -- src/app/googleAnalyticsPlacement.test.ts src/app/components/GoogleAnalyticsTracker.test.tsx src/app/adsensePlacement.test.ts` -> `6 passed`
+  - `npm run build` -> production build 성공
+- 배포 영향:
+  - 신규 환경 변수와 백엔드 변경은 없다.
+  - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트에 정적 Google 태그 스니펫이 반영된다.

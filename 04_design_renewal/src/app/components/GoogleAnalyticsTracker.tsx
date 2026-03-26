@@ -1,10 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "react-router";
 
 import {
   DEFAULT_GOOGLE_ANALYTICS_MEASUREMENT_ID,
-  appendGoogleAnalyticsScript,
-  initializeGoogleAnalytics,
   trackPageView,
 } from "../lib/googleAnalytics";
 
@@ -24,18 +22,15 @@ export function GoogleAnalyticsTracker({
   measurementId = DEFAULT_GOOGLE_ANALYTICS_MEASUREMENT_ID,
 }: GoogleAnalyticsTrackerProps) {
   const location = useLocation();
+  const hasSkippedInitialPageViewRef = useRef(false);
 
   useEffect(() => {
     if (!enabled || !measurementId) {
       return;
     }
 
-    appendGoogleAnalyticsScript(measurementId);
-    initializeGoogleAnalytics(measurementId);
-  }, [enabled, measurementId]);
-
-  useEffect(() => {
-    if (!enabled || !measurementId) {
+    if (!hasSkippedInitialPageViewRef.current) {
+      hasSkippedInitialPageViewRef.current = true;
       return;
     }
 

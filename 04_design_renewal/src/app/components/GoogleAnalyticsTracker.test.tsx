@@ -7,7 +7,8 @@ import { resetGoogleAnalyticsState } from "../lib/googleAnalytics";
 import { GoogleAnalyticsTracker } from "./GoogleAnalyticsTracker";
 
 type DataLayerCommand = [string, ...unknown[]];
-type AnalyticsWindow = Window & { dataLayer?: unknown[] };
+type GtagFunction = (...args: unknown[]) => void;
+type AnalyticsWindow = Window & { dataLayer?: unknown[]; gtag?: GtagFunction };
 
 type PageViewPayload = {
   page_location: string;
@@ -46,6 +47,19 @@ function getPageViewEvents(): PageViewPayload[] {
     .map((command) => command[2] as PageViewPayload);
 }
 
+/** 배포 HTML의 gtag 초기화 스니펫을 테스트 환경에 그대로 재현한다. */
+function bootstrapGoogleTag(measurementId: string): void {
+  const analyticsWindow = window as AnalyticsWindow;
+
+  analyticsWindow.dataLayer = analyticsWindow.dataLayer || [];
+  analyticsWindow.gtag = function gtag(): void {
+    analyticsWindow.dataLayer?.push(arguments);
+  };
+
+  analyticsWindow.gtag("js", new Date());
+  analyticsWindow.gtag("config", measurementId);
+}
+
 /** 라우트 이동 버튼과 트래커를 함께 렌더링하는 테스트 전용 셸이다. */
 function TrackerHarness() {
   const navigate = useNavigate();
@@ -78,12 +92,40 @@ describe("GoogleAnalyticsTracker", () => {
       </BrowserRouter>
     );
 
-    expect(document.head.querySelector('script[src*="googletagmanager.com/gtag/js"]')).not.toBeInTheDocument();
     expect(getDataLayerCommands()).toHaveLength(0);
   });
 
-  it("초기 진입과 라우트 변경마다 page_view를 기록한다", async () => {
+  it("정적 스니펫 이후 라우트 변경마다 page_view를 기록한다", async () => {
     const user = userEvent.setup();
+    bootstrapGoogleTag("G-SM6ETGCFGP");
+
+    render(
+      <BrowserRouter>
+        <Routes>
+          <Route path="*" element={<TrackerHarness />} />
+        </Routes>
+      </BrowserRouter>
+    );
+
+    expect(getDataLayerCommands()).toContainEqual(["config", "G-SM6ETGCFGP"]);
+    expect(getPageViewEvents()).toHaveLength(0);
+
+    await user.click(screen.getByRole("button", { name: "가격으로 이동" }));
+
+    await waitFor(() => {
+      expect(getPageViewEvents()).toHaveLength(1);
+    });
+
+    expect(getPageViewEvents()[0]).toMatchObject({
+      page_location: `${window.location.origin}/pricing?plan=pro#summary`,
+      page_path: "/pricing?plan=pro#summary",
+      page_title: "Math OCR Test",
+    });
+  });
+
+  it("공식 gtag 스니펫과 같은 arguments queue 형식으로 라우트 page_view를 적재한다", async () => {
+    const user = userEvent.setup();
+    bootstrapGoogleTag("G-SM6ETGCFGP");
 
     render(
       <BrowserRouter>
@@ -94,53 +136,31 @@ describe("GoogleAnalyticsTracker", () => {
     );
 
     await waitFor(() => {
-      expect(document.head.querySelector('script[src="https://www.googletagmanager.com/gtag/js?id=G-SM6ETGCFGP"]')).toBeInTheDocument();
+      expect(getRawDataLayerEntries()).toHaveLength(2);
     });
 
-    expect(getDataLayerCommands()).toContainEqual(["config", "G-SM6ETGCFGP", { send_page_view: false }]);
-    expect(getPageViewEvents()[0]).toMatchObject({
-      page_location: `${window.location.origin}/`,
-      page_path: "/",
-      page_title: "Math OCR Test",
-    });
+    const [jsCommand, configCommand] = getRawDataLayerEntries();
+
+    expect(Array.isArray(jsCommand)).toBe(false);
+    expect(Array.isArray(configCommand)).toBe(false);
+    expect(getDataLayerCommands()).toContainEqual(["config", "G-SM6ETGCFGP"]);
 
     await user.click(screen.getByRole("button", { name: "가격으로 이동" }));
-
-    await waitFor(() => {
-      expect(getPageViewEvents()).toHaveLength(2);
-    });
-
-    expect(getPageViewEvents()[1]).toMatchObject({
-      page_location: `${window.location.origin}/pricing?plan=pro#summary`,
-      page_path: "/pricing?plan=pro#summary",
-      page_title: "Math OCR Test",
-    });
-  });
-
-  it("공식 gtag 스니펫과 같은 arguments queue 형식으로 명령을 적재한다", async () => {
-    render(
-      <BrowserRouter>
-        <GoogleAnalyticsTracker enabled measurementId="G-SM6ETGCFGP" />
-      </BrowserRouter>
-    );
 
     await waitFor(() => {
       expect(getRawDataLayerEntries()).toHaveLength(3);
     });
 
-    const [jsCommand, configCommand, pageViewCommand] = getRawDataLayerEntries();
+    const pageViewCommand = getRawDataLayerEntries()[2];
 
-    expect(Array.isArray(jsCommand)).toBe(false);
-    expect(Array.isArray(configCommand)).toBe(false);
     expect(Array.isArray(pageViewCommand)).toBe(false);
 
-    expect(getDataLayerCommands()).toContainEqual(["config", "G-SM6ETGCFGP", { send_page_view: false }]);
     expect(getDataLayerCommands()).toContainEqual([
       "event",
       "page_view",
       {
-        page_location: `${window.location.origin}/`,
-        page_path: "/",
+        page_location: `${window.location.origin}/pricing?plan=pro#summary`,
+        page_path: "/pricing?plan=pro#summary",
         page_title: "Math OCR Test",
       },
     ]);
