@@ -568,3 +568,18 @@
 - 배포 영향:
   - 신규 환경 변수와 백엔드 변경은 없다.
   - 프런트엔드 정적 빌드를 다시 배포해야 실제 사이트에 Clarity가 반영된다.
+
+## 2026-03-26 10:10 KST
+
+- 사용자 제공 Google AdSense 클라이언트 ID `ca-pub-4088422118336195` 를 운영 프런트 [App.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/App.tsx) 전역 라우트 레이아웃에 연결했다.
+- 기존 `index.html` 직삽입 대신 [AdSenseTracker.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AdSenseTracker.tsx) 와 [googleAdSense.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/googleAdSense.ts) 로 분리했다.
+  - `StrictMode` 에서 effect 가 두 번 실행돼도 script id 기준으로 한 번만 삽입한다.
+  - `clientId` 누락이나 `document.head` 미준비 상황은 사용자 기능과 무관한 추적 로더라서 예외를 던지지 않고 no-op 처리한다.
+  - `crossorigin="anonymous"` 와 async 로더 속성을 코드에서 일관되게 부여한다.
+- TDD로 [AdSenseTracker.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AdSenseTracker.test.tsx) 를 먼저 추가해 비활성화 no-op 과 `StrictMode` 단일 삽입 계약을 RED로 고정한 뒤 통과시켰다.
+- 검증 결과:
+  - `npm run test:run -- src/app/components/AdSenseTracker.test.tsx src/app/components/ClarityTracker.test.tsx src/app/components/GoogleAnalyticsTracker.test.tsx` -> `6 passed`
+  - `npm run build` -> production build 성공
+- 배포 영향:
+  - 신규 환경 변수와 백엔드 변경은 없다.
+  - 프런트엔드 정적 빌드를 다시 배포해야 실제 사이트에 AdSense 로더가 반영된다.
