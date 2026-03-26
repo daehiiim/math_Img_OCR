@@ -583,3 +583,21 @@
 - 배포 영향:
   - 신규 환경 변수와 백엔드 변경은 없다.
   - 프런트엔드 정적 빌드를 다시 배포해야 실제 사이트에 AdSense 로더가 반영된다.
+
+## 2026-03-26 10:21 KST
+
+- AdSense 검증 실패 원인을 확인했다. [index.html](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html) head 에는 광고 코드가 없고, [App.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/App.tsx) 에서 React effect 기반 `AdSenseTracker` 로 런타임 주입하던 구조라 공급자가 요구한 `<head>` 직접 삽입 계약과 달랐다.
+- TDD로 [adsensePlacement.test.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/adsensePlacement.test.ts) 를 먼저 추가해 다음 계약을 RED로 고정했다.
+  - 배포 원본 HTML head 에 AdSense 스크립트가 직접 들어 있어야 한다.
+  - 앱 라우트는 AdSense 로더를 런타임에 다시 주입하지 않아야 한다.
+- 수정 내용:
+  - [index.html](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html) head 에 AdSense 스크립트를 직접 추가했다.
+  - [App.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/App.tsx) 에서 `AdSenseTracker` import 와 마운트를 제거했다.
+  - 불필요해진 `AdSenseTracker.tsx`, `AdSenseTracker.test.tsx`, `googleAdSense.ts` 를 삭제했다.
+  - 같은 유형 재발 방지를 위해 [error_patterns.md](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 에 `<head>` 직접 삽입 요구 스크립트는 정적 HTML에 넣는 규칙을 추가했다.
+- 검증 결과:
+  - `npm run test:run -- src/app/adsensePlacement.test.ts src/app/components/ClarityTracker.test.tsx src/app/components/GoogleAnalyticsTracker.test.tsx` -> `6 passed`
+  - `npm run build` -> production build 성공
+- 배포 영향:
+  - 신규 환경 변수와 백엔드 변경은 없다.
+  - 프런트엔드 정적 빌드를 다시 배포한 뒤 AdSense 화면에서 재확인해야 한다.

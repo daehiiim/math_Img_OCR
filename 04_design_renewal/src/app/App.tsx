@@ -15,7 +15,6 @@ import { OpenAiConnectionPage } from "./components/OpenAiConnectionPage";
 import { PricingPage } from "./components/PricingPage";
 import { PaymentPage } from "./components/PaymentPage";
 import { PublicHomePage } from "./components/PublicHomePage";
-import { AdSenseTracker } from "./components/AdSenseTracker";
 import { ClarityTracker } from "./components/ClarityTracker";
 import { GoogleAnalyticsTracker } from "./components/GoogleAnalyticsTracker";
 
@@ -23,7 +22,6 @@ import { GoogleAnalyticsTracker } from "./components/GoogleAnalyticsTracker";
 function TrackingLayout() {
   return (
     <>
-      <AdSenseTracker />
       <ClarityTracker />
       <GoogleAnalyticsTracker />
       <Outlet />
