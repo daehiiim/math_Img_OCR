@@ -52,4 +52,21 @@ describe("AuthLayout", () => {
     expect(screen.getByText("4개 이미지 남음")).toBeInTheDocument();
     expect(screen.getByText("OpenAI 연결됨")).toBeInTheDocument();
   });
+
+  it("홈과 분리된 비홈 리퀴드 셸 스코프를 적용한다", () => {
+    render(
+      <MemoryRouter initialEntries={["/workspace"]}>
+        <Routes>
+          <Route element={<AuthLayout />}>
+            <Route path="/workspace" element={<div>workspace</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("workspace").closest(".liquid-shell")).toHaveClass(
+      "liquid-shell",
+      "liquid-shell--auth"
+    );
+  });
 });

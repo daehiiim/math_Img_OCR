@@ -36,14 +36,14 @@ export function AccountSheet({ open, onOpenChange }: AccountSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full max-w-md">
-        <SheetHeader className="border-b border-border">
+      <SheetContent side="right" className="w-full max-w-md border-l-0 p-0">
+        <SheetHeader className="border-b border-white/55 px-5 pb-4 pt-5">
           <SheetTitle>내 계정</SheetTitle>
           <SheetDescription>OpenAI 연결 상태와 계정 작업을 여기서 바로 관리합니다.</SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-6">
-          <section className="rounded-xl border border-border bg-muted/20 px-4 py-4">
+        <div className="flex-1 space-y-6 overflow-y-auto px-5 pb-6 pt-5">
+          <section className="liquid-frost-panel liquid-frost-panel--soft rounded-[24px] px-4 py-4">
             <p className="text-[16px] font-semibold text-foreground">{user.name}</p>
             <p className="mt-1 text-[13px] text-muted-foreground">{user.email}</p>
           </section>

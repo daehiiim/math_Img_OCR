@@ -21,21 +21,18 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
   const location = useLocation();
 
   return (
-    <aside className="w-64 min-h-screen bg-card border-r border-border flex flex-col">
-      {/* Logo */}
-      <div className="p-5 border-b border-border">
+    <aside className="liquid-sidebar-shell flex min-h-screen w-64 flex-col">
+      <div className="border-b border-white/55 p-5">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+          <div className="liquid-logo-mark flex h-8 w-8 items-center justify-center rounded-xl text-primary-foreground">
             <Cpu className="w-4 h-4 text-primary-foreground" />
           </div>
           <div>
             <h1 className="text-[15px]">MathHWP</h1>
-            
           </div>
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 p-3">
         <p className="text-[11px] text-muted-foreground px-3 mb-2 uppercase tracking-wider">
           메인
@@ -50,11 +47,10 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
               <li key={item.path}>
                 <Link
                   to={item.path}
+                  data-active={isActive}
                   className={cn(
-                    "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    "liquid-sidebar-link flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] transition-colors",
+                    isActive ? "text-foreground" : "text-muted-foreground"
                   )}
                 >
                   <item.icon className="w-4 h-4" />
@@ -67,11 +63,10 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
             <button
               type="button"
               onClick={onOpenAccount}
+              data-active={isAccountOpen}
               className={cn(
-                "flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-colors",
-                isAccountOpen
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                "liquid-sidebar-link flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] transition-colors",
+                isAccountOpen ? "text-foreground" : "text-muted-foreground"
               )}
             >
               <UserRound className="w-4 h-4" />
@@ -81,9 +76,10 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
         </ul>
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-border">
-        
+      <div className="border-t border-white/55 p-4">
+        <div className="liquid-inline-note rounded-2xl px-3 py-3 text-[11px] text-muted-foreground">
+          업로드부터 HWPX 내보내기까지 한 흐름으로 정리했습니다.
+        </div>
       </div>
     </aside>
   );

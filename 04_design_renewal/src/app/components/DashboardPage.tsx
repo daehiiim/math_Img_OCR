@@ -36,12 +36,10 @@ export function DashboardPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+    <div className="liquid-workspace-page mx-auto max-w-7xl p-6 lg:p-8">
+      <div className="mb-8 flex items-center justify-between">
         <div>
           <h1>작업 대시보드</h1>
-          
         </div>
         <Button onClick={() => navigate("/new")} className="gap-2">
           <Upload className="w-4 h-4" />
@@ -49,9 +47,8 @@ export function DashboardPage() {
         </Button>
       </div>
 
-      {/* Credits Overview */}
       {user && (
-        <Card className="mb-8 border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
+        <Card className="liquid-frost-panel--accent mb-8 border-primary/10">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-primary" />
@@ -65,9 +62,8 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              {/* Remaining Credits */}
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <div className="liquid-stat-orb flex h-12 w-12 shrink-0 items-center justify-center rounded-full">
                   <Coins className="w-6 h-6 text-primary" />
                 </div>
                 <div>
@@ -76,10 +72,9 @@ export function DashboardPage() {
                 </div>
               </div>
 
-              {/* Used Credits */}
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <TrendingUp className="w-6 h-6 text-amber-500" />
+                <div className="liquid-stat-orb flex h-12 w-12 shrink-0 items-center justify-center rounded-full">
+                  <TrendingUp className="w-6 h-6 text-amber-600" />
                 </div>
                 <div>
                   <p className="text-[12px] text-muted-foreground mb-1">사용한 이미지</p>
@@ -87,7 +82,6 @@ export function DashboardPage() {
                 </div>
               </div>
 
-              {/* Action Button */}
               <div className="flex flex-col items-start gap-3 sm:items-end">
                 {user.openAiConnected ? (
                   <div className="flex items-center gap-2 text-emerald-500">
@@ -109,7 +103,6 @@ export function DashboardPage() {
         </Card>
       )}
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardContent className="pt-6">
@@ -118,7 +111,7 @@ export function DashboardPage() {
                 <p className="text-[12px] text-muted-foreground">전체 작업</p>
                 <p className="text-[28px] mt-1">{jobs.length}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <div className="liquid-stat-orb flex h-10 w-10 items-center justify-center rounded-2xl">
                 <Box className="w-5 h-5 text-primary" />
               </div>
             </div>
@@ -133,8 +126,8 @@ export function DashboardPage() {
                   {jobs.filter((j) => j.status === "running").length}
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <Cpu className="w-5 h-5 text-amber-500" />
+              <div className="liquid-stat-orb flex h-10 w-10 items-center justify-center rounded-2xl">
+                <Cpu className="w-5 h-5 text-amber-600" />
               </div>
             </div>
           </CardContent>
@@ -152,7 +145,7 @@ export function DashboardPage() {
                   }
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <div className="liquid-stat-orb flex h-10 w-10 items-center justify-center rounded-2xl">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               </div>
             </div>
@@ -167,7 +160,7 @@ export function DashboardPage() {
                   {jobs.reduce((acc, j) => acc + j.regions.length, 0)}
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <div className="liquid-stat-orb flex h-10 w-10 items-center justify-center rounded-2xl">
                 <Layers className="w-5 h-5 text-blue-500" />
               </div>
             </div>
@@ -175,14 +168,12 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Pipeline Overview */}
       <Card className="mb-8">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Workflow className="w-4 h-4" />
             파이프라인 흐름
           </CardTitle>
-          
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-0 overflow-x-auto pb-2">
@@ -194,7 +185,7 @@ export function DashboardPage() {
               { step: "5", label: "HWPX 내보내기", desc: "POST /.../export/hwpx", color: "bg-rose-500" },
             ].map((item, i) => (
               <div key={item.step} className="flex items-center shrink-0">
-                <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-accent/50 min-w-[160px]">
+                <div className="liquid-inline-note flex min-w-[160px] items-center gap-2 rounded-[22px] px-4 py-3">
                   <div
                     className={`w-7 h-7 rounded-full ${item.color} text-white flex items-center justify-center text-[12px] shrink-0`}
                   >
@@ -214,7 +205,6 @@ export function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Job List */}
       <div className="mb-4 flex items-center justify-between">
         <h2>작업 목록</h2>
         <p className="text-[13px] text-muted-foreground">
@@ -225,7 +215,7 @@ export function DashboardPage() {
       {jobs.length === 0 ? (
         <Card>
           <CardContent className="py-16 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+            <div className="liquid-stat-orb mb-4 flex h-16 w-16 items-center justify-center rounded-full">
               <FileImage className="w-7 h-7 text-muted-foreground" />
             </div>
             <h3 className="text-[15px] mb-1">작업이 없습니다</h3>
@@ -244,14 +234,15 @@ export function DashboardPage() {
             const cfg = getStatusConfig(job.status);
             const StatusIcon = cfg.icon;
             return (
-              <Card
-                key={job.id}
-                className="hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/workspace/job/${job.id}`)}
-              >
+              <Card key={job.id} className="transition-transform duration-200 hover:-translate-y-0.5">
                 <CardContent className="py-4">
                   <div className="flex items-center gap-4">
-                    {/* Thumbnail */}
+                    <button
+                      type="button"
+                      aria-label={`${job.fileName} 작업 상세 보기`}
+                      className="flex min-w-0 flex-1 items-center gap-4 rounded-[24px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/10"
+                      onClick={() => navigate(`/workspace/job/${job.id}`)}
+                    >
                     <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden shrink-0">
                       <img
                         src={job.imageUrl}
@@ -260,7 +251,6 @@ export function DashboardPage() {
                       />
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <p className="text-[14px] truncate">{job.fileName}</p>
@@ -286,26 +276,24 @@ export function DashboardPage() {
                         </span>
                       </div>
                     </div>
+                    </button>
 
-                    {/* Actions */}
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/workspace/job/${job.id}`);
-                        }}
+                        type="button"
+                        aria-label={`${job.fileName} 작업 보기`}
+                        onClick={() => navigate(`/workspace/job/${job.id}`)}
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteJob(job.id);
-                        }}
+                        type="button"
+                        aria-label={`${job.fileName} 작업 삭제`}
+                        onClick={() => deleteJob(job.id)}
                       >
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>

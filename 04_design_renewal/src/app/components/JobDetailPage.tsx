@@ -292,9 +292,15 @@ export function JobDetailPage() {
   const selectionDisabled = job.status === "running";
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto">
+    <div className="liquid-workspace-page mx-auto max-w-5xl p-6 lg:p-8">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/workspace")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          type="button"
+          aria-label="대시보드로 돌아가기"
+          onClick={() => navigate("/workspace")}
+        >
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
@@ -444,7 +450,7 @@ export function JobDetailPage() {
                     description: "영역별 풀이 해설을 생성합니다.",
                   },
                 ].map((option) => (
-                  <div key={option.id} className="rounded-xl border p-3">
+                  <div key={option.id} className="liquid-inline-note rounded-[20px] p-3">
                     <div className="flex items-start gap-3">
                       <Checkbox
                         id={option.id}
@@ -464,7 +470,7 @@ export function JobDetailPage() {
                 ))}
               </div>
 
-                <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
+                <div className="liquid-inline-note rounded-[22px] p-3 text-[12px]">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">이번 실행 최대 차감 예정</span>
                     <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
@@ -559,7 +565,14 @@ export function JobDetailPage() {
                     </div>
                     <div className="bg-white rounded border p-2 flex items-center gap-2">
                       <code className="text-[11px] flex-1 truncate text-muted-foreground">{job.hwpxPath}</code>
-                      <Button variant="ghost" size="icon" onClick={copyPath} className="shrink-0 h-6 w-6">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        type="button"
+                        aria-label={copied ? "내보낸 경로 복사 완료" : "내보낸 경로 복사"}
+                        onClick={copyPath}
+                        className="shrink-0 h-6 w-6"
+                      >
                         {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                       </Button>
                     </div>

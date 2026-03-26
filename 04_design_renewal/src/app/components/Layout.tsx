@@ -19,10 +19,10 @@ export function Layout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="liquid-shell liquid-shell--workspace flex h-screen overflow-hidden">
       <AppSidebar onOpenAccount={() => setIsAccountOpen(true)} isAccountOpen={isAccountOpen} />
       <AccountSheet open={isAccountOpen} onOpenChange={setIsAccountOpen} />
-      <main className="flex-1 overflow-y-auto">
+      <main className="relative flex-1 overflow-y-auto">
         <Outlet />
       </main>
     </div>

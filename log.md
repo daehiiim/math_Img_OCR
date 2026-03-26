@@ -717,3 +717,22 @@
 - 배포 영향:
   - 백엔드/환경 변수 변경은 없다.
   - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트에 롤백된 UI가 반영된다.
+
+## 2026-03-26 18:35:00 KST
+
+- 비홈 화면 한정 리퀴드 글라스 리디자인 계획을 다시 적용했다.
+- 아키텍처 변경:
+  - [theme.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css)에 `liquid-shell` 스코프 토큰과 카드, 버튼, 입력, 시트, 드롭다운, 사이드바 공통 유틸을 추가했다.
+  - [AuthLayout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AuthLayout.tsx), [StudioLayout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/StudioLayout.tsx), [Layout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/Layout.tsx)에 비홈 전용 래퍼 클래스를 부여해 홈 첫 화면과 테마 범위를 분리했다.
+  - [LoginPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/LoginPage.tsx), [PricingPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PricingPage.tsx), [PaymentPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PaymentPage.tsx), [OpenAiConnectionPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/OpenAiConnectionPage.tsx), [DashboardPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/DashboardPage.tsx), [NewJobPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx), [JobDetailPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.tsx), [AppSidebar.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AppSidebar.tsx), [AccountSheet.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AccountSheet.tsx)을 실버+세이지 톤의 반투명 패널 구조로 정리했다.
+  - [button.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ui/button.tsx), [badge.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ui/badge.tsx)에 variant/data-slot 훅을 보강해 비홈 화면 전체 스타일 일관성을 맞췄다.
+- UX 및 접근성 조정:
+  - 홈 [`PublicHomePage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 와 홈 전용 스타일은 건드리지 않았다.
+  - 아이콘 전용 버튼 `aria-label`, 비밀번호 입력 메타데이터, 키보드 포커스 링, 키보드 접근 가능한 작업 카드 상호작용을 추가해 리디자인 후 접근성 회귀를 막았다.
+- 검증 결과:
+  - `npm run test:run` -> `139 passed`
+  - `npm run build` -> production build 성공, 기존과 동일한 chunk size warning만 남음
+  - `VITE_LOCAL_UI_MOCK=true` 로 `/`, `/login`, `/pricing`, `/payment/starter`, `/connect-openai`, `/new`, `/workspace`, `/workspace/job/:jobId` 실브라우저 스모크 QA를 확인했다.
+- 배포 영향:
+  - 백엔드/환경 변수 변경은 없다.
+  - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트에 이번 비홈 리디자인이 반영된다.

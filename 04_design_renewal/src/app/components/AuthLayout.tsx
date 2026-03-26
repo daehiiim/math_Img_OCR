@@ -17,43 +17,44 @@ export function AuthLayout() {
   const isLoginPage = location.pathname === "/login";
 
   return (
-    <div className="min-h-screen bg-[#fafafa] flex flex-col">
-      {/* Header */}
-      <header className="h-14 border-b border-black/[0.06] bg-white flex items-center justify-between px-5 shrink-0">
+    <div className="liquid-shell liquid-shell--auth flex min-h-screen flex-col">
+      <header className="liquid-header-shell flex h-16 shrink-0 items-center justify-between px-5 sm:px-6">
         <Link to={isAuthenticated ? "/workspace" : "/"} className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-[#111] flex items-center justify-center">
+          <div className="liquid-logo-mark flex h-8 w-8 items-center justify-center rounded-xl text-white">
             <span className="text-[11px] text-white tracking-tight">M</span>
           </div>
-          <span className="text-[14px] tracking-[-0.01em] text-[#111]">MathHWP</span>
+          <span className="text-[14px] tracking-[-0.02em] text-foreground">MathHWP</span>
         </Link>
 
         {isAuthenticated && user && !isLoginPage && (
           <div className="flex items-center gap-3">
-            {/* Credits indicator */}
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#f4f4f5] text-[12px] text-[#71717a]">
+            <div className="liquid-chip liquid-chip--accent flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <ImageIcon className="w-3 h-3" />
-                <span className="text-[#111]">{`${user.credits}개 이미지 남음`}</span>
+                <span className="text-foreground">{`${user.credits}개 이미지 남음`}</span>
               </span>
               {user.openAiConnected ? (
-                <span className="flex items-center gap-1 text-emerald-600">
+                <span className="flex items-center gap-1 text-emerald-700">
                   <KeyRound className="w-3 h-3" />
                   OpenAI 연결됨
                 </span>
               ) : null}
             </div>
 
-            {/* Avatar dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center text-[11px] cursor-pointer hover:ring-2 hover:ring-indigo-200 transition-shadow">
+                <button
+                  type="button"
+                  aria-label="계정 메뉴 열기"
+                  className="liquid-avatar-badge flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-[11px] text-white transition-shadow hover:ring-[3px] hover:ring-white/45"
+                >
                   {user.avatarInitials}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-52 rounded-2xl p-2">
                 <div className="px-3 py-2">
-                  <p className="text-[13px] text-[#111]">{user.name}</p>
-                  <p className="text-[11px] text-[#71717a]">{user.email}</p>
+                  <p className="text-[13px] text-foreground">{user.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{user.email}</p>
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
@@ -85,13 +86,11 @@ export function AuthLayout() {
         )}
       </header>
 
-      {/* Content */}
-      <main className="flex-1 flex items-center justify-center px-4 py-12">
+      <main className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
         <Outlet />
       </main>
 
-      {/* Minimal footer */}
-      <footer className="py-4 text-center text-[11px] text-[#a1a1aa]">
+      <footer className="px-4 pb-6 text-center text-[11px] text-muted-foreground">
         MathHWP &middot; AI 기반 수학 이미지를 HWPX로 변환
       </footer>
     </div>

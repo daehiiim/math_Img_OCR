@@ -53,7 +53,7 @@ export function OpenAiKeyForm({
       </div>
 
       {maskedKey ? (
-        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+        <div className="liquid-inline-note rounded-[20px] px-4 py-3">
           <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Connected Key</p>
           <p className="mt-1 font-mono text-[13px] text-foreground">{maskedKey}</p>
         </div>
@@ -63,10 +63,15 @@ export function OpenAiKeyForm({
         <Label htmlFor="openai-api-key">OpenAI API key</Label>
         <Input
           id="openai-api-key"
+          name="openaiApiKey"
           type="password"
           value={apiKey}
           onChange={(event) => setApiKey(event.target.value)}
           placeholder="sk-..."
+          autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
         />
       </div>
 

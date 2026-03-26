@@ -232,6 +232,8 @@ export function RegionEditor({
               </span>
               {!disabled && (
                 <button
+                  type="button"
+                  aria-label={`${region.id} 영역 삭제`}
                   className="m-0.5 p-0.5 rounded hover:bg-red-100"
                   onClick={(e) => {
                     e.stopPropagation();

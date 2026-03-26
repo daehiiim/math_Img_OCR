@@ -46,4 +46,21 @@ describe("StudioLayout", () => {
     expect(screen.getByText("9개 이미지 남음")).toBeInTheDocument();
     expect(screen.getByText("OpenAI 연결됨")).toBeInTheDocument();
   });
+
+  it("작업실 공개 셸에도 비홈 리퀴드 스코프를 적용한다", () => {
+    render(
+      <MemoryRouter initialEntries={["/workspace"]}>
+        <Routes>
+          <Route element={<StudioLayout />}>
+            <Route path="/workspace" element={<div>workspace</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("workspace").closest(".liquid-shell")).toHaveClass(
+      "liquid-shell",
+      "liquid-shell--studio"
+    );
+  });
 });

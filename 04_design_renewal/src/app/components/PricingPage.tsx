@@ -11,6 +11,7 @@ import {
 } from "../lib/billingCurrency";
 import { cloneDefaultBillingCatalog } from "../lib/billingCatalog";
 import { isLocalUiMockEnabled } from "../lib/localUiMock";
+import { Button } from "./ui/button";
 
 type PlanId = "single" | "starter" | "pro";
 
@@ -111,24 +112,24 @@ export function PricingPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="w-full max-w-[900px]"
+      className="liquid-page-shell liquid-page-shell--billing w-full max-w-[980px]"
     >
       <button
         onClick={() => navigate("/")}
-        className="mb-8 flex cursor-pointer items-center gap-1.5 text-[13px] text-[#71717a] transition-colors hover:text-[#111]"
+        className="mb-8 flex cursor-pointer items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         홈으로 돌아가기
       </button>
 
-      <div className="mb-10 text-center">
-        <h1 className="mb-2 text-[26px] tracking-[-0.02em] text-[#111]">
+      <div className="liquid-frost-panel liquid-frost-panel--soft mb-10 rounded-[32px] px-6 py-8 text-center md:px-10">
+        <h1 className="mb-2 text-[26px] tracking-[-0.02em] text-foreground">
           이미지 구매
         </h1>
-        <p className="text-[15px] text-[#71717a]">
+        <p className="text-[15px] text-muted-foreground">
           수학 이미지를 HWPX 문서로 즉시 변환하세요.
         </p>
-        <div className="mt-4 inline-flex flex-col gap-1 rounded-2xl border border-[#ece7dd] bg-[#fbf7f1] px-5 py-3 text-[13px] text-[#6b6258]">
+        <div className="liquid-inline-note mt-4 inline-flex flex-col gap-1 rounded-[22px] px-5 py-3 text-[13px] text-muted-foreground">
           <p>실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.</p>
         </div>
         {isCatalogIssue && (
@@ -138,7 +139,7 @@ export function PricingPage() {
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
         {!isCatalogIssue && plans.length === 0 ? (
-          <div className="rounded-xl border border-[#e4e4e7] bg-white p-7 text-[14px] text-[#71717a] md:col-span-3">
+          <div className="liquid-frost-panel rounded-[28px] p-7 text-[14px] text-muted-foreground md:col-span-3">
             플랜 정보를 불러오는 중입니다.
           </div>
         ) : null}
@@ -156,7 +157,7 @@ export function PricingPage() {
           >
             {plan.badge && (
               <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2">
-                <div className="flex items-center gap-1 rounded-full bg-[#14532d] px-3 py-1 text-[11px] text-white">
+                <div className="liquid-chip liquid-chip--accent flex items-center gap-1 rounded-full px-3 py-1 text-[11px] text-foreground">
                   <Sparkles className="h-3 w-3" />
                   {plan.badge}
                 </div>
@@ -164,25 +165,25 @@ export function PricingPage() {
             )}
 
             <div
-              className={`flex h-full flex-col rounded-xl border p-7 transition-shadow ${
+              className={`liquid-frost-panel flex h-full flex-col rounded-[28px] p-7 transition-shadow ${
                 plan.highlight
-                  ? "border-[#b7d3bf] bg-[#f7fbf8] shadow-[0_10px_30px_rgba(20,83,45,0.08)]"
-                  : "border-[#e4e4e7] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
+                  ? "liquid-frost-panel--accent"
+                  : "liquid-frost-panel--soft hover:-translate-y-0.5"
               }`}
             >
-              <p className="mb-2 text-[13px] text-[#71717a]">{plan.title}</p>
+              <p className="mb-2 text-[13px] text-muted-foreground">{plan.title}</p>
               <div className="mb-1 flex items-baseline gap-2">
-                <span className="text-[34px] tracking-[-0.03em] text-[#111]">
+                <span className="text-[34px] tracking-[-0.03em] text-foreground">
                   {plan.priceLabel}
                 </span>
-                <span className="text-[12px] uppercase tracking-[0.2em] text-[#a1a1aa]">
+                <span className="text-[12px] uppercase tracking-[0.2em] text-muted-foreground">
                   {normalizeBillingCurrency(plan.currency)}
                 </span>
               </div>
-              <p className="mb-2 text-[14px] text-[#52525b]">{plan.description}</p>
-              <p className="mb-6 text-[13px] text-[#a1a1aa]">{plan.perImageLabel}</p>
+              <p className="mb-2 text-[14px] text-foreground/80">{plan.description}</p>
+              <p className="mb-6 text-[13px] text-muted-foreground">{plan.perImageLabel}</p>
 
-              <button
+              <Button
                 onClick={() =>
                   navigate(
                     `/payment/${plan.plan_id}${
@@ -200,22 +201,21 @@ export function PricingPage() {
                   )
                 }
                 disabled={isCatalogIssue}
-                className={`mb-7 h-10 w-full cursor-pointer rounded-lg text-[14px] transition-all active:scale-[0.98] ${
+                variant={plan.highlight ? "default" : "outline"}
+                className={`mb-7 h-11 w-full text-[14px] ${
                   isCatalogIssue
-                    ? "cursor-not-allowed border border-[#e4e4e7] bg-[#fafafa] text-[#a1a1aa]"
-                    : plan.highlight
-                    ? "bg-[#14532d] text-white hover:bg-[#0f3f22]"
-                    : "border border-[#e4e4e7] bg-[#fafafa] text-[#111] hover:bg-[#f4f4f5]"
+                    ? "cursor-not-allowed opacity-55"
+                    : ""
                 }`}
               >
                 구매
-              </button>
+              </Button>
 
-              <div className="space-y-2.5 border-t border-[#f4f4f5] pt-6">
+              <div className="space-y-2.5 border-t border-white/55 pt-6">
                 {plan.features.map((feature) => (
                   <div key={feature} className="flex items-start gap-2">
                     <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                    <span className="text-[13px] text-[#52525b]">{feature}</span>
+                    <span className="text-[13px] text-foreground/80">{feature}</span>
                   </div>
                 ))}
               </div>

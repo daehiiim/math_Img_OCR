@@ -23,6 +23,7 @@ import { cloneDefaultBillingCatalog } from "../lib/billingCatalog";
 import { formatBillingAmount, normalizeBillingCurrency } from "../lib/billingCurrency";
 import { applyLocalUiMockCheckoutCredits, isLocalUiMockEnabled } from "../lib/localUiMock";
 import { buildPublicAppUrl } from "../lib/publicAppUrl";
+import { Button } from "./ui/button";
 
 type PlanId = "single" | "starter" | "pro";
 
@@ -313,7 +314,7 @@ export function PaymentPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="w-full max-w-[460px]"
+      className="liquid-page-shell liquid-page-shell--billing w-full max-w-[480px]"
     >
       <AnimatePresence mode="wait">
         {paid ? (
@@ -322,38 +323,39 @@ export function PaymentPage() {
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.35 }}
-            className="flex flex-col items-center rounded-2xl border border-black/[0.04] bg-white p-10 text-center shadow-[0_2px_20px_rgba(0,0,0,0.06)]"
+            className="liquid-frost-panel liquid-frost-panel--accent flex flex-col items-center rounded-[32px] p-10 text-center"
           >
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.15 }}
-              className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50"
+              className="liquid-inline-note mb-6 flex h-16 w-16 items-center justify-center rounded-full"
             >
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />
             </motion.div>
-            <h1 className="mb-2 text-[20px] tracking-[-0.02em] text-[#111]">
+            <h1 className="mb-2 text-[20px] tracking-[-0.02em] text-foreground">
               결제가 완료되었습니다
             </h1>
-            <p className="mb-1 text-[14px] text-[#71717a]">
+            <p className="mb-1 text-[14px] text-muted-foreground">
               {resolvedPlan.credits}개의 이미지 크레딧이 계정에 반영되었습니다.
             </p>
-            <p className="mt-1 text-[13px] text-[#a1a1aa]">
+            <p className="mt-1 text-[13px] text-muted-foreground">
               {isLocalUiMock
                 ? "mock 모드에서는 주문/영수증 포털을 제공하지 않습니다."
                 : "영수증과 주문 내역은 Polar customer portal에서 확인할 수 있습니다."}
             </p>
             <div className="mt-6 flex w-full flex-col gap-3">
-              <button
+              <Button
                 onClick={() => navigate(returnTo || "/workspace")}
-                className="h-11 w-full cursor-pointer rounded-lg bg-[#14532d] text-[14px] text-white transition-colors hover:bg-[#0f3f22]"
+                className="h-11 w-full"
               >
                 {returnTo ? "이전 화면으로 이동" : "워크스페이스로 이동"}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleOpenPortal}
                 disabled={portalLoading || isLocalUiMock}
-                className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-[#d4d4d8] bg-white text-[14px] text-[#111] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
+                variant="outline"
+                className="h-11 w-full gap-2"
               >
                 {portalLoading ? (
                   <>
@@ -366,7 +368,7 @@ export function PaymentPage() {
                     <ExternalLink className="h-4 w-4" />
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </motion.div>
         ) : (
@@ -375,56 +377,57 @@ export function PaymentPage() {
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.2 }}
           >
-            <button
+            <Button
               onClick={() =>
                 navigate(
                   returnTo ? `/pricing?returnTo=${encodeURIComponent(returnTo)}` : "/pricing"
                 )
               }
-              className="mb-6 flex cursor-pointer items-center gap-1.5 text-[13px] text-[#71717a] transition-colors hover:text-[#111]"
+              variant="ghost"
+              className="mb-6 gap-1.5 px-0 text-[13px] text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               가격 페이지로 돌아가기
-            </button>
+            </Button>
 
             <div className="mb-6">
-              <h1 className="mb-1 text-[22px] tracking-[-0.02em] text-[#111]">
+              <h1 className="mb-1 text-[22px] tracking-[-0.02em] text-foreground">
                 결제 완료하기
               </h1>
-              <p className="text-[14px] text-[#71717a]">
+              <p className="text-[14px] text-muted-foreground">
                 Polar checkout으로 안전하게 결제됩니다.
               </p>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_2px_20px_rgba(0,0,0,0.06)]">
-              <div className="border-b border-[#f4f4f5] p-6">
-                <p className="mb-4 text-[11px] uppercase tracking-widest text-[#a1a1aa]">
+            <div className="liquid-frost-panel overflow-hidden rounded-[32px]">
+              <div className="border-b border-white/55 p-6">
+                <p className="mb-4 text-[11px] uppercase tracking-widest text-muted-foreground">
                   주문 요약
                 </p>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[14px] text-[#71717a]">플랜</span>
-                  <span className="text-[14px] text-[#111]">{resolvedPlan.title}</span>
+                  <span className="text-[14px] text-muted-foreground">플랜</span>
+                  <span className="text-[14px] text-foreground">{resolvedPlan.title}</span>
                 </div>
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-[14px] text-[#71717a]">이미지</span>
-                  <span className="text-[14px] text-[#111]">{resolvedPlan.credits}</span>
+                  <span className="text-[14px] text-muted-foreground">이미지</span>
+                  <span className="text-[14px] text-foreground">{resolvedPlan.credits}</span>
                 </div>
-                <div className="my-3 h-px bg-[#f4f4f5]" />
+                <div className="my-3 h-px bg-white/60" />
                 <div className="flex items-center justify-between">
-                  <span className="text-[15px] text-[#111]">총액</span>
+                  <span className="text-[15px] text-foreground">총액</span>
                   <div className="text-right">
-                    <span className="text-[18px] tracking-[-0.02em] text-[#111]">
+                    <span className="text-[18px] tracking-[-0.02em] text-foreground">
                       {resolvedPlan.priceLabel}
                     </span>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#a1a1aa]">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                       {normalizeBillingCurrency(resolvedPlan.currency)}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="border-b border-[#f4f4f5] p-6">
-                <p className="mb-4 text-[11px] uppercase tracking-widest text-[#a1a1aa]">
+              <div className="border-b border-white/55 p-6">
+                <p className="mb-4 text-[11px] uppercase tracking-widest text-muted-foreground">
                   결제 수단
                 </p>
                 <div className="space-y-2">
@@ -435,34 +438,35 @@ export function PaymentPage() {
                     return (
                       <button
                         key={method.id}
+                        type="button"
                         onClick={() => setSelectedMethod(method.id)}
-                        className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-all ${
+                        className={`flex w-full cursor-pointer items-center gap-3 rounded-[22px] border px-4 py-3 transition-[transform,background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
                           isSelected
-                            ? "border-[#111] bg-[#fafafa]"
-                            : "border-[#e4e4e7] bg-white hover:border-[#d4d4d8]"
+                            ? "border-white/75 bg-white/78 shadow-[0_20px_32px_-28px_rgba(38,59,50,0.24)]"
+                            : "bg-white/52 hover:bg-white/68"
                         }`}
                       >
                         <div
                           className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${
-                            isSelected ? "border-[#111]" : "border-[#d4d4d8]"
+                            isSelected ? "border-foreground" : "border-border"
                           }`}
                         >
                           {isSelected && (
-                            <div className="h-2 w-2 rounded-full bg-[#111]" />
+                            <div className="h-2 w-2 rounded-full bg-foreground" />
                           )}
                         </div>
                         <Icon
                           className={`h-4 w-4 ${
-                            isSelected ? "text-[#111]" : "text-[#a1a1aa]"
+                            isSelected ? "text-foreground" : "text-muted-foreground"
                           }`}
                         />
                         <div className="flex-1 text-left">
-                          <span className="text-[14px] text-[#3f3f46]">
+                          <span className="text-[14px] text-foreground/80">
                             {method.label}
                           </span>
                         </div>
                         {method.sublabel && (
-                          <span className="text-[11px] text-[#a1a1aa]">
+                          <span className="text-[11px] text-muted-foreground">
                             {method.sublabel}
                           </span>
                         )}
@@ -473,10 +477,10 @@ export function PaymentPage() {
               </div>
 
               <div className="p-6">
-                <button
+                <Button
                   onClick={handlePay}
                   disabled={paying || checkingPayment || isCatalogIssue || isCatalogPending}
-                  className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#111] text-[14px] text-white transition-all hover:bg-[#222] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-11 w-full gap-2"
                 >
                   {paying || checkingPayment ? (
                     <>
@@ -499,7 +503,7 @@ export function PaymentPage() {
                       지금 결제 · {resolvedPlan.priceLabel}
                     </>
                   )}
-                </button>
+                </Button>
 
                 {isCatalogIssue && (
                   <p className="mt-3 text-center text-[12px] text-amber-700">
@@ -507,15 +511,15 @@ export function PaymentPage() {
                   </p>
                 )}
                 {isCatalogPending && !isCatalogIssue && (
-                  <p className="mt-3 text-center text-[12px] text-[#71717a]">
+                  <p className="mt-3 text-center text-[12px] text-muted-foreground">
                     상품 정보를 불러오는 중입니다.
                   </p>
                 )}
-                <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-[#a1a1aa]">
+                <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
                   <ShieldCheck className="h-3 w-3" />
                   실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.
                 </div>
-                <p className="mt-2 text-center text-[11px] text-[#a1a1aa]">
+                <p className="mt-2 text-center text-[11px] text-muted-foreground">
                   결제가 실패하면 잔액 변경 없이 다시 시도만 요청됩니다.
                 </p>
                 {statusMessage && (

@@ -59,22 +59,23 @@ export function LoginPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="w-full max-w-[380px]"
+      className="liquid-page-shell liquid-page-shell--auth w-full max-w-[400px]"
     >
-      <div className="bg-white rounded-2xl shadow-[0_2px_20px_rgba(0,0,0,0.06)] border border-black/[0.04] p-10 flex flex-col items-center text-center">
-        {/* Logo */}
-        <div className="w-14 h-14 rounded-xl bg-[#111] flex items-center justify-center mb-7">
+      <div className="liquid-frost-panel flex flex-col items-center rounded-[32px] p-10 text-center">
+        <div className="liquid-logo-mark mb-7 flex h-14 w-14 items-center justify-center rounded-[20px] text-white">
           <span className="text-[18px] text-white tracking-tight">M</span>
         </div>
 
-        <h1 className="text-[22px] tracking-[-0.02em] text-[#111] mb-2">MathHWP</h1>
-        <p className="text-[14px] text-[#71717a] leading-relaxed mb-9 max-w-[300px]">수학 이미지를 업로드하여 HWPX 문서로 자동 변환합니다.</p>
+        <h1 className="mb-2 text-[22px] tracking-[-0.02em] text-foreground">MathHWP</h1>
+        <p className="mb-9 max-w-[300px] text-[14px] leading-relaxed text-muted-foreground">
+          수학 이미지를 업로드하여 HWPX 문서로 자동 변환합니다.
+        </p>
 
-        {/* 로그인 버튼은 mock/실환경 문구만 분기하고 스타일은 유지한다. */}
         <button
+          type="button"
           onClick={handleLogin}
           disabled={Boolean(authErrorMessage)}
-          className="w-full flex items-center justify-center gap-3 h-11 rounded-lg bg-white border border-[#e4e4e7] hover:bg-[#fafafa] hover:border-[#d4d4d8] active:scale-[0.99] transition-all cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+          className="liquid-chip flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-2xl px-4 transition-[transform,background-color,border-color,box-shadow] duration-200 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-60"
         >
           <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24">
             <path
@@ -94,7 +95,7 @@ export function LoginPage() {
               fill="#EA4335"
             />
           </svg>
-          <span className="text-[14px] text-[#3f3f46]">
+          <span className="text-[14px] text-foreground/80">
             {isLocalUiMock ? "로컬 테스트로 로그인" : "Google 계정으로 로그인"}
           </span>
         </button>
@@ -104,7 +105,7 @@ export function LoginPage() {
             {authErrorMessage}
           </p>
         )}
-        <p className="text-[12px] text-[#a1a1aa] mt-5">
+        <p className="mt-5 text-[12px] text-muted-foreground">
           {isLocalUiMock
             ? "Google 없이 로컬 프로필로 바로 진입합니다."
             : "이미지를 올리는 순간에만 로그인하도록 동작합니다."}

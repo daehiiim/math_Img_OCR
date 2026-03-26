@@ -308,7 +308,7 @@ export function NewJobPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1480px] p-4 sm:p-6 lg:p-8">
+    <div className="liquid-workspace-page mx-auto max-w-[1480px] p-4 sm:p-6 lg:p-8">
       <input
         ref={fileInputRef}
         type="file"
@@ -329,15 +329,14 @@ export function NewJobPage() {
         </p>
       </div>
 
-      {/* 업로드 영역 */}
       {!preview ? (
-        <Card className="mx-auto mb-6 max-w-4xl">
+        <Card className="liquid-frost-panel--soft mx-auto mb-6 max-w-4xl">
           <CardContent className="pt-6">
             <div
-              className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
+              className={`liquid-dashed-dropzone rounded-[28px] border-2 border-dashed p-12 text-center transition-colors ${
                 dragActive
                   ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/50"
+                  : "hover:border-primary/40"
               }`}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -346,7 +345,7 @@ export function NewJobPage() {
               onDragLeave={() => setDragActive(false)}
               onDrop={handleDrop}
             >
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+              <div className="liquid-stat-orb mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
                 <Upload className="w-7 h-7 text-muted-foreground" />
               </div>
               <h3 className="text-[15px] mb-1">이미지를 드래그하거나 클릭하여 업로드</h3>
@@ -368,7 +367,7 @@ export function NewJobPage() {
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0">
             <Card className="overflow-hidden">
-              <CardHeader className="gap-4 border-b bg-muted/20">
+              <CardHeader className="gap-4 border-b border-white/55 bg-white/20">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-1">
                     <CardTitle className="text-[15px]">영역 지정</CardTitle>
@@ -384,13 +383,13 @@ export function NewJobPage() {
                   </Button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
-                  <span className="rounded-full border bg-background px-3 py-1 font-medium text-foreground">
+                  <span className="liquid-chip rounded-full px-3 py-1 font-medium text-foreground">
                     {preview.name}
                   </span>
-                  <span className="rounded-full bg-background/70 px-3 py-1">
+                  <span className="liquid-inline-note rounded-full px-3 py-1">
                     {preview.width} × {preview.height}px
                   </span>
-                  <span className="rounded-full bg-background/70 px-3 py-1">
+                  <span className="liquid-inline-note rounded-full px-3 py-1">
                     영역 {regions.length}개
                   </span>
                 </div>
@@ -445,7 +444,7 @@ export function NewJobPage() {
                       description: "영역별 풀이 해설을 생성합니다.",
                     },
                   ].map((option) => (
-                    <div key={option.id} className="rounded-xl border p-3">
+                    <div key={option.id} className="liquid-inline-note rounded-[20px] p-3">
                       <div className="flex items-start gap-3">
                         <Checkbox
                           id={option.id}
@@ -462,7 +461,7 @@ export function NewJobPage() {
                   ))}
                 </div>
 
-                <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
+                <div className="liquid-inline-note rounded-[22px] p-3 text-[12px]">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">이번 실행 최대 차감 예정</span>
                     <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>

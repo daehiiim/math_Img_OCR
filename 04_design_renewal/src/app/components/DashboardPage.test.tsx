@@ -50,4 +50,16 @@ describe("DashboardPage", () => {
     expect(screen.getByText("OpenAI 연결됨")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "이미지 충전" })).toBeInTheDocument();
   });
+
+  it("작업실 대시보드에 생산성 우선 글라스 페이지 스코프를 적용한다", () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("작업 대시보드").closest(".liquid-workspace-page")).toHaveClass(
+      "liquid-workspace-page"
+    );
+  });
 });

@@ -9,23 +9,23 @@ export function StudioLayout() {
   const { isAuthenticated, logout, user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-[#fcfaf6]">
-      <header className="border-b border-black/5 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
+    <div className="liquid-shell liquid-shell--studio min-h-screen">
+      <header className="liquid-header-shell border-b-0">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#171717] text-white">
+            <div className="liquid-logo-mark flex h-10 w-10 items-center justify-center rounded-2xl text-white">
               M
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-[#8b8177]">MathHWP</p>
-              <p className="text-[15px] tracking-[-0.02em] text-[#171717]">문제 이미지 작업실</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">MathHWP</p>
+              <p className="text-[15px] tracking-[-0.02em] text-foreground">문제 이미지 작업실</p>
             </div>
           </Link>
 
           <div className="flex items-center gap-2">
             {isAuthenticated && user ? (
               <>
-                <div className="hidden rounded-full border border-black/5 bg-[#f7f3ec] px-3 py-1.5 text-[12px] text-[#5c564f] sm:block">
+                <div className="liquid-chip liquid-chip--accent hidden rounded-full px-3 py-1.5 text-[12px] text-muted-foreground sm:block">
                   <span className="flex items-center gap-2">
                     <span className="flex items-center gap-1.5">
                       <ImageIcon className="h-3.5 w-3.5" />
@@ -66,7 +66,7 @@ export function StudioLayout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-5 py-8 lg:px-8">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <Outlet />
       </main>
     </div>

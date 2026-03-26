@@ -33,6 +33,21 @@ describe("PricingPage", () => {
     expect(screen.getByText("실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.")).toBeInTheDocument();
   });
 
+  it("비홈 결제 페이지 셸에 글라스 과금 스코프를 적용한다", async () => {
+    render(
+      <MemoryRouter>
+        <PricingPage />
+      </MemoryRouter>
+    );
+
+    const title = await screen.findByRole("heading", { name: "이미지 구매" });
+
+    expect(title.closest(".liquid-page-shell")).toHaveClass(
+      "liquid-page-shell",
+      "liquid-page-shell--billing"
+    );
+  });
+
   it("catalog 요청이 실패하면 live fallback을 숨기고 점검 안내만 보여준다", async () => {
     getBillingCatalogApiMock.mockRejectedValueOnce(new Error("catalog blocked"));
 

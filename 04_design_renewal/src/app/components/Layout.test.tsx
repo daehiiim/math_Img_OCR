@@ -63,4 +63,21 @@ describe("Layout", () => {
       expect(screen.queryByText("math@example.com")).not.toBeInTheDocument();
     });
   });
+
+  it("워크스페이스에 비홈 리퀴드 셸 스코프를 적용한다", () => {
+    render(
+      <MemoryRouter initialEntries={["/workspace"]}>
+        <Routes>
+          <Route path="/workspace" element={<Layout />}>
+            <Route index element={<div>workspace</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("workspace").closest(".liquid-shell")).toHaveClass(
+      "liquid-shell",
+      "liquid-shell--workspace"
+    );
+  });
 });
