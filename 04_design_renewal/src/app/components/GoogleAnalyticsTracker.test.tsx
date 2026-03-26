@@ -7,6 +7,7 @@ import { resetGoogleAnalyticsState } from "../lib/googleAnalytics";
 import { GoogleAnalyticsTracker } from "./GoogleAnalyticsTracker";
 
 type DataLayerCommand = [string, ...unknown[]];
+type AnalyticsWindow = Window & { dataLayer?: unknown[] };
 
 type PageViewPayload = {
   page_location: string;
@@ -14,11 +15,28 @@ type PageViewPayload = {
   page_title: string;
 };
 
-/** 테스트마다 dataLayer 누적 상태를 읽기 쉽게 가져온다. */
-function getDataLayerCommands(): DataLayerCommand[] {
-  const analyticsWindow = window as Window & { dataLayer?: DataLayerCommand[] };
+/** 테스트에서 dataLayer 원본 엔트리를 그대로 읽어온다. */
+function getRawDataLayerEntries(): unknown[] {
+  const analyticsWindow = window as AnalyticsWindow;
 
   return analyticsWindow.dataLayer ?? [];
+}
+
+/** 공식 gtag queue 엔트리를 배열 형태로 정규화해 검증에 사용한다. */
+function toDataLayerCommand(entry: unknown): DataLayerCommand | null {
+  if (!entry || typeof entry !== "object" || !("length" in entry)) {
+    return null;
+  }
+
+  const arrayLikeEntry = entry as ArrayLike<unknown>;
+  return Array.from(arrayLikeEntry) as DataLayerCommand;
+}
+
+/** 테스트마다 dataLayer 누적 상태를 읽기 쉽게 가져온다. */
+function getDataLayerCommands(): DataLayerCommand[] {
+  return getRawDataLayerEntries()
+    .map(toDataLayerCommand)
+    .filter((command): command is DataLayerCommand => command !== null);
 }
 
 /** 기록된 page_view 이벤트만 추려서 검증에 사용한다. */
@@ -97,5 +115,34 @@ describe("GoogleAnalyticsTracker", () => {
       page_path: "/pricing?plan=pro#summary",
       page_title: "Math OCR Test",
     });
+  });
+
+  it("공식 gtag 스니펫과 같은 arguments queue 형식으로 명령을 적재한다", async () => {
+    render(
+      <BrowserRouter>
+        <GoogleAnalyticsTracker enabled measurementId="G-SM6ETGCFGP" />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(getRawDataLayerEntries()).toHaveLength(3);
+    });
+
+    const [jsCommand, configCommand, pageViewCommand] = getRawDataLayerEntries();
+
+    expect(Array.isArray(jsCommand)).toBe(false);
+    expect(Array.isArray(configCommand)).toBe(false);
+    expect(Array.isArray(pageViewCommand)).toBe(false);
+
+    expect(getDataLayerCommands()).toContainEqual(["config", "G-SM6ETGCFGP", { send_page_view: false }]);
+    expect(getDataLayerCommands()).toContainEqual([
+      "event",
+      "page_view",
+      {
+        page_location: `${window.location.origin}/`,
+        page_path: "/",
+        page_title: "Math OCR Test",
+      },
+    ]);
   });
 });

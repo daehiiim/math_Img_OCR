@@ -601,3 +601,22 @@
 - 배포 영향:
   - 신규 환경 변수와 백엔드 변경은 없다.
   - 프런트엔드 정적 빌드를 다시 배포한 뒤 AdSense 화면에서 재확인해야 한다.
+
+## 2026-03-26 10:56 KST
+
+- 운영 사이트에서 GA4 스크립트 삽입과 `gtag.js` 로더는 정상인데 `g/collect` 요청이 전혀 발생하지 않는 현상을 재현했다.
+- 원인을 [googleAnalytics.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/googleAnalytics.ts) 의 queue 구현으로 좁혔다.
+  - 기존 구현은 `gtag(...args)` 호출을 `dataLayer.push(args)` 로 적재했다.
+  - Playwright 대조 실험에서 같은 측정 ID를 써도 공식 스니펫처럼 `dataLayer.push(arguments)` 를 사용하면 `g/collect` 가 발생하고, 배열 push 방식을 쓰면 발생하지 않았다.
+- TDD로 [GoogleAnalyticsTracker.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/GoogleAnalyticsTracker.test.tsx) 에 “공식 gtag 스니펫과 같은 arguments queue 형식” 회귀 테스트를 먼저 추가해 RED를 확인했다.
+- 수정 내용:
+  - [googleAnalytics.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/googleAnalytics.ts) 에서 `gtag` 큐 함수를 공식 스니펫과 동일한 `arguments` 객체 적재 방식으로 교체했다.
+  - [GoogleAnalyticsTracker.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/GoogleAnalyticsTracker.test.tsx) 의 dataLayer 읽기 헬퍼를 array-like queue 엔트리 정규화 방식으로 바꾸고, 실제 queue 계약 회귀 테스트를 추가했다.
+  - Clarity 는 운영 사이트와 자동화 브라우저에서 `b.clarity.ms/collect` 204 응답이 확인돼 이번 턴에는 코드 변경하지 않았다.
+- 검증 결과:
+  - `npm run test:run -- src/app/components/GoogleAnalyticsTracker.test.tsx` -> `3 passed`
+  - `npm run test:run -- src/app/components/GoogleAnalyticsTracker.test.tsx src/app/components/ClarityTracker.test.tsx` -> `5 passed`
+  - `npm run build` -> production build 성공
+- 배포 영향:
+  - 신규 환경 변수와 백엔드 변경은 없다.
+  - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트의 GA4 `g/collect` 전송이 반영된다.

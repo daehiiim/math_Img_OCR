@@ -4,9 +4,10 @@ export const DEFAULT_GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-SM6ETGCFGP";
 
 const initializedMeasurementIds = new Set<string>();
 
+type GtagFunction = (...args: unknown[]) => void;
 type AnalyticsWindow = Window & {
-  dataLayer?: unknown[][];
-  gtag?: (...args: unknown[]) => void;
+  dataLayer?: unknown[];
+  gtag?: GtagFunction;
 };
 
 type GoogleAnalyticsConfig = {
@@ -35,23 +36,27 @@ export function buildGoogleAnalyticsScriptUrl(measurementId: string): string {
 }
 
 // dataLayer 배열이 없으면 초기화하고 재사용한다.
-function ensureDataLayer(): unknown[][] {
+function ensureDataLayer(): unknown[] {
   const analyticsWindow = getAnalyticsWindow();
   analyticsWindow.dataLayer ??= [];
   return analyticsWindow.dataLayer;
 }
 
+// gtag 호출을 공식 스니펫과 같은 arguments queue 형식으로 누적한다.
+function createQueuedGtag(): GtagFunction {
+  return function gtag(): void {
+    ensureDataLayer().push(arguments);
+  } as GtagFunction;
+}
+
 // gtag 호출 함수를 한 번만 만들고 이후에는 재사용한다.
-function ensureGtag(): (...args: unknown[]) => void {
+function ensureGtag(): GtagFunction {
   const analyticsWindow = getAnalyticsWindow();
   if (typeof analyticsWindow.gtag === "function") {
     return analyticsWindow.gtag;
   }
 
-  analyticsWindow.gtag = (...args: unknown[]) => {
-    ensureDataLayer().push(args);
-  };
-
+  analyticsWindow.gtag = createQueuedGtag();
   return analyticsWindow.gtag;
 }
 
