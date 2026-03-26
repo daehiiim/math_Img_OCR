@@ -195,7 +195,7 @@ describe("NewJobPage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("heading", { name: "수식 이미지 변환 작업 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "새 작업 생성" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "파일 선택" })).toBeInTheDocument();
     expect(screen.queryByText(/데모 이미지/)).not.toBeInTheDocument();
   });

@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
+import { Check, ArrowLeft, Sparkles } from "lucide-react";
 
 import { getBillingCatalogApi, type BillingPlanResponse } from "../api/billingApi";
-import { cloneDefaultBillingCatalog } from "../lib/billingCatalog";
 import {
   formatBillingAmount,
   formatBillingUnitPrice,
   normalizeBillingCurrency,
 } from "../lib/billingCurrency";
+import { cloneDefaultBillingCatalog } from "../lib/billingCatalog";
 import { isLocalUiMockEnabled } from "../lib/localUiMock";
-import { Alert, AlertDescription } from "./ui/alert";
-import { Skeleton } from "./ui/skeleton";
-import { PageIntro } from "./shared/PageIntro";
-import { PlanCard } from "./shared/PlanCard";
 
 type PlanId = "single" | "starter" | "pro";
 
@@ -24,7 +21,7 @@ interface PlanDecoration {
   features: string[];
 }
 
-interface PlanCardView extends BillingPlanResponse, PlanDecoration {
+interface PlanCard extends BillingPlanResponse, PlanDecoration {
   priceLabel: string;
   perImageLabel: string;
 }
@@ -54,8 +51,7 @@ const planDecorations: Record<PlanId, PlanDecoration> = {
 
 const planOrder: PlanId[] = ["single", "starter", "pro"];
 
-/** 결제 화면으로 넘길 플랜 카드 표시 정보를 계산한다. */
-function buildPlanCards(catalog: BillingPlanResponse[]): PlanCardView[] {
+function buildPlanCards(catalog: BillingPlanResponse[]): PlanCard[] {
   return [...catalog]
     .sort((left, right) => planOrder.indexOf(left.plan_id) - planOrder.indexOf(right.plan_id))
     .map((plan) => ({
@@ -66,12 +62,15 @@ function buildPlanCards(catalog: BillingPlanResponse[]): PlanCardView[] {
     }));
 }
 
-/** 플랜 목록을 로드해 live/fallback 표시 정책을 유지한다. */
-function usePricingCatalog(isLocalUiMock: boolean) {
+export function PricingPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isLocalUiMock = isLocalUiMockEnabled();
   const [catalog, setCatalog] = useState<BillingPlanResponse[]>(() =>
     isLocalUiMock ? fallbackCatalog : []
   );
   const [catalogLoadFailed, setCatalogLoadFailed] = useState(false);
+  const returnTo = new URLSearchParams(location.search).get("returnTo");
 
   useEffect(() => {
     let active = true;
@@ -79,61 +78,31 @@ function usePricingCatalog(isLocalUiMock: boolean) {
     const loadCatalog = async () => {
       try {
         const plans = await getBillingCatalogApi();
-        if (!active) {
-          return;
-        }
-
-        if (plans.length > 0) {
+        if (active && plans.length > 0) {
           setCatalog(plans);
           setCatalogLoadFailed(false);
           return;
         }
 
-        setCatalogLoadFailed(true);
-        setCatalog(isLocalUiMock ? fallbackCatalog : []);
-      } catch {
-        if (!active) {
-          return;
+        if (active) {
+          setCatalogLoadFailed(true);
+          setCatalog(isLocalUiMock ? fallbackCatalog : []);
         }
-
-        setCatalogLoadFailed(true);
-        setCatalog(isLocalUiMock ? fallbackCatalog : []);
+      } catch {
+        if (active) {
+          setCatalogLoadFailed(true);
+          setCatalog(isLocalUiMock ? fallbackCatalog : []);
+        }
       }
     };
 
     void loadCatalog();
+
     return () => {
       active = false;
     };
-  }, [isLocalUiMock]);
+  }, []);
 
-  return { catalog, catalogLoadFailed };
-}
-
-/** 로딩 중에는 플랜 카드 스켈레톤을 렌더링한다. */
-function PricingSkeletonGrid() {
-  return (
-    <div className="grid gap-5 md:grid-cols-3">
-      {[0, 1, 2].map((item) => (
-        <div key={item} className="space-y-4 rounded-xl border p-6">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-9 w-28" />
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-20 w-full" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** 플랜 선택 화면을 shadcn 카드 패턴으로 렌더링한다. */
-export function PricingPage() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const isLocalUiMock = isLocalUiMockEnabled();
-  const { catalog, catalogLoadFailed } = usePricingCatalog(isLocalUiMock);
-  const returnTo = new URLSearchParams(location.search).get("returnTo");
   const plans = useMemo(() => buildPlanCards(catalog), [catalog]);
   const isCatalogIssue = catalogLoadFailed && !isLocalUiMock;
 
@@ -142,46 +111,79 @@ export function PricingPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="w-full max-w-6xl"
+      className="w-full max-w-[900px]"
     >
-      <div className="space-y-8">
-        <PageIntro
-          title="수식 OCR 크레딧 가격 안내"
-          description="MathHWP 작업실에서 필요한 수식 OCR 분량에 맞춰 크레딧 플랜을 선택하세요."
-          backHref="/"
-          backLabel="홈으로 돌아가기"
-          align="center"
-        />
+      <button
+        onClick={() => navigate("/")}
+        className="mb-8 flex cursor-pointer items-center gap-1.5 text-[13px] text-[#71717a] transition-colors hover:text-[#111]"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        홈으로 돌아가기
+      </button>
 
-        <Alert className="mx-auto max-w-2xl">
-          <AlertDescription>
-            실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.
-          </AlertDescription>
-        </Alert>
+      <div className="mb-10 text-center">
+        <h1 className="mb-2 text-[26px] tracking-[-0.02em] text-[#111]">
+          이미지 구매
+        </h1>
+        <p className="text-[15px] text-[#71717a]">
+          수학 이미지를 HWPX 문서로 즉시 변환하세요.
+        </p>
+        <div className="mt-4 inline-flex flex-col gap-1 rounded-2xl border border-[#ece7dd] bg-[#fbf7f1] px-5 py-3 text-[13px] text-[#6b6258]">
+          <p>실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.</p>
+        </div>
+        {isCatalogIssue && (
+          <p className="mt-3 text-[13px] text-amber-700">결제 설정 점검 중</p>
+        )}
+      </div>
 
-        {isCatalogIssue ? (
-          <Alert className="mx-auto max-w-2xl border-amber-200 bg-amber-50 text-amber-950">
-            <AlertDescription>결제 설정 점검 중</AlertDescription>
-          </Alert>
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        {!isCatalogIssue && plans.length === 0 ? (
+          <div className="rounded-xl border border-[#e4e4e7] bg-white p-7 text-[14px] text-[#71717a] md:col-span-3">
+            플랜 정보를 불러오는 중입니다.
+          </div>
         ) : null}
+        {plans.map((plan, index) => (
+          <motion.div
+            key={plan.plan_id}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.4,
+              delay: index * 0.08,
+              ease: [0.25, 0.46, 0.45, 0.94],
+            }}
+            className="relative"
+          >
+            {plan.badge && (
+              <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2">
+                <div className="flex items-center gap-1 rounded-full bg-[#14532d] px-3 py-1 text-[11px] text-white">
+                  <Sparkles className="h-3 w-3" />
+                  {plan.badge}
+                </div>
+              </div>
+            )}
 
-        {!isCatalogIssue && plans.length === 0 ? <PricingSkeletonGrid /> : null}
+            <div
+              className={`flex h-full flex-col rounded-xl border p-7 transition-shadow ${
+                plan.highlight
+                  ? "border-[#b7d3bf] bg-[#f7fbf8] shadow-[0_10px_30px_rgba(20,83,45,0.08)]"
+                  : "border-[#e4e4e7] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
+              }`}
+            >
+              <p className="mb-2 text-[13px] text-[#71717a]">{plan.title}</p>
+              <div className="mb-1 flex items-baseline gap-2">
+                <span className="text-[34px] tracking-[-0.03em] text-[#111]">
+                  {plan.priceLabel}
+                </span>
+                <span className="text-[12px] uppercase tracking-[0.2em] text-[#a1a1aa]">
+                  {normalizeBillingCurrency(plan.currency)}
+                </span>
+              </div>
+              <p className="mb-2 text-[14px] text-[#52525b]">{plan.description}</p>
+              <p className="mb-6 text-[13px] text-[#a1a1aa]">{plan.perImageLabel}</p>
 
-        {!isCatalogIssue && plans.length > 0 ? (
-          <div className="grid gap-5 md:grid-cols-3">
-            {plans.map((plan) => (
-              <PlanCard
-                key={plan.plan_id}
-                title={plan.title}
-                priceLabel={plan.priceLabel}
-                currencyLabel={normalizeBillingCurrency(plan.currency)}
-                description={plan.description}
-                perImageLabel={plan.perImageLabel}
-                features={plan.features}
-                actionLabel="구매"
-                badge={plan.badge}
-                highlight={plan.highlight}
-                onAction={() =>
+              <button
+                onClick={() =>
                   navigate(
                     `/payment/${plan.plan_id}${
                       returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""
@@ -197,10 +199,29 @@ export function PricingPage() {
                     }
                   )
                 }
-              />
-            ))}
-          </div>
-        ) : null}
+                disabled={isCatalogIssue}
+                className={`mb-7 h-10 w-full cursor-pointer rounded-lg text-[14px] transition-all active:scale-[0.98] ${
+                  isCatalogIssue
+                    ? "cursor-not-allowed border border-[#e4e4e7] bg-[#fafafa] text-[#a1a1aa]"
+                    : plan.highlight
+                    ? "bg-[#14532d] text-white hover:bg-[#0f3f22]"
+                    : "border border-[#e4e4e7] bg-[#fafafa] text-[#111] hover:bg-[#f4f4f5]"
+                }`}
+              >
+                구매
+              </button>
+
+              <div className="space-y-2.5 border-t border-[#f4f4f5] pt-6">
+                {plan.features.map((feature) => (
+                  <div key={feature} className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    <span className="text-[13px] text-[#52525b]">{feature}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        ))}
       </div>
     </motion.div>
   );

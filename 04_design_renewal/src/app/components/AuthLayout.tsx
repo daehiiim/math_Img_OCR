@@ -1,82 +1,99 @@
-import { ImageIcon, KeyRound, LogOut, Settings } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
-
+import { ImageIcon, KeyRound, LogOut, Settings } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 
-/** 인증/온보딩 화면 상단의 계정 메뉴를 공통 드롭다운으로 렌더링한다. */
-function AuthHeaderMenu() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
-
-  if (!user) {
-    return null;
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="rounded-full">{user.avatarInitials}</Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>{user.name}<p className="mt-1 text-xs font-normal text-muted-foreground">{user.email}</p></DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild><Link to="/connect-openai"><Settings />설정</Link></DropdownMenuItem>
-          <DropdownMenuItem asChild><Link to="/pricing"><ImageIcon />이미지 구매</Link></DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={() => { void logout(); navigate("/"); }}><LogOut />로그아웃</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-/** 인증 헤더의 남은 이미지와 OpenAI 연결 상태를 배지 조합으로 렌더링한다. */
-function AuthHeaderStatus() {
-  const { user } = useAuth();
-
-  if (!user) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <Badge variant="outline"><ImageIcon />{`${user.credits}개 이미지 남음`}</Badge>
-      {user.openAiConnected ? <Badge variant="secondary"><KeyRound />OpenAI 연결됨</Badge> : null}
-    </div>
-  );
-}
-
-/** 로그인, 결제, OpenAI 연결 화면에 쓰는 공통 헤더와 중앙 정렬 레이아웃을 렌더링한다. */
 export function AuthLayout() {
+  const navigate = useNavigate();
+  const auth = useAuth();
+  const { user, isAuthenticated, logout } = auth;
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
   const isLoginPage = location.pathname === "/login";
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/20">
-      <header className="border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
-          <Link to={isAuthenticated ? "/workspace" : "/"} className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-foreground text-background">M</div>
-            <div><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">MathHWP</p><p className="text-sm">AI 기반 수식 OCR 작업실</p></div>
-          </Link>
-          {isAuthenticated && !isLoginPage ? <div className="flex items-center gap-3"><AuthHeaderStatus /><AuthHeaderMenu /></div> : null}
-        </div>
+    <div className="min-h-screen bg-[#fafafa] flex flex-col">
+      {/* Header */}
+      <header className="h-14 border-b border-black/[0.06] bg-white flex items-center justify-between px-5 shrink-0">
+        <Link to={isAuthenticated ? "/workspace" : "/"} className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-[#111] flex items-center justify-center">
+            <span className="text-[11px] text-white tracking-tight">M</span>
+          </div>
+          <span className="text-[14px] tracking-[-0.01em] text-[#111]">MathHWP</span>
+        </Link>
+
+        {isAuthenticated && user && !isLoginPage && (
+          <div className="flex items-center gap-3">
+            {/* Credits indicator */}
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#f4f4f5] text-[12px] text-[#71717a]">
+              <span className="flex items-center gap-1.5">
+                <ImageIcon className="w-3 h-3" />
+                <span className="text-[#111]">{`${user.credits}개 이미지 남음`}</span>
+              </span>
+              {user.openAiConnected ? (
+                <span className="flex items-center gap-1 text-emerald-600">
+                  <KeyRound className="w-3 h-3" />
+                  OpenAI 연결됨
+                </span>
+              ) : null}
+            </div>
+
+            {/* Avatar dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center text-[11px] cursor-pointer hover:ring-2 hover:ring-indigo-200 transition-shadow">
+                  {user.avatarInitials}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <div className="px-3 py-2">
+                  <p className="text-[13px] text-[#111]">{user.name}</p>
+                  <p className="text-[11px] text-[#71717a]">{user.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/connect-openai" className="flex items-center gap-2 cursor-pointer">
+                    <Settings className="w-3.5 h-3.5" />
+                    <span className="text-[13px]">설정</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/pricing" className="flex items-center gap-2 cursor-pointer">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span className="text-[13px]">이미지 구매</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    void logout();
+                    navigate("/");
+                  }}
+                  className="flex items-center gap-2 text-red-600 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="text-[13px]">로그아웃</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </header>
-      <main className="flex flex-1 items-center justify-center px-4 py-12"><Outlet /></main>
-      <footer className="border-t bg-background/80 py-4 text-center text-xs text-muted-foreground">MathHWP · AI 기반 수식 OCR과 수식 한글 변환 workflow</footer>
+
+      {/* Content */}
+      <main className="flex-1 flex items-center justify-center px-4 py-12">
+        <Outlet />
+      </main>
+
+      {/* Minimal footer */}
+      <footer className="py-4 text-center text-[11px] text-[#a1a1aa]">
+        MathHWP &middot; AI 기반 수학 이미지를 HWPX로 변환
+      </footer>
     </div>
   );
 }

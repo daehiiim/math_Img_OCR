@@ -3,9 +3,9 @@ import { useLocation, useNavigate } from "react-router";
 import { useJobs } from "../context/JobContext";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Card, CardContent } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import { Upload, ImageIcon, ArrowRight } from "lucide-react";
+import { Upload, ImageIcon, ArrowRight, Sparkles, X } from "lucide-react";
 import { resolveUploadGate } from "../lib/authFlow";
 import { calculateRequiredCredits } from "../lib/executionCredits";
 import {
@@ -16,9 +16,8 @@ import {
 import { validateImageFile } from "../lib/uploadPreview";
 import type { JobExecutionOptions, Region } from "../store/jobStore";
 import { RegionEditor } from "./RegionEditor";
-import { PageIntro } from "./shared/PageIntro";
-import { ExecutionOptionsPanel } from "./shared/ExecutionOptionsPanel";
-import { RegionWorkspaceShell } from "./shared/RegionWorkspaceShell";
+import { Checkbox } from "./ui/checkbox";
+import { Label } from "./ui/label";
 
 const defaultExecutionOptions: JobExecutionOptions = {
   doOcr: true,
@@ -323,10 +322,12 @@ export function NewJobPage() {
         }}
       />
 
-      <PageIntro
-        title="수식 이미지 변환 작업 시작"
-        description="PNG, JPG, JPEG 이미지를 올리고 필요한 문제 영역만 선택한 뒤 수식 OCR과 HWPX workflow를 시작합니다."
-      />
+      <div className="mb-8">
+        <h1>새 작업 생성</h1>
+        <p className="text-muted-foreground text-[14px] mt-1">
+          파일 선택과 영역 지정은 로그인 없이 진행하고, 파이프라인 실행 직전에만 로그인합니다.
+        </p>
+      </div>
 
       {/* 업로드 영역 */}
       {!preview ? (
@@ -366,15 +367,38 @@ export function NewJobPage() {
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0">
-            <RegionWorkspaceShell
-              title="영역 지정"
-              description="이미지 위에 필요한 문제 영역만 선택하고 draft 상태를 그대로 유지합니다."
-              fileName={preview.name}
-              imageMeta={`${preview.width} × ${preview.height}px`}
-              regionCount={regions.length}
-              error={errorMessage}
-              onReset={resetDraftSelection}
-            >
+            <Card className="overflow-hidden">
+              <CardHeader className="gap-4 border-b bg-muted/20">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-[15px]">영역 지정</CardTitle>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={resetDraftSelection}
+                    className="gap-2 self-start"
+                  >
+                    <X className="w-4 h-4" />
+                    다른 파일 선택
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+                  <span className="rounded-full border bg-background px-3 py-1 font-medium text-foreground">
+                    {preview.name}
+                  </span>
+                  <span className="rounded-full bg-background/70 px-3 py-1">
+                    {preview.width} × {preview.height}px
+                  </span>
+                  <span className="rounded-full bg-background/70 px-3 py-1">
+                    영역 {regions.length}개
+                  </span>
+                </div>
+                {errorMessage && (
+                  <p className="text-[12px] text-destructive">{errorMessage}</p>
+                )}
+              </CardHeader>
+              <CardContent className="px-4 pb-6 pt-6 sm:px-6">
                 <RegionEditor
                   imageUrl={preview.url}
                   imageWidth={preview.width}
@@ -387,42 +411,77 @@ export function NewJobPage() {
                     toast.success("영역 draft가 반영되었습니다.");
                   }}
                 />
-            </RegionWorkspaceShell>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-6 xl:sticky xl:top-6">
-            <ExecutionOptionsPanel
-              title="파이프라인 실행"
-              description="원하는 작업만 선택해서 실행할 수 있습니다."
-              options={[
-                {
-                  id: "draft-do-ocr",
-                  key: "doOcr",
-                  label: "문제 타이핑",
-                  description: "OCR과 수식 추출을 실행합니다.",
-                },
-                {
-                  id: "draft-do-image-stylize",
-                  key: "doImageStylize",
-                  label: "이미지 생성",
-                  description: "도형·그림을 생성합니다.",
-                },
-                {
-                  id: "draft-do-explanation",
-                  key: "doExplanation",
-                  label: "해설 작성",
-                  description: "영역별 풀이 해설을 생성합니다.",
-                },
-              ]}
-              values={executionOptions}
-              requiredCredits={requiredCredits}
-              summary="현재 편집 중인 draft 영역 기준 예상 차감입니다."
-              actionLabel={isSubmitting ? "파이프라인 실행 중..." : "파이프라인 실행"}
-              actionIcon={<ArrowRight data-icon="inline-end" />}
-              actionDisabled={isSubmitting}
-              onToggle={updateExecutionOption}
-              onAction={() => void handleRunPipeline()}
-            />
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-[14px] flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  파이프라인 실행
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  {[
+                    {
+                      id: "draft-do-ocr",
+                      key: "doOcr" as const,
+                      label: "문제 타이핑",
+                      description: "OCR과 수식 추출을 실행합니다.",
+                    },
+                    {
+                      id: "draft-do-image-stylize",
+                      key: "doImageStylize" as const,
+                      label: "이미지 생성",
+                      description: "도형·그림을 생성합니다.",
+                    },
+                    {
+                      id: "draft-do-explanation",
+                      key: "doExplanation" as const,
+                      label: "해설 작성",
+                      description: "영역별 풀이 해설을 생성합니다.",
+                    },
+                  ].map((option) => (
+                    <div key={option.id} className="rounded-xl border p-3">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id={option.id}
+                          checked={executionOptions[option.key]}
+                          onCheckedChange={(checked) => updateExecutionOption(option.key, checked === true)}
+                          aria-label={option.label}
+                        />
+                        <div className="flex-1 space-y-1">
+                          <Label htmlFor={option.id}>{option.label}</Label>
+                          <p className="text-[12px] text-muted-foreground">{option.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">이번 실행 최대 차감 예정</span>
+                    <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    현재 편집 중인 draft 영역 기준 예상 차감입니다.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() => void handleRunPipeline()}
+                  className="w-full gap-2"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "파이프라인 실행 중..." : "파이프라인 실행"}
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}

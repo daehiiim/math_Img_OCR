@@ -699,3 +699,21 @@
 - `/login`, `/pricing`, `/payment/:planId`, `/connect-openai`, `/new`, `/workspace`, `/workspace/job/:jobId`, `*` 와 `AuthLayout`, `StudioLayout`, `Layout`, `AppSidebar`, `AccountSheet`, `ResultsViewer` 를 shared component 기준으로 재구성했다.
 - auth, billing, store, route query 계약은 유지했고 기존 테스트가 보는 문구와 경로도 유지했다.
 - 검증: `npm run test:run` 138 passed, `npm run build` 통과. 빌드에는 기존과 동일한 chunk size warning만 남았다.
+
+## 2026-03-26 16:51:46 KST
+
+- 사용자 피드백에 따라 `04_design_renewal` 최근 디자인 리뉴얼을 사실상 전면 롤백했다.
+- 아키텍처 변경:
+  - [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx), [LoginPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/LoginPage.tsx), [PricingPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PricingPage.tsx), [PaymentPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PaymentPage.tsx) 등 주요 화면을 `19fa0bc` 기준 UI로 복원했다.
+  - [Layout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/Layout.tsx), [AuthLayout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AuthLayout.tsx), [StudioLayout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/StudioLayout.tsx), [AppSidebar.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AppSidebar.tsx), [AccountSheet.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AccountSheet.tsx) shell도 함께 되돌렸다.
+  - 미사용 [shared](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/shared) presentation layer 파일 12개를 삭제해 복원 이후 죽은 코드를 정리했다.
+  - `SeoManager`, `siteSeo`, `publicAppUrl`, auth/billing runtime 계약은 유지하고, 시각/UI만 이전 스타일로 복원했다.
+- UX 조정:
+  - 홈 첫 화면 히어로, 중앙 하이라이트, 카드형 소개, 하단 CTA를 이전 버전의 다크 랜딩 구성으로 복구했다.
+  - 다만 운영 URL/브랜드 일관성을 위해 주요 서비스명 표기는 `MathHWP`로 유지했다.
+- 검증 결과:
+  - `npm run test:run` -> `134 passed`
+  - `npm run build` -> production build 성공, 기존과 동일한 chunk size warning만 남음
+- 배포 영향:
+  - 백엔드/환경 변수 변경은 없다.
+  - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트에 롤백된 UI가 반영된다.
