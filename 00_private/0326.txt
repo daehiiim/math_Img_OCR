@@ -1,0 +1,3 @@
+<Math OCR 추가작업>
+1. SEO 최적화
+현재 mathtohwp.vercel

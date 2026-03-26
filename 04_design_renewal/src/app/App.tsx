@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { RouterProvider, createBrowserRouter } from "react-router";
+import { Outlet, RouterProvider, createBrowserRouter } from "react-router";
 import { AuthProvider } from "./context/AuthContext";
 import { JobProvider } from "./context/JobContext";
 import { Toaster } from "./components/ui/sonner";
@@ -15,6 +15,19 @@ import { OpenAiConnectionPage } from "./components/OpenAiConnectionPage";
 import { PricingPage } from "./components/PricingPage";
 import { PaymentPage } from "./components/PaymentPage";
 import { PublicHomePage } from "./components/PublicHomePage";
+import { ClarityTracker } from "./components/ClarityTracker";
+import { GoogleAnalyticsTracker } from "./components/GoogleAnalyticsTracker";
+
+// 모든 브라우저 라우트에 전역 추적기를 공통 연결한다.
+function TrackingLayout() {
+  return (
+    <>
+      <ClarityTracker />
+      <GoogleAnalyticsTracker />
+      <Outlet />
+    </>
+  );
+}
 
 // Wrapper component that provides AuthContext to all routes
 function AppWrapper() {
@@ -22,48 +35,50 @@ function AppWrapper() {
     () =>
       createBrowserRouter([
         {
-          path: "/",
-          Component: PublicHomePage,
-        },
-        {
-          path: "/new",
-          Component: StudioLayout,
-          children: [{ index: true, Component: NewJobPage }],
-        },
-        // Auth & onboarding pages
-        {
-          path: "/login",
-          Component: AuthLayout,
-          children: [{ index: true, Component: LoginPage }],
-        },
-        {
-          path: "/pricing",
-          Component: AuthLayout,
-          children: [{ index: true, Component: PricingPage }],
-        },
-        {
-          path: "/payment/:planId",
-          Component: AuthLayout,
-          children: [{ index: true, Component: PaymentPage }],
-        },
-        {
-          path: "/connect-openai",
-          Component: AuthLayout,
-          children: [{ index: true, Component: OpenAiConnectionPage }],
-        },
-        // OCR workspace (sidebar layout)
-        {
-          path: "/workspace",
-          Component: Layout,
+          Component: TrackingLayout,
           children: [
-            { index: true, Component: DashboardPage },
-            { path: "job/:jobId", Component: JobDetailPage },
+            {
+              path: "/",
+              Component: PublicHomePage,
+            },
+            {
+              path: "/new",
+              Component: StudioLayout,
+              children: [{ index: true, Component: NewJobPage }],
+            },
+            // Auth & onboarding pages
+            {
+              path: "/login",
+              Component: AuthLayout,
+              children: [{ index: true, Component: LoginPage }],
+            },
+            {
+              path: "/pricing",
+              Component: AuthLayout,
+              children: [{ index: true, Component: PricingPage }],
+            },
+            {
+              path: "/payment/:planId",
+              Component: AuthLayout,
+              children: [{ index: true, Component: PaymentPage }],
+            },
+            {
+              path: "/connect-openai",
+              Component: AuthLayout,
+              children: [{ index: true, Component: OpenAiConnectionPage }],
+            },
+            // OCR workspace (sidebar layout)
+            {
+              path: "/workspace",
+              Component: Layout,
+              children: [
+                { index: true, Component: DashboardPage },
+                { path: "job/:jobId", Component: JobDetailPage },
+                { path: "*", Component: NotFoundPage },
+              ],
+            },
             { path: "*", Component: NotFoundPage },
           ],
-        },
-        {
-          path: "*",
-          Component: NotFoundPage,
         },
       ]),
     []

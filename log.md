@@ -534,3 +534,37 @@
   - 신규 환경 변수는 없다.
   - 백엔드 재배포가 필요하다.
   - DB 마이그레이션은 이번 수정과 직접 관련 없고, 이전 세션의 운영 작업으로 별도 진행 대상이다.
+
+## 2026-03-26 09:26 KST
+
+- 사용자 제공 GA4 측정 ID `G-SM6ETGCFGP` 를 [04_design_renewal App 루트](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/App.tsx) 에 연결했다.
+- 단순 `index.html` 직삽입 대신 SPA 라우트 변경을 안정적으로 잡기 위해 [GoogleAnalyticsTracker.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/GoogleAnalyticsTracker.tsx) 와 [googleAnalytics.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/googleAnalytics.ts) 를 추가했다.
+  - 외부 `gtag.js` 스크립트는 한 번만 주입한다.
+  - `gtag("config", ..., { send_page_view: false })` 로 자동 page_view를 끄고,
+  - React Router location 변화마다 수동 `page_view` 를 보낸다.
+- TDD로 [GoogleAnalyticsTracker.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/GoogleAnalyticsTracker.test.tsx) 를 먼저 추가해 초기 진입/라우트 변경 시 `page_view` 가 기록되는지 RED로 고정한 뒤 통과시켰다.
+- 검증 결과:
+  - `npm run test:run -- src/app/components/GoogleAnalyticsTracker.test.tsx src/app/components/Layout.test.tsx src/app/components/PublicHomePage.test.tsx` -> `11 passed`
+  - `npm run build` -> production build 성공
+- 배포 영향:
+  - 신규 환경 변수는 없다.
+  - 프런트엔드 정적 빌드를 다시 배포해야 실제 사이트에 Analytics가 반영된다.
+
+## 2026-03-26 09:28 KST
+
+- 사용자 제공 Microsoft Clarity 프로젝트 ID `w1jgubofnf` 를 운영 프런트 [App.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/App.tsx) 전역 라우트 레이아웃에 연결했다.
+- 단순 `index.html` 직삽입 대신 [ClarityTracker.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ClarityTracker.tsx) 와 [microsoftClarity.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/microsoftClarity.ts) 로 분리했다.
+  - `StrictMode` 에서 effect 가 두 번 실행돼도 script id 기준으로 한 번만 삽입한다.
+  - 외부 스크립트 로드 전 호출도 누적되도록 `window.clarity` queue 함수를 먼저 준비한다.
+  - 사용자 기능과 무관한 추적 로더라서 실패 시 예외를 던지지 않고 조용히 no-op 처리한다.
+- TDD로 [ClarityTracker.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ClarityTracker.test.tsx) 를 먼저 추가해 비활성화 no-op 과 `StrictMode` 단일 삽입 계약을 RED로 고정한 뒤 통과시켰다.
+- 문서화:
+  - [2026-03-26-clarity-tracker-design.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-03-26-clarity-tracker-design.md)
+  - [2026-03-26-clarity-tracker.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-03-26-clarity-tracker.md)
+- 검증 결과:
+  - `npm run test:run -- src/app/components/ClarityTracker.test.tsx` -> `2 passed`
+  - `npm run test:run -- src/app/components/ClarityTracker.test.tsx src/app/components/GoogleAnalyticsTracker.test.tsx` -> `4 passed`
+  - `npm run build` -> production build 성공
+- 배포 영향:
+  - 신규 환경 변수와 백엔드 변경은 없다.
+  - 프런트엔드 정적 빌드를 다시 배포해야 실제 사이트에 Clarity가 반영된다.
