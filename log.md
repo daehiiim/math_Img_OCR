@@ -803,3 +803,19 @@
 - 배포 영향:
   - 백엔드 및 환경 변수 변경은 없다.
   - 프런트 정적 HTML 변경이므로 운영 반영에는 Vercel 프런트 재배포가 필요하다.
+
+## 2026-03-27 17:08:00 KST
+
+- RSS 제출 요구에 맞춰 프런트 정적 SEO 자산 파이프라인에 `/rss.xml` 생성을 추가했다.
+- 아키텍처 변경:
+  - [siteSeo.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.ts)에 `buildRssXml()`을 추가하고, 기존 공개 SEO 메타(`getRouteSeo`)를 재사용해 `/`, `/new`, `/pricing` 3개 공개 페이지를 RSS item으로 직렬화하도록 정리했다.
+  - [seoVitePlugin.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/seoVitePlugin.ts)에서 `rss.xml`을 `ads.txt`, `robots.txt`, `sitemap.xml`과 동일하게 build/dev 정적 자산으로 노출하도록 확장했다.
+  - [index.html](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html)에 `rel="alternate" type="application/rss+xml"` 링크를 추가해 피드 발견성을 보강했다.
+  - [docs/seo.md](/D:/03_PROJECT/05_mathOCR/docs/seo.md)에 `/rss.xml` 확인 절차를 기록했다.
+- TDD/검증:
+  - [siteSeo.test.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.test.ts), [seoVitePlugin.test.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/seoVitePlugin.test.ts)에 RSS 회귀 테스트를 먼저 추가하고 RED를 확인했다.
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/seo/siteSeo.test.ts seoVitePlugin.test.ts src/app/naverVerificationPlacement.test.ts src/app/googleAnalyticsPlacement.test.ts src/app/adsensePlacement.test.ts` 기준 `16 passed`.
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공, `dist/rss.xml` 및 `dist/index.html`의 RSS alternate 링크를 확인했다.
+- 배포 영향:
+  - 백엔드 및 환경 변수 변경은 없다.
+  - 프런트 정적 빌드를 재배포해야 운영 도메인에서 `https://mathhwp.vercel.app/rss.xml` 제출 URL이 실제로 노출된다.

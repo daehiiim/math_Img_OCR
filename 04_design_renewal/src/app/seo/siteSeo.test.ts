@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SITE_URL,
   buildHomeStructuredData,
+  buildRssXml,
   buildRobotsTxt,
   buildSitemapXml,
   getRouteSeo,
@@ -57,6 +58,22 @@ describe("siteSeo", () => {
     expect(sitemapXml).toContain("<loc>https://mathhwp.vercel.app/pricing</loc>");
     expect(sitemapXml).not.toContain("/workspace");
     expect(sitemapXml).not.toContain("/payment");
+  });
+
+  it("rss.xml은 주요 공개 경로를 canonical host 기준 피드로 생성한다", () => {
+    const rssXml = buildRssXml(DEFAULT_SITE_URL);
+
+    expect(rssXml).toContain("<title>MathHWP</title>");
+    expect(rssXml).toContain("<link>https://mathhwp.vercel.app/</link>");
+    expect(rssXml).toContain(
+      '<atom:link href="https://mathhwp.vercel.app/rss.xml" rel="self" type="application/rss+xml" />'
+    );
+    expect(rssXml).toContain(
+      "<item><title>수식 OCR로 이미지 수식을 편집 가능한 한글 문서로 변환 | MathHWP</title>"
+    );
+    expect(rssXml).toContain("<link>https://mathhwp.vercel.app/new</link>");
+    expect(rssXml).toContain("<link>https://mathhwp.vercel.app/pricing</link>");
+    expect(rssXml).not.toContain("/workspace");
   });
 
   it("홈 구조화 데이터는 웹사이트와 소프트웨어 앱 정보를 함께 제공한다", () => {

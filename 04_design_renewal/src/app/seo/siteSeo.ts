@@ -15,7 +15,7 @@ export type RouteSeo = {
 
 type StructuredDataEntry = Record<string, unknown>;
 
-const PUBLIC_SITEMAP_PATHS = ["/", "/new", "/pricing"] as const;
+const PUBLIC_SITE_PATHS = ["/", "/new", "/pricing"] as const;
 
 /** 후보 URL 중 첫 번째 유효한 값을 canonical host로 정규화한다. */
 export function resolveSeoSiteUrl(...candidates: Array<string | undefined>): string {
@@ -159,13 +159,36 @@ export function buildAdsTxt(): string {
 /** sitemap.xml 본문을 공개 경로 목록 기준으로 생성한다. */
 export function buildSitemapXml(siteUrl: string): string {
   const lastModified = new Date().toISOString();
-  const urlEntries = PUBLIC_SITEMAP_PATHS.map((path) => buildSitemapEntry(siteUrl, path, lastModified));
+  const urlEntries = PUBLIC_SITE_PATHS.map((path) => buildSitemapEntry(siteUrl, path, lastModified));
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ...urlEntries,
     "</urlset>",
+  ].join("\n");
+}
+
+/** rss.xml 본문을 공개 경로 목록 기준으로 생성한다. */
+export function buildRssXml(siteUrl: string): string {
+  const normalizedSiteUrl = resolveSeoSiteUrl(siteUrl);
+  const publishedAt = new Date().toUTCString();
+  const homeSeo = getRouteSeo("/");
+  const itemEntries = PUBLIC_SITE_PATHS.map((path) => buildRssItem(normalizedSiteUrl, path, publishedAt));
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+    "<channel>",
+    `<title>${escapeXml(SITE_NAME)}</title>`,
+    `<link>${buildAbsoluteUrl(normalizedSiteUrl, "/")}</link>`,
+    `<description>${escapeXml(homeSeo.description)}</description>`,
+    `<language>ko-KR</language>`,
+    `<lastBuildDate>${publishedAt}</lastBuildDate>`,
+    `<atom:link href="${buildAbsoluteUrl(normalizedSiteUrl, "/rss.xml")}" rel="self" type="application/rss+xml" />`,
+    ...itemEntries,
+    "</channel>",
+    "</rss>",
   ].join("\n");
 }
 
@@ -182,6 +205,22 @@ function buildSitemapEntry(siteUrl: string, path: string, lastModified: string):
     `    <lastmod>${lastModified}</lastmod>`,
     "  </url>",
   ].join("\n");
+}
+
+/** 공개 경로 하나를 RSS item으로 직렬화한다. */
+function buildRssItem(siteUrl: string, path: string, publishedAt: string): string {
+  const routeSeo = getRouteSeo(path);
+  const absoluteUrl = buildAbsoluteUrl(siteUrl, path);
+
+  return [
+    "<item>",
+    `<title>${escapeXml(routeSeo.title)}</title>`,
+    `<link>${absoluteUrl}</link>`,
+    `<guid isPermaLink="true">${absoluteUrl}</guid>`,
+    `<description>${escapeXml(routeSeo.description)}</description>`,
+    `<pubDate>${publishedAt}</pubDate>`,
+    "</item>",
+  ].join("");
 }
 
 /** 경로 비교 전에 슬래시 형태를 정규화한다. */
@@ -207,4 +246,14 @@ function rewriteLegacySiteHost(value: string): string {
   } catch {
     return value;
   }
+}
+
+/** XML 특수문자를 escape해 피드 파서를 안전하게 통과시킨다. */
+function escapeXml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }

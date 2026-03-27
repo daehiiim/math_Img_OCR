@@ -9,7 +9,9 @@
   - `/`, `/new`, `/pricing`는 index 대상
   - `/login`, `/payment/:planId`, `/connect-openai`, `/workspace*`, 404는 `noindex`
 - SEO 규칙과 sitemap/robots 생성 로직을 [siteSeo.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.ts)에 모았다.
+- SEO 규칙과 sitemap/robots/RSS 생성 로직을 [siteSeo.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.ts)에 모았다.
 - Vite 빌드 시 `robots.txt` 와 `sitemap.xml`을 실제 루트 파일로 생성하도록 [seoVitePlugin.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/seoVitePlugin.ts)를 추가했다.
+  - 현재는 `ads.txt`, `robots.txt`, `sitemap.xml`, `rss.xml`을 함께 생성한다.
 - 홈페이지 [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx)를 검색 의도형 한국어 콘텐츠로 재작성했다.
   - 단일 H1
   - 소개 문단
@@ -49,6 +51,7 @@
 2. 배포 사이트에서 다음 경로를 직접 확인한다.
    - `/robots.txt`
    - `/sitemap.xml`
+   - `/rss.xml`
 3. Google Search Console에 `https://mathhwp.vercel.app` 또는 실제 custom domain을 속성으로 등록한다.
 4. Search Console에서 sitemap 제출란에 `https://<도메인>/sitemap.xml` 을 넣는다.
 5. URL 검사로 홈(`/`)과 주요 페이지(`/new`, `/pricing`)를 재색인 요청한다.

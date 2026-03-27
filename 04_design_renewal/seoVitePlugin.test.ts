@@ -38,6 +38,19 @@ describe("seoVitePlugin", () => {
     });
   });
 
+  it("SEO 플러그인은 rss.xml을 배포 자산으로 생성한다", () => {
+    const assets = collectGeneratedAssets();
+    const rssAsset = assets.find((asset) => asset.fileName === "rss.xml");
+
+    expect(rssAsset?.source).toContain(
+      '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'
+    );
+    expect(rssAsset?.source).toContain(
+      '<atom:link href="https://mathhwp.vercel.app/rss.xml" rel="self" type="application/rss+xml" />'
+    );
+    expect(rssAsset?.source).not.toContain("mathtohwp");
+  });
+
   it("legacy host가 들어와도 robots와 sitemap은 canonical host로 생성한다", () => {
     const assets = collectGeneratedAssets();
     const robotsAsset = assets.find((asset) => asset.fileName === "robots.txt");

@@ -1,6 +1,12 @@
 import type { Plugin } from "vite";
 
-import { buildAdsTxt, buildRobotsTxt, buildSitemapXml, resolveSeoSiteUrl } from "./src/app/seo/siteSeo";
+import {
+  buildAdsTxt,
+  buildRobotsTxt,
+  buildRssXml,
+  buildSitemapXml,
+  resolveSeoSiteUrl,
+} from "./src/app/seo/siteSeo";
 
 type SeoAsset = {
   contentType: string;
@@ -19,6 +25,7 @@ function buildSeoAssets(siteUrl: string): SeoAsset[] {
     { fileName: "ads.txt", source: buildAdsTxt(), contentType: "text/plain; charset=utf-8" },
     { fileName: "robots.txt", source: buildRobotsTxt(siteUrl), contentType: "text/plain; charset=utf-8" },
     { fileName: "sitemap.xml", source: buildSitemapXml(siteUrl), contentType: "application/xml; charset=utf-8" },
+    { fileName: "rss.xml", source: buildRssXml(siteUrl), contentType: "application/rss+xml; charset=utf-8" },
   ];
 }
 
