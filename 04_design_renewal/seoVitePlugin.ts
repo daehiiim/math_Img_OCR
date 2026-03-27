@@ -1,6 +1,6 @@
 import type { Plugin } from "vite";
 
-import { buildRobotsTxt, buildSitemapXml } from "./src/app/seo/siteSeo";
+import { buildAdsTxt, buildRobotsTxt, buildSitemapXml } from "./src/app/seo/siteSeo";
 
 type SeoAsset = {
   contentType: string;
@@ -16,6 +16,7 @@ type SeoVitePluginOptions = {
 /** 빌드와 개발 서버에서 동일하게 제공할 SEO 정적 자산 목록을 만든다. */
 function buildSeoAssets(siteUrl: string): SeoAsset[] {
   return [
+    { fileName: "ads.txt", source: buildAdsTxt(), contentType: "text/plain; charset=utf-8" },
     { fileName: "robots.txt", source: buildRobotsTxt(siteUrl), contentType: "text/plain; charset=utf-8" },
     { fileName: "sitemap.xml", source: buildSitemapXml(siteUrl), contentType: "application/xml; charset=utf-8" },
   ];

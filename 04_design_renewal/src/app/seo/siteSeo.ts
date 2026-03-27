@@ -1,6 +1,8 @@
 export const DEFAULT_SITE_URL = "https://mathhwp.vercel.app";
 export const SITE_NAME = "MathHWP";
 export const OG_IMAGE_PATH = "/og-image.svg";
+export const ADSENSE_ADS_TXT_PUBLISHER = "pub-4088422118336195";
+export const ADSENSE_SELLER_ACCOUNT_ID = "f08c47fec0942fa0";
 
 export type RouteSeo = {
   canonicalPath: string;
@@ -144,6 +146,11 @@ export function buildHomeStructuredData(siteUrl: string): StructuredDataEntry[] 
 /** robots.txt 본문을 빌드 시점에 생성한다. */
 export function buildRobotsTxt(siteUrl: string): string {
   return ["User-agent: *", "Allow: /", "", `Sitemap: ${buildAbsoluteUrl(siteUrl, "/sitemap.xml")}`].join("\n");
+}
+
+/** ads.txt 본문을 AdSense 공급자 형식으로 생성한다. */
+export function buildAdsTxt(): string {
+  return ["google.com", ADSENSE_ADS_TXT_PUBLISHER, "DIRECT", ADSENSE_SELLER_ACCOUNT_ID].join(", ");
 }
 
 /** sitemap.xml 본문을 공개 경로 목록 기준으로 생성한다. */

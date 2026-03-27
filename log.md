@@ -736,3 +736,22 @@
 - 배포 영향:
   - 백엔드/환경 변수 변경은 없다.
   - 프런트엔드 정적 빌드를 다시 배포해야 운영 사이트에 이번 비홈 리디자인이 반영된다.
+
+## 2026-03-27 11:12:00 KST
+
+- 애드센스 `ads.txt 상태를 찾을 수 없음` 이슈를 조사했다.
+- 원인 분석:
+  - 운영 도메인 `https://mathtohwp.vercel.app/ads.txt` 와 `https://mathhwp.vercel.app/ads.txt` 가 실제 `ads.txt` 파일이 아니라 SPA `index.html` 을 `200`으로 반환하고 있었다.
+  - [vercel.json](/D:/03_PROJECT/05_mathOCR/04_design_renewal/vercel.json)의 catch-all rewrite 환경에서 `ads.txt` 정적 자산이 없어서 HTML fallback으로 흘러갔다.
+- 아키텍처 변경:
+  - [siteSeo.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.ts)에 `buildAdsTxt()`와 AdSense seller 상수를 추가했다.
+  - [seoVitePlugin.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/seoVitePlugin.ts)에서 `ads.txt`를 `robots.txt`, `sitemap.xml`과 동일한 빌드 자산으로 생성하도록 확장했다.
+  - [seoVitePlugin.test.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/seoVitePlugin.test.ts)로 `ads.txt` 생성 계약을 RED-GREEN으로 고정했다.
+- 검증 결과:
+  - `npm run test:run -- seoVitePlugin.test.ts src/app/seo/siteSeo.test.ts` -> `8 passed`
+  - `npm run build` -> `dist/ads.txt` 생성 확인
+  - `dist/ads.txt` 본문 -> `google.com, pub-4088422118336195, DIRECT, f08c47fec0942fa0`
+- 배포 영향:
+  - 백엔드/환경 변수 변경은 없다.
+  - 프런트엔드 정적 빌드를 재배포해야 운영 도메인에서 실제 `ads.txt`가 노출된다.
+  - 재배포 후 애드센스에서 반영까지 수 시간~수일 지연될 수 있다.
