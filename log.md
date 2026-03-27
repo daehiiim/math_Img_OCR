@@ -787,3 +787,19 @@
 - 배포 영향:
   - 백엔드 코드 변경은 없다.
   - 프런트 재배포가 필요하며, Vercel의 `SITE_URL`/`APP_URL`/`NEXT_PUBLIC_SITE_URL` 중 legacy host가 남아 있으면 `https://mathhwp.vercel.app`로 정리하는 편이 안전하다.
+
+## 2026-03-27 16:36:00 KST
+
+- Naver Search Advisor 홈페이지 소유 확인용 메타 태그 삽입 작업을 처리했다.
+- 구현 변경:
+  - [`index.html`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html)에 `<meta name="naver-site-verification" ...>`를 `<head>` 직접 삽입으로 추가했다.
+  - [`naverVerificationPlacement.test.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/naverVerificationPlacement.test.ts)를 추가해 배포 원본 HTML head에 메타 태그가 반드시 포함되는지 회귀 테스트를 만들었다.
+- TDD 검증:
+  - `npm run test:run -- src/app/naverVerificationPlacement.test.ts`를 먼저 실행해 실패를 확인했다.
+  - 이후 메타 태그를 추가한 뒤 `npm run test:run -- src/app/naverVerificationPlacement.test.ts src/app/googleAnalyticsPlacement.test.ts src/app/adsensePlacement.test.ts`가 `4 passed`로 통과했다.
+- 빌드 검증:
+  - `npm run build` 통과
+  - `dist/index.html`에서 `naver-site-verification` 메타 태그 존재를 확인했다.
+- 배포 영향:
+  - 백엔드 및 환경 변수 변경은 없다.
+  - 프런트 정적 HTML 변경이므로 운영 반영에는 Vercel 프런트 재배포가 필요하다.
