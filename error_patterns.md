@@ -13,4 +13,5 @@
 - 배경 비디오에 별도 poster 레이어를 둘 때는 `loadeddata` 이후 즉시 제거한다. 재생 중에도 정지 poster가 남아 있으면 움직이는 프레임 위에 고정 별 위치가 겹쳐 잔상처럼 보인다.
 - AdSense처럼 공급자가 `<head>` 직접 삽입을 요구하는 검증 스크립트는 React effect로 동적 주입하지 않는다. 배포 원본 HTML head 또는 서버 템플릿에 넣고 최종 페이지 소스로 검증한다.
 - SPA fallback rewrite가 있는 프런트에서 `ads.txt`·`robots.txt` 같은 루트 검증 파일을 누락한 채 배포하지 않는다. 정적 자산을 빌드 산출물로 먼저 생성하고 운영 URL이 실제 plain text를 반환하는지 확인한다.
+- SEO canonical host는 `SITE_URL`/`APP_URL` 환경값을 그대로 신뢰하지 않는다. legacy alias가 들어와도 sitemap·robots·canonical·OAuth 복귀 URL을 단일 운영 host로 정규화한다.
 - GA4 `gtag` queue를 래핑할 때는 `...args` 배열을 `dataLayer`에 직접 push하지 않는다. 공식 스니펫과 같은 `arguments` 객체를 push하고, 배포 후 `g/collect` 네트워크 요청까지 확인한다.

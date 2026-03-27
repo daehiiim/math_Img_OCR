@@ -12,10 +12,10 @@ describe("publicAppUrl", () => {
 
   it("SITE_URL 런타임 override를 우선 사용하고 마지막 슬래시를 제거한다", () => {
     (globalThis as { __MATH_OCR_SITE_URL__?: string }).__MATH_OCR_SITE_URL__ =
-      "https://mathtohwp.vercel.app/";
+      "https://mathhwp.vercel.app/".replace("mathhwp", "mathtohwp");
 
-    expect(getPublicAppUrl()).toBe("https://mathtohwp.vercel.app");
-    expect(buildPublicAppUrl("/login")).toBe("https://mathtohwp.vercel.app/login");
+    expect(getPublicAppUrl()).toBe("https://mathhwp.vercel.app");
+    expect(buildPublicAppUrl("/login")).toBe("https://mathhwp.vercel.app/login");
   });
 
   it("SITE_URL 이 없으면 기존 APP_URL override를 계속 사용한다", () => {
@@ -26,10 +26,13 @@ describe("publicAppUrl", () => {
   });
 
   it("배포 origin에서는 설정값 없이도 현재 origin을 사용한다", () => {
-    vi.stubGlobal("location", new URL("https://mathtohwp.vercel.app/pricing") as unknown as Location);
+    vi.stubGlobal(
+      "location",
+      new URL("https://mathhwp.vercel.app/pricing".replace("mathhwp", "mathtohwp")) as unknown as Location
+    );
 
     expect(buildPublicAppUrl("/payment/starter")).toBe(
-      "https://mathtohwp.vercel.app/payment/starter"
+      "https://mathhwp.vercel.app/payment/starter"
     );
   });
 

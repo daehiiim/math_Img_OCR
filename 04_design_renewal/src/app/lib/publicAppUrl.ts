@@ -1,4 +1,5 @@
 import { isLocalUiMockEnabled } from "./localUiMock";
+import { normalizeSiteUrl } from "../seo/siteSeo";
 
 const LOCAL_APP_HOSTNAMES = ["localhost", "127.0.0.1", "0.0.0.0"] as const;
 
@@ -21,8 +22,7 @@ function getRuntimeConfig(): PublicAppRuntimeConfig {
 
 // URL 문자열의 공백과 마지막 슬래시를 정규화한다.
 function normalizePublicAppUrl(value: string): string {
-  const trimmed = value.trim();
-  return trimmed ? trimmed.replace(/\/$/, "") : "";
+  return normalizeSiteUrl(value);
 }
 
 // 런타임 override, process env, Vite define 순서로 공개 앱 URL을 읽는다.

@@ -16,6 +16,13 @@ describe("siteSeo", () => {
     );
   });
 
+  it("legacy vercel host가 들어와도 canonical host로 정규화한다", () => {
+    const legacySiteUrl = DEFAULT_SITE_URL.replace("mathhwp", "mathtohwp");
+
+    expect(resolveSeoSiteUrl(legacySiteUrl)).toBe(DEFAULT_SITE_URL);
+    expect(buildSitemapXml(legacySiteUrl)).toContain("<loc>https://mathhwp.vercel.app/</loc>");
+  });
+
   it("site url 후보가 모두 비어 있으면 기본 production url을 사용한다", () => {
     expect(resolveSeoSiteUrl("", undefined)).toBe(DEFAULT_SITE_URL);
   });

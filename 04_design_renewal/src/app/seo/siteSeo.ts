@@ -3,6 +3,8 @@ export const SITE_NAME = "MathHWP";
 export const OG_IMAGE_PATH = "/og-image.svg";
 export const ADSENSE_ADS_TXT_PUBLISHER = "pub-4088422118336195";
 export const ADSENSE_SELLER_ACCOUNT_ID = "f08c47fec0942fa0";
+const CANONICAL_SITE_HOSTNAME = new URL(DEFAULT_SITE_URL).hostname;
+const LEGACY_SITE_HOSTNAME = CANONICAL_SITE_HOSTNAME.replace("mathhwp", "mathtohwp");
 
 export type RouteSeo = {
   canonicalPath: string;
@@ -30,13 +32,14 @@ export function resolveSeoSiteUrl(...candidates: Array<string | undefined>): str
 /** canonical host 비교를 위해 공백과 마지막 슬래시를 제거한다. */
 export function normalizeSiteUrl(value: string | undefined): string {
   const trimmedValue = value?.trim() ?? "";
-  return trimmedValue ? trimmedValue.replace(/\/$/, "") : "";
+  return trimmedValue ? rewriteLegacySiteHost(trimmedValue.replace(/\/$/, "")) : "";
 }
 
 /** 내부 경로를 절대 canonical URL로 조합한다. */
 export function buildAbsoluteUrl(siteUrl: string, path: string): string {
+  const normalizedSiteUrl = resolveSeoSiteUrl(siteUrl);
   const normalizedPath = path === "/" ? "/" : `/${path.replace(/^\/+|\/+$/g, "")}`;
-  return normalizedPath === "/" ? `${siteUrl}/` : `${siteUrl}${normalizedPath}`;
+  return normalizedPath === "/" ? `${normalizedSiteUrl}/` : `${normalizedSiteUrl}${normalizedPath}`;
 }
 
 /** 현재 경로에 대응하는 title, description, robots 규칙을 반환한다. */
@@ -189,4 +192,19 @@ function normalizePathname(pathname: string): string {
   }
 
   return `/${trimmedValue.replace(/^\/+|\/+$/g, "")}`;
+}
+
+/** 이전 vercel host가 들어오면 현재 canonical host로 치환한다. */
+function rewriteLegacySiteHost(value: string): string {
+  try {
+    const normalizedUrl = new URL(value);
+    if (normalizedUrl.hostname !== LEGACY_SITE_HOSTNAME) {
+      return value;
+    }
+
+    normalizedUrl.hostname = CANONICAL_SITE_HOSTNAME;
+    return normalizedUrl.toString().replace(/\/$/, "");
+  } catch {
+    return value;
+  }
 }

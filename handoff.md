@@ -1,22 +1,25 @@
 Done
-- `04_design_renewal` 비홈 리디자인은 유지했고 홈 `/`은 그대로다.
-- `ads.txt`를 Vite SEO 자산으로 추가했고 `seoVitePlugin.test.ts` RED-GREEN, `npm run build`로 `dist/ads.txt` 생성을 확인했다.
+- `siteSeo`/`publicAppUrl`/`seoVitePlugin`에 legacy host 정규화를 추가해 `mathtohwp` 입력이 들어와도 SEO 자산과 공개 URL을 `mathhwp.vercel.app`로 고정했다.
+- 회귀 테스트 4개 묶음과 stale `SITE_URL=mathtohwp...` 빌드 검증을 통과했다.
 
 In Progress
-- 최우선 과제: 프런트 재배포 후 운영 도메인 `ads.txt` 응답 검증
-- 진행 상태: 로컬 테스트와 빌드는 통과했다. 다음 단계는 Vercel 프런트 재배포 후 `https://mathtohwp.vercel.app/ads.txt`가 plain text를 반환하는지 확인하고 애드센스 재크롤 반영을 기다리는 것이다.
+- 최우선 과제: 프런트 재배포 후 운영 `mathhwp.vercel.app`에서 sitemap/canonical 응답 재검증
+- 진행 상태: 현재 운영 `https://mathhwp.vercel.app/sitemap.xml`과 runtime canonical은 아직 `mathtohwp`를 가리킨다. 코드 수정은 로컬 빌드/브라우저 검증까지 완료됐다.
 
 Next
-- 프런트 정적 빌드 재배포
-- 운영 `ads.txt` 200 / `text/plain` 확인
-- 필요 시 애드센스 등록 도메인과 canonical host(`mathtohwp`/`mathhwp`) 일치 여부 점검
+- Vercel 프런트 재배포
+- Vercel 환경 변수 `SITE_URL`/`APP_URL`/`NEXT_PUBLIC_SITE_URL`에 legacy host가 남아 있으면 `https://mathhwp.vercel.app`로 정리
+- 운영 `/sitemap.xml`의 `<loc>` 3개가 모두 `https://mathhwp.vercel.app/...`인지 확인
+- 운영 홈 DOM canonical이 `https://mathhwp.vercel.app/`인지 확인 후 Search Console sitemap 재제출
 
 Related Files
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\seoVitePlugin.ts`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\seoVitePlugin.test.ts`
 - `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\seo\siteSeo.ts`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\vercel.json`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\lib\publicAppUrl.ts`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\seoVitePlugin.ts`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\seo\siteSeo.test.ts`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\lib\publicAppUrl.test.ts`
 
 Last State
-- 백엔드/환경 변수 변경은 없다.
-- 현재 운영 도메인 `/ads.txt`는 재배포 전까지 HTML fallback을 반환한다.
+- 로컬 `npm run build`는 stale `SITE_URL=mathtohwp...` 조건에서도 `dist/robots.txt`, `dist/sitemap.xml`, runtime canonical을 모두 `mathhwp`로 생성했다.
+- 배포 환경 반영 전까지 Search Console의 `Couldn't fetch`는 지속될 수 있다.
+- 백엔드 코드 변경은 없지만, 실제 로그인/결제 복귀 URL 일관성을 위해 프런트 공개 URL 환경값도 함께 정리하는 편이 안전하다.

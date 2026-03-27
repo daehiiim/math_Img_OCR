@@ -1,6 +1,6 @@
 import type { Plugin } from "vite";
 
-import { buildAdsTxt, buildRobotsTxt, buildSitemapXml } from "./src/app/seo/siteSeo";
+import { buildAdsTxt, buildRobotsTxt, buildSitemapXml, resolveSeoSiteUrl } from "./src/app/seo/siteSeo";
 
 type SeoAsset = {
   contentType: string;
@@ -50,13 +50,14 @@ function registerSeoMiddleware(server: Parameters<NonNullable<Plugin["configureS
 
 /** Vite 빌드와 dev 모두에서 동일한 SEO 자산을 노출하는 플러그인을 만든다. */
 export function createSeoVitePlugin(options: SeoVitePluginOptions): Plugin {
-  const seoAssets = buildSeoAssets(options.siteUrl);
+  const canonicalSiteUrl = resolveSeoSiteUrl(options.siteUrl);
+  const seoAssets = buildSeoAssets(canonicalSiteUrl);
 
   return {
     name: "mathhwp-seo-assets",
     transformIndexHtml(html) {
       return {
-        html: replaceSiteUrlPlaceholders(html, options.siteUrl),
+        html: replaceSiteUrlPlaceholders(html, canonicalSiteUrl),
         tags: buildVerificationTags(options.googleSiteVerification),
       };
     },

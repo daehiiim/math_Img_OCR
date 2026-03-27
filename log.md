@@ -755,3 +755,35 @@
   - 백엔드/환경 변수 변경은 없다.
   - 프런트엔드 정적 빌드를 재배포해야 운영 도메인에서 실제 `ads.txt`가 노출된다.
   - 재배포 후 애드센스에서 반영까지 수 시간~수일 지연될 수 있다.
+
+## 2026-03-27 11:35:00 KST
+
+- Google Search Console 도메인 소유권 확인 경로를 점검했다.
+- 원인 분석:
+  - `mathhwp.vercel.app`는 Vercel이 제공하는 기본 `vercel.app` 서브도메인이므로 사용자가 DNS TXT 레코드를 직접 추가할 수 없다.
+  - 저장소에는 canonical/운영 host가 `mathhwp.vercel.app`와 `mathtohwp.vercel.app`로 혼재해 있어 Search Console 속성과 실제 노출 URL이 어긋날 수 있다.
+- 아키텍처 판단:
+  - 현재 프런트는 [seoVitePlugin.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/seoVitePlugin.ts#L33)에서 `GOOGLE_SITE_VERIFICATION` 계열 환경 변수를 받아 `<meta name="google-site-verification">`를 주입할 수 있다.
+  - 따라서 `vercel.app` 기본 서브도메인을 계속 사용할 경우에는 DNS TXT가 아니라 URL-prefix 속성 + 메타 태그 검증으로 처리하는 것이 맞다.
+  - DNS TXT 검증이 꼭 필요하면 Vercel 프로젝트에 custom domain을 연결한 뒤 그 도메인 DNS에서 TXT를 추가해야 한다.
+- 배포 영향:
+  - 백엔드 변경은 없다.
+  - 프런트 환경 변수 추가 후 재배포가 필요할 수 있다.
+
+## 2026-03-27 15:57:00 KST
+
+- Google Search Console sitemap fetch 이슈를 재현하고 root cause를 확인했다.
+- 원인 분석:
+  - 운영 `https://mathhwp.vercel.app/sitemap.xml`은 `application/xml`로 정상 응답하지만 내부 `<loc>`가 모두 `https://mathtohwp.vercel.app/...`를 가리키고 있었다.
+  - 운영 홈 페이지의 runtime canonical도 `https://mathtohwp.vercel.app/`로 설정되어 있어 Search Console 속성 host와 canonical host가 어긋난 상태였다.
+- 구현 변경:
+  - [siteSeo.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.ts)에 legacy Vercel host 정규화 계층을 추가했다.
+  - [publicAppUrl.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/publicAppUrl.ts)가 같은 정규화 규칙을 사용하도록 바꿔 OAuth/결제 복귀 URL도 `mathhwp`로 고정했다.
+  - [seoVitePlugin.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/seoVitePlugin.ts)는 입력 `siteUrl`이 legacy host여도 canonical host 기준으로 `robots.txt`/`sitemap.xml`을 생성하도록 바꿨다.
+- 검증:
+  - `npm run test:run -- src/app/seo/siteSeo.test.ts seoVitePlugin.test.ts src/app/lib/publicAppUrl.test.ts src/app/context/AuthContext.test.tsx` 통과
+  - `SITE_URL=https://mathtohwp.vercel.app`로 강제한 상태에서 `npm run build` 통과
+  - 로컬 정적 서버 + 브라우저 검증에서 홈 canonical이 `https://mathhwp.vercel.app/`로 설정되는 것을 확인했다.
+- 배포 영향:
+  - 백엔드 코드 변경은 없다.
+  - 프런트 재배포가 필요하며, Vercel의 `SITE_URL`/`APP_URL`/`NEXT_PUBLIC_SITE_URL` 중 legacy host가 남아 있으면 `https://mathhwp.vercel.app`로 정리하는 편이 안전하다.

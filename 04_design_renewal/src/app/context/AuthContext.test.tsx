@@ -100,7 +100,7 @@ describe("AuthContext", () => {
   it("Google OAuth redirectTo를 공개 앱 URL 기준으로 보낸다", async () => {
     const user = userEvent.setup();
     (globalThis as { __MATH_OCR_SITE_URL__?: string }).__MATH_OCR_SITE_URL__ =
-      "https://mathtohwp.vercel.app/";
+      "https://mathhwp.vercel.app/".replace("mathhwp", "mathtohwp");
 
     render(
       <AuthProvider>
@@ -114,7 +114,7 @@ describe("AuthContext", () => {
       expect(signInWithOAuthMock).toHaveBeenCalledWith({
         provider: "google",
         options: {
-          redirectTo: "https://mathtohwp.vercel.app/login",
+          redirectTo: "https://mathhwp.vercel.app/login",
         },
       })
     );
