@@ -348,9 +348,7 @@ export function NewJobPage() {
                   onDragLeave={() => setDragActive(false)}
                   onDrop={handleDrop}
                 >
-                  <div className="liquid-stat-orb mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-                    <Upload className="w-7 h-7 text-muted-foreground" />
-                  </div>
+                  <Upload className="mx-auto mb-4 h-7 w-7 text-muted-foreground/78" />
                   <h3 className="mb-1 text-[15px]">이미지를 드래그하거나 클릭하여 업로드</h3>
                   <p className="mb-4 text-[13px] text-muted-foreground">
                     PNG, JPG, JPEG 형식 지원 · 10MB 이하

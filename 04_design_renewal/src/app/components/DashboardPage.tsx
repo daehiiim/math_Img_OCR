@@ -84,9 +84,7 @@ export function DashboardPage() {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)]">
                 <div className="liquid-feature-row grid gap-3 rounded-[28px] p-4 sm:grid-cols-2">
                   <div className="flex items-center gap-4">
-                    <div className="liquid-stat-orb flex h-12 w-12 shrink-0 items-center justify-center rounded-full">
-                      <Coins className="w-6 h-6 text-primary" />
-                    </div>
+                    <Coins className="h-6 w-6 shrink-0 text-primary/78" />
                     <div>
                       <p className="mb-1 text-[12px] text-muted-foreground">남은 이미지</p>
                       <p className="text-[24px]">{user.credits.toLocaleString()}</p>
@@ -94,9 +92,7 @@ export function DashboardPage() {
                   </div>
 
                   <div className="flex items-center gap-4">
-                    <div className="liquid-stat-orb flex h-12 w-12 shrink-0 items-center justify-center rounded-full">
-                      <TrendingUp className="w-6 h-6 text-amber-600" />
-                    </div>
+                    <TrendingUp className="h-6 w-6 shrink-0 text-amber-600/88" />
                     <div>
                       <p className="mb-1 text-[12px] text-muted-foreground">사용한 이미지</p>
                       <p className="text-[24px]">{user.usedCredits.toLocaleString()}</p>
@@ -143,36 +139,28 @@ export function DashboardPage() {
               <p className="text-[12px] text-muted-foreground">전체 작업</p>
               <p className="mt-1 text-[28px]">{jobs.length}</p>
             </div>
-            <div className="liquid-stat-orb flex h-10 w-10 items-center justify-center rounded-2xl">
-              <Box className="w-5 h-5 text-primary" />
-            </div>
+            <Box className="h-5 w-5 shrink-0 text-primary/76" />
           </div>
           <div className="liquid-inline-note flex items-center justify-between rounded-[24px] px-4 py-4">
             <div>
               <p className="text-[12px] text-muted-foreground">처리 중</p>
               <p className="mt-1 text-[28px]">{runningJobs}</p>
             </div>
-            <div className="liquid-stat-orb flex h-10 w-10 items-center justify-center rounded-2xl">
-              <Cpu className="w-5 h-5 text-amber-600" />
-            </div>
+            <Cpu className="h-5 w-5 shrink-0 text-amber-600/82" />
           </div>
           <div className="liquid-inline-note flex items-center justify-between rounded-[24px] px-4 py-4">
             <div>
               <p className="text-[12px] text-muted-foreground">완료</p>
               <p className="mt-1 text-[28px]">{completedJobs}</p>
             </div>
-            <div className="liquid-stat-orb flex h-10 w-10 items-center justify-center rounded-2xl">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-            </div>
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500/84" />
           </div>
           <div className="liquid-inline-note flex items-center justify-between rounded-[24px] px-4 py-4">
             <div>
               <p className="text-[12px] text-muted-foreground">총 영역</p>
               <p className="mt-1 text-[28px]">{totalRegions}</p>
             </div>
-            <div className="liquid-stat-orb flex h-10 w-10 items-center justify-center rounded-2xl">
-              <Layers className="w-5 h-5 text-blue-500" />
-            </div>
+            <Layers className="h-5 w-5 shrink-0 text-blue-500/82" />
           </div>
         </div>
       </section>
@@ -217,9 +205,7 @@ export function DashboardPage() {
         {jobs.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="liquid-stat-orb mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-                <FileImage className="w-7 h-7 text-muted-foreground" />
-              </div>
+              <FileImage className="mb-4 h-7 w-7 text-muted-foreground/80" />
               <h3 className="mb-1 text-[15px]">작업이 없습니다</h3>
               <p className="mb-4 text-[13px] text-muted-foreground">
                 수학 문제 이미지를 업로드하여 첫 번째 작업을 시작하세요.
