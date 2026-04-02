@@ -902,6 +902,34 @@ def test_supabase_billing_store_grants_signup_bonus_for_first_profile(monkeypatc
     assert ledger_insert["payload"]["balance_after"] == 3
 
 
+def test_supabase_billing_store_skips_signup_bonus_for_existing_profile(monkeypatch):
+    """기존 profile이 있으면 signup bonus를 다시 적립하지 않는다."""
+    monkeypatch.setattr("app.billing.get_settings", lambda root_path: _build_auth_settings())
+    store = SupabaseBillingStore(Path("."))
+    user_client = RecordingSupabaseClient(
+        select_rows={
+            "profiles": [
+                {
+                    "user_id": "user-123",
+                    "credits_balance": 7,
+                    "used_credits": 2,
+                    "openai_connected": False,
+                    "openai_key_masked": None,
+                }
+            ]
+        }
+    )
+    admin_client = RecordingSupabaseClient()
+    monkeypatch.setattr(store, "_user_client", lambda user: user_client)
+    monkeypatch.setattr(store, "_billing_write_client", lambda: admin_client)
+
+    profile = store.get_or_create_profile(make_user())
+
+    assert profile.credits_balance == 7
+    assert {entry["method"] for entry in user_client.operations} == {"select"}
+    assert admin_client.operations == []
+
+
 def test_supabase_billing_store_uses_admin_client_for_action_charge_writes(monkeypatch):
     monkeypatch.setattr(
         "app.billing.get_settings",

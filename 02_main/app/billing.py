@@ -31,6 +31,8 @@ POLAR_PRODUCT_CURRENCY_MISMATCH = "product currency mismatch"
 POLAR_PRODUCT_ID_MISMATCH = "configured Polar product id mismatch"
 POLAR_REQUIRED_CURRENCY = "krw"
 POLAR_DEFAULT_BILLING_COUNTRY = "KR"
+SIGNUP_BONUS_CREDITS = 3
+SIGNUP_BONUS_REASON = "signup_bonus"
 CHECKOUT_ADDRESS_FIELDS = ("country", "line1", "line2", "postal_code", "city", "state")
 CHECKOUT_BILLING_FIELD_NAMES = ("country", "state", "city", "postal_code", "line1", "line2")
 JOB_ACTION_REASON_MAP = {
@@ -590,23 +592,37 @@ class SupabaseBillingStore:
         )
         return self._map_profile(rows[0]) if rows else None
 
+    def _build_default_profile_payload(self, user_id: str) -> dict[str, Any]:
+        """신규 사용자 기본 profile payload를 만든다."""
+        return {
+            "user_id": user_id,
+            "display_name": user_id[:8],
+            "credits_balance": SIGNUP_BONUS_CREDITS,
+            "used_credits": 0,
+            "openai_connected": False,
+            "openai_key_masked": None,
+        }
+
+    def _record_signup_bonus(self, user_id: str) -> None:
+        """신규 가입 보너스 적립 이력을 원장에 남긴다."""
+        self._billing_write_client().insert(
+            "credit_ledger",
+            {
+                "user_id": user_id,
+                "delta": SIGNUP_BONUS_CREDITS,
+                "balance_after": SIGNUP_BONUS_CREDITS,
+                "reason": SIGNUP_BONUS_REASON,
+            },
+        )
+
     def _ensure_profile(self, client: SupabaseClient, user_id: str) -> BillingProfile:
         """profile이 없으면 기본 row를 만든다."""
         profile = self._read_profile(client, user_id)
         if profile is not None:
             return profile
 
-        inserted = client.insert(
-            "profiles",
-            {
-                "user_id": user_id,
-                "display_name": user_id[:8],
-                "credits_balance": 0,
-                "used_credits": 0,
-                "openai_connected": False,
-                "openai_key_masked": None,
-            },
-        )
+        inserted = client.insert("profiles", self._build_default_profile_payload(user_id))
+        self._record_signup_bonus(user_id)
         return self._map_profile(inserted[0])
 
     def _sync_openai_profile(

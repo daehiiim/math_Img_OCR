@@ -10,6 +10,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        glass:
+          "border border-white/80 bg-white/72 text-foreground shadow-[0_20px_40px_-28px_rgba(86,118,164,0.32)] backdrop-blur-md hover:bg-white/82",
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
@@ -22,6 +24,7 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        pill: "h-10 rounded-full px-5 has-[>svg]:px-4",
         sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
         lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
         icon: "size-9 rounded-md",
@@ -34,6 +37,7 @@ const buttonVariants = cva(
   },
 );
 
+/** 앱 전역에서 쓰는 버튼에 variant, size, slot 메타데이터를 주입한다. */
 function Button({
   className,
   variant,

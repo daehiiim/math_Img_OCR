@@ -137,7 +137,8 @@ create table if not exists public.credit_ledger (
       'explanation_charge',
       'manual_adjustment',
       'purchase',
-      'stripe_purchase'
+      'stripe_purchase',
+      'signup_bonus'
     )
   ),
   created_at timestamptz not null default now()

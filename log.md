@@ -920,3 +920,25 @@
 - 배포 영향:
   - 백엔드/환경 변수 변경은 없다.
   - 운영 반영에는 프런트 정적 빌드 재배포가 필요하다.
+
+## 2026-04-02 18:48 KST
+
+- 요청: 신규 로그인 계정에 무료 토큰 3개를 자동 지급하도록 백엔드 과금 초기화 흐름을 변경했다.
+- 아키텍처 결정:
+  - 신규 지급은 [`/billing/profile`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py) 경유의 기존 `profile` 최초 생성 흐름에 포함했다.
+  - 지급 대상은 `profiles` row가 없는 사용자만으로 고정했다.
+  - 지급 수량은 백엔드 상수 `3`으로 두고, 원장 reason은 `signup_bonus`로 분리했다.
+- 처리:
+  - [`billing.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/billing.py) 에 signup bonus 상수와 원장 기록 helper를 추가했다.
+  - [`2026-04-02_signup_bonus.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-02_signup_bonus.sql) 마이그레이션을 추가하고 [`supabase_saas_init.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/supabase_saas_init.sql) 초기 스키마 reason 제약도 동기화했다.
+  - [`test_billing.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_billing.py) 에 신규 지급/기존 사용자 무재지급 회귀 테스트를 추가했다.
+  - [`error_patterns.md`](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 에 billing reason과 DB 제약을 같은 변경으로 묶으라는 규칙을 추가했다.
+- 문서화:
+  - 설계 문서 [2026-04-02-signup-bonus-design.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-04-02-signup-bonus-design.md)를 추가했다.
+  - 구현 계획 문서 [2026-04-02-signup-bonus-plan.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-04-02-signup-bonus-plan.md)를 추가했다.
+- 검증:
+  - `D:\03_PROJECT\05_mathOCR\.tmp\pydeps-latest\bin\pytest.exe 02_main/tests/test_billing.py -k signup_bonus -v` 기준 신규 지급 테스트 2건이 통과했다.
+  - `D:\03_PROJECT\05_mathOCR\.tmp\pydeps-latest\bin\pytest.exe 02_main/tests/test_billing.py 02_main/tests/test_auth.py -v` 기준 `54 passed`를 확인했다.
+- 배포 영향:
+  - 백엔드 코드와 Supabase 스키마가 함께 변경됐다.
+  - 운영 반영 시 [`2026-04-02_signup_bonus.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-02_signup_bonus.sql) 을 애플리케이션 배포보다 먼저 적용해야 한다.

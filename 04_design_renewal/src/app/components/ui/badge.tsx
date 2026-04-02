@@ -11,6 +11,8 @@ const badgeVariants = cva(
       variant: {
         default:
           "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+        glass:
+          "rounded-full border border-white/80 bg-white/72 px-2.5 py-1 text-[#334862] shadow-[0_18px_34px_-28px_rgba(86,118,164,0.28)] backdrop-blur-md",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
         destructive:
@@ -25,6 +27,7 @@ const badgeVariants = cva(
   },
 );
 
+/** 앱 전역에서 쓰는 배지에 variant와 slot 메타데이터를 주입한다. */
 function Badge({
   className,
   variant,

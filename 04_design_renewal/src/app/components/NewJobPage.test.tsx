@@ -196,6 +196,8 @@ describe("NewJobPage", () => {
     );
 
     expect(screen.getByRole("heading", { name: "새 작업 생성" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "메인 캔버스 진입 패널" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "실행 도크" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "파일 선택" })).toBeInTheDocument();
     expect(screen.queryByText(/데모 이미지/)).not.toBeInTheDocument();
   });
@@ -219,6 +221,8 @@ describe("NewJobPage", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     expect(await screen.findByText("sample.png")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "메인 캔버스 보드" })).toHaveClass("liquid-new-job-board");
+    expect(screen.getByRole("region", { name: "실행 도크" })).toHaveClass("liquid-new-job-dock");
     expect(screen.getByText("320 × 240px")).toBeInTheDocument();
     expect(prepareLoginMock).not.toHaveBeenCalled();
   });

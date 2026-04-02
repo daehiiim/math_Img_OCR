@@ -17,3 +17,4 @@
 - GA4 `gtag` queue를 래핑할 때는 `...args` 배열을 `dataLayer`에 직접 push하지 않는다. 공식 스니펫과 같은 `arguments` 객체를 push하고, 배포 후 `g/collect` 네트워크 요청까지 확인한다.
 - HWPX 문단 템플릿을 복제하거나 `section0.xml`을 패키징할 때는 `hp:linesegarray` 레이아웃 캐시를 남기지 않는다. stale cache가 남으면 한글이 파일 open 직후 잘못된 글자 간격을 렌더링하므로 clone 단계와 최종 write 직전에 모두 제거한다.
 - 선택형 DB 컬럼을 점진 도입할 때는 schema compatibility fallback을 기능별 컬럼군으로 분리한다. 새 metadata 컬럼 누락이 기존 optional select/upsert 경로까지 함께 꺼지지 않도록 읽기/쓰기 회귀 테스트를 같이 둔다.
+- 신규 적립 reason을 추가할 때는 앱 상수와 `credit_ledger_reason_check`를 같은 변경 묶음으로 갱신하고, 최초 적립 회귀 테스트까지 함께 확인한다.

@@ -42,6 +42,11 @@ describe("DashboardPage", () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByRole("heading", { name: "작업 대시보드" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "상단 요약" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "핵심 지표" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "작업 목록" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "작업 흐름" })).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.queryByText("∞")).not.toBeInTheDocument();
     expect(
@@ -58,8 +63,7 @@ describe("DashboardPage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("작업 대시보드").closest(".liquid-workspace-page")).toHaveClass(
-      "liquid-workspace-page"
-    );
+    expect(screen.getByText("작업 대시보드").closest(".liquid-workspace-page")).toHaveClass("liquid-workspace-page");
+    expect(screen.getByRole("button", { name: "새 작업" })).toBeInTheDocument();
   });
 });
