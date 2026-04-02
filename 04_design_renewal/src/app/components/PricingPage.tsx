@@ -122,22 +122,46 @@ export function PricingPage() {
         홈으로 돌아가기
       </button>
 
-      <div className="liquid-frost-panel liquid-frost-panel--soft mb-10 rounded-[32px] px-6 py-8 text-center md:px-10">
-        <h1 className="mb-2 text-[26px] tracking-[-0.02em] text-foreground">
-          이미지 구매
-        </h1>
-        <p className="text-[15px] text-muted-foreground">
-          수학 이미지를 HWPX 문서로 즉시 변환하세요.
+      <section
+        aria-label="상단 안내 surface"
+        className="liquid-frost-panel liquid-frost-panel--soft mb-10 rounded-[32px] px-6 py-8 text-center md:px-10"
+      >
+        <div className="mb-5 flex flex-wrap justify-center gap-2">
+          <span className="liquid-chip liquid-chip--accent rounded-full px-4 py-2 text-[12px] font-medium text-foreground">
+            Credits Store
+          </span>
+          <span className="liquid-chip rounded-full px-4 py-2 text-[12px] text-foreground/72">
+            Polar checkout
+          </span>
+        </div>
+        <h1 className="mb-2 text-[26px] tracking-[-0.02em] text-foreground">이미지 구매</h1>
+        <p className="mx-auto max-w-[560px] text-[15px] leading-relaxed text-muted-foreground">
+          수학 이미지를 HWPX 문서로 즉시 변환하고, 필요한 크레딧만 가볍게 충전할 수 있습니다.
         </p>
-        <div className="liquid-inline-note mt-4 inline-flex flex-col gap-1 rounded-[22px] px-5 py-3 text-[13px] text-muted-foreground">
-          <p>실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.</p>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          <div className="liquid-inline-note rounded-[24px] px-5 py-4 text-left">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              Checkout Guide
+            </p>
+            <p className="mt-2 text-[14px] leading-relaxed text-foreground/82">
+              실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.
+            </p>
+          </div>
+          <div className="liquid-inline-note rounded-[24px] px-5 py-4 text-left">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              Catalog Currency
+            </p>
+            <p className="mt-2 text-[14px] leading-relaxed text-foreground/82">
+              KRW catalog 기준으로 패키지 가격과 이미지 단가를 먼저 확인합니다.
+            </p>
+          </div>
         </div>
         {isCatalogIssue && (
           <p className="mt-3 text-[13px] text-amber-700">결제 설정 점검 중</p>
         )}
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+      <section aria-label="plan surface" className="grid grid-cols-1 gap-5 md:grid-cols-3">
         {!isCatalogIssue && plans.length === 0 ? (
           <div className="liquid-frost-panel rounded-[28px] p-7 text-[14px] text-muted-foreground md:col-span-3">
             플랜 정보를 불러오는 중입니다.
@@ -201,8 +225,9 @@ export function PricingPage() {
                   )
                 }
                 disabled={isCatalogIssue}
-                variant={plan.highlight ? "default" : "outline"}
-                className={`mb-7 h-11 w-full text-[14px] ${
+                variant={plan.highlight ? "default" : "glass"}
+                size="pill"
+                className={`mb-7 w-full text-[14px] ${
                   isCatalogIssue
                     ? "cursor-not-allowed opacity-55"
                     : ""
@@ -214,7 +239,7 @@ export function PricingPage() {
               <div className="space-y-2.5 border-t border-white/55 pt-6">
                 {plan.features.map((feature) => (
                   <div key={feature} className="flex items-start gap-2">
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#4da3ff]" />
                     <span className="text-[13px] text-foreground/80">{feature}</span>
                   </div>
                 ))}
@@ -222,7 +247,7 @@ export function PricingPage() {
             </div>
           </motion.div>
         ))}
-      </div>
+      </section>
     </motion.div>
   );
 }

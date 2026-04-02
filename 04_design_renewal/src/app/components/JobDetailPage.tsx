@@ -306,85 +306,96 @@ export function JobDetailPage() {
 
   return (
     <div className="liquid-workspace-page mx-auto max-w-5xl p-6 lg:p-8">
-      <div className="flex items-center gap-3 mb-6">
-        <Button
-          variant="ghost"
-          size="icon"
-          type="button"
-          aria-label="대시보드로 돌아가기"
-          onClick={() => navigate("/workspace")}
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate">{job.fileName}</h1>
-            <Badge variant="outline" className="shrink-0 text-[10px] font-mono">
-              {job.id.slice(0, 20)}...
-            </Badge>
-          </div>
-          <p className="text-[13px] text-muted-foreground">
-            {new Date(job.createdAt).toLocaleString("ko-KR")} · {job.imageWidth}×{job.imageHeight}px · {job.regions.length}개 영역
-          </p>
-        </div>
-      </div>
-
-      <Card className="mb-6">
-        <CardContent className="py-4">
-          <div className="flex items-center gap-0">
-            {statusSteps.map((step, index) => {
-              const isActive = index === currentStep;
-              const isDone = index < currentStep;
-
-              return (
-                <div key={step.key} className="flex items-center flex-1">
-                  <div className="flex items-center gap-2 flex-1">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] transition-colors ${
-                        isDone
-                          ? "bg-emerald-500 text-white"
-                          : isActive
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {isDone ? (
-                        <CheckCircle2 className="w-4 h-4" />
-                      ) : isActive && (job.status === "running" || isRunning) ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        index + 1
-                      )}
-                    </div>
-                    <span
-                      className={`text-[12px] hidden sm:inline ${
-                        isActive ? "text-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      {step.label}
-                    </span>
-                  </div>
-                  {index < statusSteps.length - 1 ? (
-                    <div
-                      className={`h-px flex-1 mx-2 ${
-                        index < currentStep ? "bg-emerald-500" : "bg-border"
-                      }`}
-                    />
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-          {job.status === "running" ? (
-            <div className="mt-3">
-              <Progress value={progress} className="h-1.5" />
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {job.regions.filter((region) => region.status === "completed").length} / {job.regions.length} 영역 처리 완료
+      <section
+        aria-label="작업 상태 surface"
+        className="liquid-frost-panel liquid-frost-panel--soft mb-6 rounded-[32px] p-5 sm:p-6"
+      >
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start">
+            <Button
+              variant="ghost"
+              size="icon"
+              type="button"
+              aria-label="대시보드로 돌아가기"
+              onClick={() => navigate("/workspace")}
+              className="liquid-chip rounded-full"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <div className="min-w-0 flex-1">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge variant="glass" className="rounded-full px-3 py-1 text-[11px]">
+                  Job Detail
+                </Badge>
+                <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] font-mono">
+                  {job.id.slice(0, 20)}...
+                </Badge>
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                  {job.regions.length}개 영역
+                </Badge>
+              </div>
+              <h1 className="truncate text-[28px] tracking-[-0.03em] text-foreground">{job.fileName}</h1>
+              <p className="mt-2 text-[13px] text-muted-foreground">
+                {new Date(job.createdAt).toLocaleString("ko-KR")} · {job.imageWidth}×{job.imageHeight}px
               </p>
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            <div className="liquid-inline-note rounded-[24px] px-4 py-3 text-[12px] text-muted-foreground">
+              현재 단계: {statusSteps[currentStep]?.label ?? "작업 준비"}
+            </div>
+          </div>
+
+          <div className="liquid-inline-note rounded-[26px] p-4 sm:p-5">
+            <div className="flex items-center gap-0">
+              {statusSteps.map((step, index) => {
+                const isActive = index === currentStep;
+                const isDone = index < currentStep;
+
+                return (
+                  <div key={step.key} className="flex flex-1 items-center">
+                    <div className="flex flex-1 items-center gap-2">
+                      <div
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] transition-colors ${
+                          isDone
+                            ? "bg-emerald-500 text-white"
+                            : isActive
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {isDone ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : isActive && (job.status === "running" || isRunning) ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          index + 1
+                        )}
+                      </div>
+                      <span
+                        className={`hidden text-[12px] sm:inline ${
+                          isActive ? "text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                    </div>
+                    {index < statusSteps.length - 1 ? (
+                      <div className={`mx-2 h-px flex-1 ${index < currentStep ? "bg-emerald-500" : "bg-border"}`} />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            {job.status === "running" ? (
+              <div className="mt-3">
+                <Progress value={progress} className="h-1.5" />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {job.regions.filter((region) => region.status === "completed").length} / {job.regions.length} 영역 처리 완료
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       {hasAutoFullResult ? (
         <Card className="mb-6 border-amber-200 bg-amber-50/80">
@@ -395,8 +406,8 @@ export function JobDetailPage() {
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section aria-label="결과 보드 surface" className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -442,9 +453,9 @@ export function JobDetailPage() {
               </CardContent>
             </Card>
           ) : null}
-        </div>
+        </section>
 
-        <div className="space-y-4">
+        <aside role="region" aria-label="액션 도크 surface" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-[14px] flex items-center gap-2">
@@ -532,7 +543,7 @@ export function JobDetailPage() {
               ) : null}
 
               {canRunQueuedSelection || canRunAutoFullFallback ? (
-                <Button onClick={() => void handleRun()} className="w-full gap-2" disabled={runButtonDisabled}>
+                <Button onClick={() => void handleRun()} size="pill" className="w-full gap-2" disabled={runButtonDisabled}>
                   <Play className="w-4 h-4" />
                   파이프라인 실행
                 </Button>
@@ -559,7 +570,7 @@ export function JobDetailPage() {
                         : job.lastError || "오류 내용을 확인하세요."}
                     </p>
                   </div>
-                  <Button onClick={() => void handleRun()} className="w-full gap-2" variant="outline" disabled={runButtonDisabled}>
+                  <Button onClick={() => void handleRun()} size="pill" className="w-full gap-2" variant="glass" disabled={runButtonDisabled}>
                     <Play className="w-4 h-4" />
                     재시도
                   </Button>
@@ -616,7 +627,8 @@ export function JobDetailPage() {
                   <Button
                     onClick={() => void handleExport()}
                     className="w-full gap-2"
-                    variant="outline"
+                    variant="glass"
+                    size="pill"
                     disabled={isExporting}
                   >
                     <Download className="w-4 h-4" />
@@ -624,7 +636,7 @@ export function JobDetailPage() {
                   </Button>
                 </div>
               ) : (
-                <Button onClick={() => void handleExport()} className="w-full gap-2" variant="outline" disabled={isExporting}>
+                <Button onClick={() => void handleExport()} className="w-full gap-2" variant="glass" size="pill" disabled={isExporting}>
                   <Download className="w-4 h-4" />
                   {isExporting ? "내보내는 중..." : "HWPX 내보내기"}
                 </Button>
@@ -669,7 +681,7 @@ export function JobDetailPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </aside>
       </div>
     </div>
   );

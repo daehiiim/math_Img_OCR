@@ -37,6 +37,8 @@ describe("OpenAiConnectionPage", () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByRole("region", { name: "연결 상태" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "다음 단계" })).toBeInTheDocument();
     expect(
       screen.getByText("OpenAI API key를 연결하면 OCR과 해설은 사용자 소유 키로 처리할 수 있습니다. 이미지 생성은 별도 크레딧이 필요합니다.")
     ).toBeInTheDocument();

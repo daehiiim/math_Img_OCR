@@ -314,7 +314,7 @@ export function PaymentPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="liquid-page-shell liquid-page-shell--billing w-full max-w-[480px]"
+      className="liquid-page-shell liquid-page-shell--billing w-full max-w-[560px]"
     >
       <AnimatePresence mode="wait">
         {paid ? (
@@ -325,6 +325,14 @@ export function PaymentPage() {
             transition={{ duration: 0.35 }}
             className="liquid-frost-panel liquid-frost-panel--accent flex flex-col items-center rounded-[32px] p-10 text-center"
           >
+            <div className="mb-4 flex flex-wrap justify-center gap-2">
+              <span className="liquid-chip liquid-chip--accent rounded-full px-4 py-2 text-[12px] font-medium text-foreground">
+                Payment Completed
+              </span>
+              <span className="liquid-chip rounded-full px-4 py-2 text-[12px] text-foreground/72">
+                Credit applied
+              </span>
+            </div>
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -347,15 +355,17 @@ export function PaymentPage() {
             <div className="mt-6 flex w-full flex-col gap-3">
               <Button
                 onClick={() => navigate(returnTo || "/workspace")}
-                className="h-11 w-full"
+                size="pill"
+                className="w-full"
               >
                 {returnTo ? "이전 화면으로 이동" : "워크스페이스로 이동"}
               </Button>
               <Button
                 onClick={handleOpenPortal}
                 disabled={portalLoading || isLocalUiMock}
-                variant="outline"
-                className="h-11 w-full gap-2"
+                variant="glass"
+                size="pill"
+                className="w-full gap-2"
               >
                 {portalLoading ? (
                   <>
@@ -391,6 +401,14 @@ export function PaymentPage() {
             </Button>
 
             <div className="mb-6">
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="liquid-chip liquid-chip--accent rounded-full px-4 py-2 text-[12px] font-medium text-foreground">
+                  Polar Checkout
+                </span>
+                <span className="liquid-chip rounded-full px-4 py-2 text-[12px] text-foreground/72">
+                  Encrypted session
+                </span>
+              </div>
               <h1 className="mb-1 text-[22px] tracking-[-0.02em] text-foreground">
                 결제 완료하기
               </h1>
@@ -399,8 +417,11 @@ export function PaymentPage() {
               </p>
             </div>
 
-            <div className="liquid-frost-panel overflow-hidden rounded-[32px]">
-              <div className="border-b border-white/55 p-6">
+            <div className="grid gap-4">
+              <section
+                aria-label="주문 요약"
+                className="liquid-frost-panel liquid-frost-panel--soft rounded-[32px] p-6"
+              >
                 <p className="mb-4 text-[11px] uppercase tracking-widest text-muted-foreground">
                   주문 요약
                 </p>
@@ -424,9 +445,12 @@ export function PaymentPage() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="border-b border-white/55 p-6">
+              <section
+                aria-label="결제 수단"
+                className="liquid-frost-panel rounded-[32px] p-6"
+              >
                 <p className="mb-4 text-[11px] uppercase tracking-widest text-muted-foreground">
                   결제 수단
                 </p>
@@ -442,7 +466,7 @@ export function PaymentPage() {
                         onClick={() => setSelectedMethod(method.id)}
                         className={`flex w-full cursor-pointer items-center gap-3 rounded-[22px] border px-4 py-3 transition-[transform,background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
                           isSelected
-                            ? "border-white/75 bg-white/78 shadow-[0_20px_32px_-28px_rgba(38,59,50,0.24)]"
+                            ? "border-white/75 bg-white/78 shadow-[0_20px_32px_-28px_rgba(86,118,164,0.24)]"
                             : "bg-white/52 hover:bg-white/68"
                         }`}
                       >
@@ -474,13 +498,17 @@ export function PaymentPage() {
                     );
                   })}
                 </div>
-              </div>
+              </section>
 
-              <div className="p-6">
+              <section
+                aria-label="결제 CTA"
+                className="liquid-frost-panel liquid-frost-panel--accent rounded-[32px] p-6"
+              >
                 <Button
                   onClick={handlePay}
                   disabled={paying || checkingPayment || isCatalogIssue || isCatalogPending}
-                  className="h-11 w-full gap-2"
+                  size="pill"
+                  className="w-full gap-2"
                 >
                   {paying || checkingPayment ? (
                     <>
@@ -515,9 +543,9 @@ export function PaymentPage() {
                     상품 정보를 불러오는 중입니다.
                   </p>
                 )}
-                <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-                  <ShieldCheck className="h-3 w-3" />
-                  실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.
+                <div className="liquid-inline-note mt-4 flex items-center justify-center gap-1.5 rounded-[22px] px-4 py-3 text-[11px] text-muted-foreground">
+                  <ShieldCheck className="h-3 w-3 shrink-0" />
+                  <span>실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.</span>
                 </div>
                 <p className="mt-2 text-center text-[11px] text-muted-foreground">
                   결제가 실패하면 잔액 변경 없이 다시 시도만 요청됩니다.
@@ -528,7 +556,7 @@ export function PaymentPage() {
                 {paymentError && (
                   <p className="mt-3 text-center text-[12px] text-rose-600">{paymentError}</p>
                 )}
-              </div>
+              </section>
             </div>
           </motion.div>
         )}

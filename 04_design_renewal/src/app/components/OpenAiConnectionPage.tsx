@@ -52,7 +52,18 @@ export function OpenAiConnectionPage() {
         새 작업으로 돌아가기
       </button>
 
-      <div className="liquid-frost-panel rounded-[32px] p-8 text-center">
+      <section
+        aria-label="연결 상태"
+        className="liquid-frost-panel liquid-frost-panel--soft rounded-[32px] p-8 text-center"
+      >
+        <div className="mb-5 flex flex-wrap justify-center gap-2">
+          <span className="liquid-chip liquid-chip--accent rounded-full px-4 py-2 text-[12px] font-medium text-foreground">
+            {isConnected ? "OpenAI Connected" : "Bring your own key"}
+          </span>
+          <span className="liquid-chip rounded-full px-4 py-2 text-[12px] text-foreground/72">
+            OCR · 해설 user key
+          </span>
+        </div>
         <div
           className={`liquid-inline-note mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-[20px] ${
             isConnected ? "text-emerald-700" : "text-foreground"
@@ -71,10 +82,10 @@ export function OpenAiConnectionPage() {
 
         {isConnected ? (
           <>
-            <p className="mb-6 text-[14px] leading-relaxed text-muted-foreground">
+            <p className="text-[14px] leading-relaxed text-muted-foreground">
               사용자 소유 키로 OCR과 해설을 처리합니다. 이미지 생성은 계정 크레딧을 계속 사용합니다.
             </p>
-            <div className="liquid-inline-note mb-6 rounded-[22px] p-4 text-left">
+            <div className="liquid-inline-note mt-6 rounded-[22px] p-4 text-left">
               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                 Connected Key
               </p>
@@ -82,6 +93,20 @@ export function OpenAiConnectionPage() {
                 {user?.openAiMaskedKey ?? "연결됨"}
               </p>
             </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[14px] leading-relaxed text-muted-foreground">
+              OpenAI API key를 연결하면 OCR과 해설은 사용자 소유 키로 처리할 수 있습니다.
+              이미지 생성은 별도 크레딧이 필요합니다.
+            </p>
+          </>
+        )}
+      </section>
+
+      <section aria-label="다음 단계" className="liquid-frost-panel mt-4 rounded-[32px] p-6">
+        {isConnected ? (
+          <>
             <div className="mb-6">
               <OpenAiKeyForm
                 title="OpenAI key 다시 저장"
@@ -91,17 +116,16 @@ export function OpenAiConnectionPage() {
                 onSubmit={handleConnect}
               />
             </div>
+            {error && <p className="mb-4 text-left text-[12px] text-red-500">{error}</p>}
             <div className="flex flex-col gap-3">
-              <Button
-                onClick={() => navigate(returnTo)}
-                className="h-11 gap-2"
-              >
+              <Button onClick={() => navigate(returnTo)} size="pill" className="gap-2">
                 새 작업으로 이동
                 <ArrowRight className="h-4 w-4" />
               </Button>
               <Button
                 onClick={() => void disconnectOpenAi()}
-                variant="ghost"
+                variant="glass"
+                size="pill"
                 className="text-[13px] text-muted-foreground hover:text-red-500"
               >
                 연결 해제
@@ -110,11 +134,6 @@ export function OpenAiConnectionPage() {
           </>
         ) : (
           <>
-            <p className="mb-7 text-[14px] leading-relaxed text-muted-foreground">
-              OpenAI API key를 연결하면 OCR과 해설은 사용자 소유 키로 처리할 수 있습니다.
-              이미지 생성은 별도 크레딧이 필요합니다.
-            </p>
-
             <div className="mb-6 space-y-2.5 text-left">
               {[
                 { icon: Sparkles, text: "OCR과 해설은 사용자 OpenAI key로 처리" },
@@ -125,7 +144,7 @@ export function OpenAiConnectionPage() {
                   key={item.text}
                   className="liquid-feature-row flex items-center gap-2.5 rounded-[20px] px-4 py-3"
                 >
-                  <item.icon className="h-4 w-4 shrink-0 text-foreground" />
+                  <item.icon className="h-4 w-4 shrink-0 text-[#4da3ff]" />
                   <span className="text-[13px] text-foreground/80">{item.text}</span>
                 </div>
               ))}
@@ -146,15 +165,15 @@ export function OpenAiConnectionPage() {
                 onClick={() =>
                   navigate(returnTo ? `/pricing?returnTo=${encodeURIComponent(returnTo)}` : "/pricing")
                 }
-                variant="outline"
-                className="h-11"
+                variant="glass"
+                size="pill"
               >
                 크레딧 구매로 이동
               </Button>
             </div>
           </>
         )}
-      </div>
+      </section>
     </motion.div>
   );
 }

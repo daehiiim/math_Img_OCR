@@ -942,3 +942,40 @@
 - 배포 영향:
   - 백엔드 코드와 Supabase 스키마가 함께 변경됐다.
   - 운영 반영 시 [`2026-04-02_signup_bonus.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-02_signup_bonus.sql) 을 애플리케이션 배포보다 먼저 적용해야 한다.
+
+## 2026-04-02 19:24 KST
+
+- 요청: 홈(`/`)을 제외한 나머지 화면을 iOS 계열의 밝은 liquid glass 감성으로 전면 리디자인하는 구현을 계속 진행했다.
+- 아키텍처 결정:
+  - 비홈 화면의 시각 언어는 [`theme.css`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css) 의 `liquid-shell` 스코프 아래에서만 재정의하고, 홈 [`PublicHomePage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 는 유지했다.
+  - 결제/인증 화면은 단일 카드 중심 레이아웃을 버리고 `pill chip + glass surface + soft CTA dock` 구조로 통일했다.
+  - 백엔드/라우트/인증/결제 비즈니스 로직은 유지하고, 접근성 surface 명명과 시각 계층만 변경했다.
+- 처리:
+  - [`PricingPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PricingPage.tsx) 에 `상단 안내 surface`, `plan surface` 영역을 추가하고 플랜 CTA를 pill/glass 언어로 교체했다.
+  - [`PaymentPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PaymentPage.tsx) 를 `주문 요약`, `결제 수단`, `결제 CTA` 3개 surface 구조로 재정렬하고 성공 화면 CTA도 pill 패턴으로 맞췄다.
+  - [`LoginPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/LoginPage.tsx) 에 `진입 허브` 영역과 진입 feature row를 추가해 mock/실환경 모두 같은 glass 언어로 정리했다.
+  - [`OpenAiConnectionPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/OpenAiConnectionPage.tsx) 를 `연결 상태` 와 `다음 단계` surface로 분리하고, 사용자 key 연결/재저장 흐름을 같은 패턴으로 재구성했다.
+  - [`NotFoundPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NotFoundPage.tsx) 를 복구형 glass surface와 pill CTA 중심의 404 화면으로 교체했다.
+  - [`NotFoundPage.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NotFoundPage.test.tsx) 를 검증 범위에 포함했고, `회복 표면` 접근성 계약을 맞췄다.
+- 검증:
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/PricingPage.test.tsx src/app/components/PaymentPage.test.tsx` 기준 `2 files, 14 tests passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/LoginPage.test.tsx src/app/components/OpenAiConnectionPage.test.tsx` 기준 `2 files, 4 tests passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/NotFoundPage.test.tsx` 기준 `1 file, 1 test passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/fontPlacement.test.ts src/app/liquidThemeContract.test.ts src/app/components/Layout.test.tsx src/app/components/AuthLayout.test.tsx src/app/components/StudioLayout.test.tsx src/app/components/ui/button.test.tsx src/app/components/ui/badge.test.tsx src/app/components/PublicHomePage.test.tsx src/app/components/DashboardPage.test.tsx src/app/components/NewJobPage.test.tsx` 기준 `10 files, 29 tests passed`.
+- 배포 영향:
+  - 이번 단계는 프런트 정적 자산/컴포넌트 변경만 포함한다.
+  - 백엔드 배포 환경, Supabase 스키마, 런타임 환경 변수 추가 변경은 없다.
+
+## 2026-04-02 19:37 KST
+
+- 마무리 작업:
+  - [`JobDetailPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.tsx) 에 `작업 상태 surface`, `결과 보드 surface`, `액션 도크 surface` 접근성 영역과 상단 상태 패널을 추가했다.
+  - [`ResultsViewer.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ResultsViewer.tsx) 의 각 결과 카드를 `qN 결과 surface` 단위의 glass 카드로 정리하고, OCR/해설 패널을 `liquid-inline-note` 기반으로 통일했다.
+  - [`JobDetailPage.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.test.tsx), [`ResultsViewer.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ResultsViewer.test.tsx) 에 새 surface 계약을 추가했다.
+- 검증:
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/JobDetailPage.test.tsx src/app/components/ResultsViewer.test.tsx` 기준 `2 files, 18 tests passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run` 기준 `40 files, 158 tests passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run build` 기준 프로덕션 빌드 통과.
+- 후속 참고:
+  - 빌드는 통과했지만 `assets/index-*.js` 가 약 `839 kB` 로 chunk size warning이 남아 있다.
+  - 이는 기능 오류가 아니라 번들 분할 후보이며, 시각 QA 이후 성능 최적화 차수로 분리해도 된다.

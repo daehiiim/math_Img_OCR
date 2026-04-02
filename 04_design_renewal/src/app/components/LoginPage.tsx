@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
+import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { motion } from "motion/react";
 import { resolvePostLoginPath } from "../lib/authFlow";
@@ -63,7 +64,18 @@ export function LoginPage() {
       transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
       className="liquid-page-shell liquid-page-shell--auth w-full max-w-[400px]"
     >
-      <div className="liquid-frost-panel flex flex-col items-center rounded-[32px] p-10 text-center">
+      <section
+        aria-label="진입 허브"
+        className="liquid-frost-panel liquid-frost-panel--soft flex flex-col items-center rounded-[32px] p-10 text-center"
+      >
+        <div className="mb-6 flex flex-wrap justify-center gap-2">
+          <span className="liquid-chip liquid-chip--accent rounded-full px-4 py-2 text-[12px] font-medium text-foreground">
+            Workspace Access
+          </span>
+          <span className="liquid-chip rounded-full px-4 py-2 text-[12px] text-foreground/72">
+            {isLocalUiMock ? "Local Mock" : "Google OAuth"}
+          </span>
+        </div>
         <BrandLogo className="mb-7 h-14 w-14 rounded-[20px]" />
 
         <h1 className="mb-2 text-[22px] tracking-[-0.02em] text-foreground">MathHWP</h1>
@@ -71,11 +83,28 @@ export function LoginPage() {
           수학 이미지를 업로드하여 HWPX 문서로 자동 변환합니다.
         </p>
 
+        <div className="mb-7 grid w-full gap-2 text-left">
+          <div className="liquid-feature-row flex items-center gap-2.5 rounded-[20px] px-4 py-3">
+            <Sparkles className="h-4 w-4 shrink-0 text-[#4da3ff]" />
+            <span className="text-[13px] text-foreground/80">
+              업로드 직전에 필요한 인증만 수행하는 가벼운 진입 흐름입니다.
+            </span>
+          </div>
+          <div className="liquid-feature-row flex items-center gap-2.5 rounded-[20px] px-4 py-3">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-[#4da3ff]" />
+            <span className="text-[13px] text-foreground/80">
+              {isLocalUiMock
+                ? "로컬 프로필로 즉시 진입해 화면 흐름을 검증할 수 있습니다."
+                : "인증 후 OpenAI 연결과 결제 흐름으로 자연스럽게 이어집니다."}
+            </span>
+          </div>
+        </div>
+
         <button
           type="button"
           onClick={handleLogin}
           disabled={Boolean(authErrorMessage)}
-          className="liquid-chip flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-2xl px-4 transition-[transform,background-color,border-color,box-shadow] duration-200 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-60"
+          className="liquid-chip flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-full px-5 transition-[transform,background-color,border-color,box-shadow] duration-200 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-60"
         >
           <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24">
             <path
@@ -98,19 +127,20 @@ export function LoginPage() {
           <span className="text-[14px] text-foreground/80">
             {isLocalUiMock ? "로컬 테스트로 로그인" : "Google 계정으로 로그인"}
           </span>
+          <ArrowRight className="h-4 w-4 text-foreground/60" />
         </button>
 
         {authErrorMessage && (
-          <p className="mt-4 text-[12px] text-rose-600">
-            {authErrorMessage}
-          </p>
+          <div className="liquid-inline-note mt-4 w-full rounded-[22px] px-4 py-3 text-left">
+            <p className="text-[12px] text-rose-600">{authErrorMessage}</p>
+          </div>
         )}
         <p className="mt-5 text-[12px] text-muted-foreground">
           {isLocalUiMock
             ? "Google 없이 로컬 프로필로 바로 진입합니다."
             : "이미지를 올리는 순간에만 로그인하도록 동작합니다."}
         </p>
-      </div>
+      </section>
     </motion.div>
   );
 }

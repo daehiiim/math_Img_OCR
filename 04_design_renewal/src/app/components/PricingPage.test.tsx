@@ -28,6 +28,8 @@ describe("PricingPage", () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByRole("region", { name: "상단 안내 surface" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "plan surface" })).toBeInTheDocument();
     expect(await screen.findByText("₩9,900")).toBeInTheDocument();
     expect(screen.getAllByText("KRW").length).toBeGreaterThan(0);
     expect(screen.getByText("실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.")).toBeInTheDocument();
@@ -46,6 +48,7 @@ describe("PricingPage", () => {
       "liquid-page-shell",
       "liquid-page-shell--billing"
     );
+    expect(screen.getByRole("region", { name: "상단 안내 surface" })).toHaveClass("liquid-frost-panel");
   });
 
   it("catalog 요청이 실패하면 live fallback을 숨기고 점검 안내만 보여준다", async () => {

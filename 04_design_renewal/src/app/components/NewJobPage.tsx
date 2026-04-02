@@ -331,42 +331,74 @@ export function NewJobPage() {
       </div>
 
       {!preview ? (
-        <Card className="liquid-frost-panel--soft mx-auto mb-6 max-w-4xl">
-          <CardContent className="pt-6">
-            <div
-              className={`liquid-dashed-dropzone rounded-[28px] border-2 border-dashed p-12 text-center transition-colors ${
-                dragActive
-                  ? "border-primary bg-primary/5"
-                  : "hover:border-primary/40"
-              }`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={handleDrop}
-            >
-              <div className="liquid-stat-orb mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-                <Upload className="w-7 h-7 text-muted-foreground" />
-              </div>
-              <h3 className="text-[15px] mb-1">이미지를 드래그하거나 클릭하여 업로드</h3>
-              <p className="text-[13px] text-muted-foreground mb-4">
-                PNG, JPG, JPEG 형식 지원 · 10MB 이하
-              </p>
-              <Button
-                variant="outline"
-                onClick={openFilePicker}
-                className="gap-2"
-              >
-                <ImageIcon className="w-4 h-4" />
-                파일 선택
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section aria-label="메인 캔버스 진입 패널" className="liquid-new-job-entry min-w-0">
+            <Card className="liquid-frost-panel--soft mx-auto mb-6 max-w-4xl">
+              <CardContent className="pt-6">
+                <div
+                  className={`liquid-dashed-dropzone rounded-[28px] border-2 border-dashed p-12 text-center transition-colors ${
+                    dragActive
+                      ? "border-primary bg-primary/5"
+                      : "hover:border-primary/40"
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragActive(true);
+                  }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={handleDrop}
+                >
+                  <div className="liquid-stat-orb mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                    <Upload className="w-7 h-7 text-muted-foreground" />
+                  </div>
+                  <h3 className="mb-1 text-[15px]">이미지를 드래그하거나 클릭하여 업로드</h3>
+                  <p className="mb-4 text-[13px] text-muted-foreground">
+                    PNG, JPG, JPEG 형식 지원 · 10MB 이하
+                  </p>
+                  <Button
+                    variant="glass"
+                    size="pill"
+                    onClick={openFilePicker}
+                    className="gap-2"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    파일 선택
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section aria-label="실행 도크" className="liquid-new-job-dock space-y-6 xl:sticky xl:top-6">
+            <Card className="liquid-frost-panel--soft">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-[14px]">
+                  <Sparkles className="w-4 h-4" />
+                  실행 도크
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="liquid-inline-note rounded-[22px] p-3 text-[12px] text-muted-foreground">
+                  이미지를 올리면 왼쪽 메인 보드에서 영역을 지정하고, 오른쪽 도크에서 실행 옵션과 차감 예측을 바로 조정할 수 있습니다.
+                </div>
+                <div className="space-y-2">
+                  {[
+                    "1. 이미지 업로드 후 메타 정보와 캔버스를 확인합니다.",
+                    "2. 필요한 영역만 지정하거나 전체 자동 인식을 선택합니다.",
+                    "3. 실행 직전에만 로그인 또는 결제를 유도합니다.",
+                  ].map((item) => (
+                    <div key={item} className="liquid-chip rounded-[20px] px-3 py-2 text-[12px] text-muted-foreground">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        </div>
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="min-w-0">
+          <section aria-label="메인 캔버스 보드" className="liquid-new-job-board min-w-0">
             <Card className="overflow-hidden">
               <CardHeader className="gap-4 border-b border-white/55 bg-white/20">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -374,8 +406,8 @@ export function NewJobPage() {
                     <CardTitle className="text-[15px]">영역 지정</CardTitle>
                   </div>
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="glass"
+                    size="pill"
                     onClick={resetDraftSelection}
                     className="gap-2 self-start"
                   >
@@ -413,9 +445,9 @@ export function NewJobPage() {
                 />
               </CardContent>
             </Card>
-          </div>
+          </section>
 
-          <div className="space-y-6 xl:sticky xl:top-6">
+          <section aria-label="실행 도크" className="liquid-new-job-dock space-y-6 xl:sticky xl:top-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-[14px] flex items-center gap-2">
@@ -482,6 +514,7 @@ export function NewJobPage() {
 
                 <Button
                   onClick={() => void handleRunPipeline()}
+                  size="pill"
                   className="w-full gap-2"
                   disabled={isSubmitting}
                 >
@@ -490,7 +523,7 @@ export function NewJobPage() {
                 </Button>
               </CardContent>
             </Card>
-          </div>
+          </section>
         </div>
       )}
     </div>

@@ -37,6 +37,7 @@ describe("LoginPage", () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByRole("region", { name: "진입 허브" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "로컬 테스트로 로그인" })).toBeInTheDocument();
     expect(screen.getByText("Google 없이 로컬 프로필로 바로 진입합니다.")).toBeInTheDocument();
   });
@@ -65,6 +66,7 @@ describe("LoginPage", () => {
       screen.getByText("로컬 UI mock 모드를 켜거나 Supabase 인증 환경값을 설정해주세요.")
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Google 계정으로 로그인" })).toBeDisabled();
+    expect(screen.getByRole("region", { name: "진입 허브" })).toBeInTheDocument();
   });
 
   it("mock 로그인 완료 후에는 원래 요청 경로로 바로 복귀한다", async () => {

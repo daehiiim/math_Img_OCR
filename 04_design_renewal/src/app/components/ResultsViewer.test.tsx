@@ -36,6 +36,7 @@ describe("ResultsViewer", () => {
 
     render(<ResultsViewer regions={[region]} />);
 
+    expect(screen.getByRole("region", { name: "q1 결과 surface" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /ocr 결과/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /이미지 미리보기/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /해설/i })).toBeInTheDocument();

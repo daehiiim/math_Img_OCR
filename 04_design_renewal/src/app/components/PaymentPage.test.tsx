@@ -64,6 +64,9 @@ describe("PaymentPage", () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByRole("region", { name: "주문 요약" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "결제 수단" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "결제 CTA" })).toBeInTheDocument();
     expect(await screen.findByText("₩9,900")).toBeInTheDocument();
     expect(screen.getByText("Polar checkout으로 안전하게 결제됩니다.")).toBeInTheDocument();
     expect(screen.getByText("실제 결제 통화와 세금은 checkout에서 최종 확정됩니다.")).toBeInTheDocument();
@@ -245,5 +248,24 @@ describe("PaymentPage", () => {
 
     expect(await screen.findByText("mock 모드에서는 주문/영수증 포털을 제공하지 않습니다.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /주문\/영수증 관리/i })).toBeDisabled();
+  });
+
+  it("결제 완료 화면에서도 pill CTA 언어를 유지한다", async () => {
+    getCheckoutSessionStatusApiMock.mockResolvedValue({
+      checkout_id: "chk_success_pill",
+      status: "succeeded",
+      credits_applied: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/payment/starter?checkout=success&checkout_id=chk_success_pill"]}>
+        <Routes>
+          <Route path="/payment/:planId" element={<PaymentPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("결제가 완료되었습니다")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /워크스페이스로 이동|이전 화면으로 이동/i })).toBeInTheDocument();
   });
 });

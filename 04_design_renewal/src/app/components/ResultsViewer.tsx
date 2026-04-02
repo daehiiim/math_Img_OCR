@@ -126,27 +126,32 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
         const lowConfidenceAutoFull = isLowConfidenceAutoFullRegion(region);
 
         return (
-          <Card key={region.id}>
+          <Card
+            key={region.id}
+            role="region"
+            aria-label={`${region.id} 결과 surface`}
+            className="liquid-frost-panel liquid-frost-panel--soft gap-4"
+          >
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="flex items-center gap-2 text-[14px]">
                   <div className="h-3 w-3 rounded-full bg-primary/70" />
                   {region.id}
                 </CardTitle>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {autoFullRegion ? (
-                    <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 px-[8px] py-[2px] text-amber-800">
+                    <Badge variant="outline" className="gap-1 rounded-full border-amber-300 bg-amber-50 px-[8px] py-[2px] text-amber-800">
                       자동 전체 인식
                     </Badge>
                   ) : null}
                   {verificationWarningVisible ? (
-                    <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 px-[8px] py-[2px] text-amber-800">
+                    <Badge variant="outline" className="gap-1 rounded-full border-amber-300 bg-amber-50 px-[8px] py-[2px] text-amber-800">
                       검증 경고
                     </Badge>
                   ) : null}
                   <Badge
-                    variant={region.status === "completed" || exportable ? "secondary" : "outline"}
-                    className="gap-1 px-[8px] py-[2px]"
+                    variant={region.status === "completed" || exportable ? "glass" : "outline"}
+                    className="gap-1 rounded-full px-[8px] py-[2px]"
                   >
                     {getRegionStatusLabel(region)}
                   </Badge>
@@ -213,7 +218,7 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
                   </TabsList>
 
                   <TabsContent value="ocr" className="mt-3">
-                    <div className="rounded-lg bg-muted/50 p-4">
+                    <div className="liquid-inline-note rounded-[20px] p-4">
                       <MathMarkupPreview value={getProblemPreviewValue(region)} emptyLabel="OCR 결과 없음" />
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
@@ -247,7 +252,7 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
                         ) : null}
                       </div>
                     ) : (
-                      <div className="rounded-lg border border-dashed bg-muted/30 p-6 text-center">
+                      <div className="rounded-[20px] border border-dashed bg-muted/30 p-6 text-center">
                         <p className="text-[12px] text-muted-foreground">
                           변환 대상 이미지가 없어 미리보기를 생성하지 않았습니다.
                         </p>
@@ -256,7 +261,7 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
                   </TabsContent>
 
                   <TabsContent value="explain" className="mt-3">
-                    <div className="rounded-lg bg-muted/50 p-4">
+                    <div className="liquid-inline-note rounded-[20px] p-4">
                       <MathMarkupPreview value={getExplanationPreviewValue(region)} emptyLabel="해설 없음" />
                     </div>
                   </TabsContent>

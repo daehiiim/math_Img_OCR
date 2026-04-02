@@ -131,6 +131,9 @@ describe("JobDetailPage", () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByRole("region", { name: "작업 상태 surface" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "액션 도크 surface" })).toBeInTheDocument();
+
     await user.click(screen.getByRole("checkbox", { name: /해설 작성/i }));
     await user.click(screen.getByRole("button", { name: /^파이프라인 실행$/i }));
 
@@ -282,6 +285,7 @@ describe("JobDetailPage", () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByRole("region", { name: "결과 보드 surface" })).toBeInTheDocument();
     expect(
       screen.queryAllByText((_, element) => {
         const text = element?.textContent || "";
