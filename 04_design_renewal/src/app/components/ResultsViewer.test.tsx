@@ -170,4 +170,18 @@ describe("ResultsViewer", () => {
     expect(screen.getByText("정답 불일치")).toBeInTheDocument();
     expect(screen.getByText("해설 재검증 필요")).toBeInTheDocument();
   });
+
+  it("자동 전체 인식 영역에는 모드 배지와 재지정 안내를 표시한다", () => {
+    const region = makeRegion({
+      selectionMode: "auto_full",
+      inputDevice: "system",
+      warningLevel: "high_risk",
+      ocrText: "짧음",
+    });
+
+    render(<ResultsViewer regions={[region]} />);
+
+    expect(screen.getByText("자동 전체 인식")).toBeInTheDocument();
+    expect(screen.getByText(/직접 영역을 지정하면 더 정확할 수 있습니다/i)).toBeInTheDocument();
+  });
 });

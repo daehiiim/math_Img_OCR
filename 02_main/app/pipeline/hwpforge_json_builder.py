@@ -16,6 +16,8 @@ from app.pipeline.hwpx_math_layout import (
 )
 from app.pipeline.hwpx_reference_renderer import collect_exportable_regions, copy_region_image, parse_problem_text
 
+PARAGRAPH_LAYOUT_CACHE_KEYS = ("linesegarray", "hp:linesegarray", "line_segment_array")
+
 
 @dataclass(frozen=True)
 class JsonTemplateProfile:
@@ -376,10 +378,25 @@ def _is_equation_run(run: dict[str, Any]) -> bool:
 
 
 def _clone_paragraph(paragraph: dict[str, Any]) -> dict[str, Any]:
-    """문단 템플릿을 안전하게 복제한다."""
-    return deepcopy(paragraph)
+    """문단 템플릿을 안전하게 복제하고 stale layout cache를 제거한다."""
+    cloned = deepcopy(paragraph)
+    _strip_paragraph_layout_cache(cloned)
+    return cloned
 
 
 def _clone_run(run: dict[str, Any]) -> dict[str, Any]:
     """run 템플릿을 안전하게 복제한다."""
     return deepcopy(run)
+
+
+def _strip_paragraph_layout_cache(node: Any) -> None:
+    """문단 dict 내부에 남은 linesegarray layout cache를 재귀적으로 제거한다."""
+    if isinstance(node, dict):
+        for cache_key in PARAGRAPH_LAYOUT_CACHE_KEYS:
+            node.pop(cache_key, None)
+        for value in node.values():
+            _strip_paragraph_layout_cache(value)
+        return
+    if isinstance(node, list):
+        for item in node:
+            _strip_paragraph_layout_cache(item)

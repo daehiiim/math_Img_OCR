@@ -236,6 +236,25 @@ def test_build_exported_document_resizes_equation_widths_from_script_length():
     assert explanation_widths["AB"] < explanation_widths["x = 21 over 4 - 8 = 9 over 4"]
 
 
+def test_clone_paragraph_drops_stale_linesegarray_cache():
+    """문단 복제본은 stale linesegarray cache를 들고 가지 않아야 한다."""
+    from app.pipeline.hwpforge_json_builder import _clone_paragraph
+
+    paragraph = {
+        "runs": [],
+        "para_shape_id": 0,
+        "column_break": False,
+        "page_break": False,
+        "style_id": 0,
+        "linesegarray": {"stale": True},
+    }
+
+    cloned = _clone_paragraph(paragraph)
+
+    assert "linesegarray" in paragraph
+    assert "linesegarray" not in cloned
+
+
 def test_build_hwpforge_export_ir_prefers_markdown_fields_when_present(tmp_path):
     """Markdown 필드가 있으면 legacy text 대신 그 값을 export IR에 써야 한다."""
     from app.pipeline.hwpforge_json_builder import build_hwpforge_export_ir

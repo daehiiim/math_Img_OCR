@@ -8,9 +8,13 @@ from app.auth import AuthenticatedUser
 from app.config import get_settings
 from app.schema_compat import (
     is_markdown_output_schema_error,
+    is_region_metadata_schema_error,
     remember_markdown_output_columns_available,
+    remember_region_metadata_columns_available,
+    should_use_region_metadata_columns,
     should_use_markdown_output_columns,
     strip_markdown_output_fields,
+    strip_region_metadata_fields,
 )
 from app.pipeline.schema import (
     ExtractorContext,
@@ -64,6 +68,11 @@ _REGION_MARKDOWN_COLUMNS = (
     "verification_warnings",
     "reason_summary",
 )
+_REGION_METADATA_COLUMNS = (
+    "selection_mode",
+    "input_device",
+    "warning_level",
+)
 
 
 class PipelineRepository(Protocol):
@@ -114,9 +123,11 @@ def _guess_content_type(path_value: str, fallback: str) -> str:
     return guessed or fallback
 
 
-def _build_region_select(include_markdown_output: bool) -> str:
+def _build_region_select(include_markdown_output: bool, include_region_metadata: bool) -> str:
     """region 조회 컬럼 목록을 현재 스키마 호환 수준에 맞게 만든다."""
     columns = list(_REGION_BASE_SELECT_COLUMNS)
+    if include_region_metadata:
+        columns.extend(_REGION_METADATA_COLUMNS)
     if include_markdown_output:
         columns[8:8] = list(_REGION_MARKDOWN_COLUMNS)
     return ",".join(columns)
@@ -149,6 +160,9 @@ class SupabasePipelineRepository:
                 polygon=row.get("polygon") or [],
                 type=row.get("region_type") or "mixed",
                 order=int(row.get("region_order") or 1),
+                selection_mode=row.get("selection_mode") or "manual",
+                input_device=row.get("input_device"),
+                warning_level=row.get("warning_level") or "normal",
             ),
             extractor=ExtractorContext(
                 ocr_text=row.get("ocr_text"),
@@ -200,6 +214,9 @@ class SupabasePipelineRepository:
                 "polygon": region.context.polygon,
                 "region_type": region.context.type,
                 "region_order": region.context.order,
+                "selection_mode": region.context.selection_mode,
+                "input_device": region.context.input_device,
+                "warning_level": region.context.warning_level,
                 "status": region.status,
                 "ocr_text": region.extractor.ocr_text,
                 "explanation": region.extractor.explanation,
@@ -237,9 +254,7 @@ class SupabasePipelineRepository:
             }
             for region in job.regions
         ]
-        if should_use_markdown_output_columns():
-            return payloads
-        return [strip_markdown_output_fields(payload) for payload in payloads]
+        return payloads
 
     def _read_region_rows(self, client: SupabaseClient, job_id: str) -> list[dict]:
         """job region row를 현재 배포 스키마에 맞는 컬럼 집합으로 읽는다."""
@@ -247,37 +262,63 @@ class SupabasePipelineRepository:
             "job_id": f"eq.{job_id}",
             "order": "region_order.asc",
         }
-        if should_use_markdown_output_columns():
+        include_markdown_output = should_use_markdown_output_columns()
+        include_region_metadata = should_use_region_metadata_columns()
+
+        while True:
             try:
                 rows = client.select(
                     "ocr_job_regions",
-                    params={**params, "select": _build_region_select(include_markdown_output=True)},
+                    params={
+                        **params,
+                        "select": _build_region_select(include_markdown_output, include_region_metadata),
+                    },
                 )
-                remember_markdown_output_columns_available(True)
+                if include_markdown_output:
+                    remember_markdown_output_columns_available(True)
+                if include_region_metadata:
+                    remember_region_metadata_columns_available(True)
                 return rows
             except Exception as error:
-                if not is_markdown_output_schema_error(error):
-                    raise
-                remember_markdown_output_columns_available(False)
-        return client.select(
-            "ocr_job_regions",
-            params={**params, "select": _build_region_select(include_markdown_output=False)},
-        )
+                if include_region_metadata and is_region_metadata_schema_error(error):
+                    remember_region_metadata_columns_available(False)
+                    include_region_metadata = False
+                    continue
+                if include_markdown_output and is_markdown_output_schema_error(error):
+                    remember_markdown_output_columns_available(False)
+                    include_markdown_output = False
+                    continue
+                raise
 
     def _upsert_region_rows(self, client: SupabaseClient, job: JobPipelineContext) -> None:
         """job region upsert를 현재 배포 스키마에 맞는 payload로 수행한다."""
         payload = self._build_region_payload(job)
-        if should_use_markdown_output_columns():
+        include_markdown_output = should_use_markdown_output_columns()
+        include_region_metadata = should_use_region_metadata_columns()
+
+        while True:
+            current_payload = payload
+            if not include_markdown_output:
+                current_payload = [strip_markdown_output_fields(row) for row in current_payload]
+            if not include_region_metadata:
+                current_payload = [strip_region_metadata_fields(row) for row in current_payload]
             try:
-                client.upsert("ocr_job_regions", payload=payload, on_conflict="job_id,region_key")
-                remember_markdown_output_columns_available(True)
+                client.upsert("ocr_job_regions", payload=current_payload, on_conflict="job_id,region_key")
+                if include_markdown_output:
+                    remember_markdown_output_columns_available(True)
+                if include_region_metadata:
+                    remember_region_metadata_columns_available(True)
                 return
             except Exception as error:
-                if not is_markdown_output_schema_error(error):
-                    raise
-                remember_markdown_output_columns_available(False)
-                payload = [strip_markdown_output_fields(row) for row in payload]
-        client.upsert("ocr_job_regions", payload=payload, on_conflict="job_id,region_key")
+                if include_region_metadata and is_region_metadata_schema_error(error):
+                    remember_region_metadata_columns_available(False)
+                    include_region_metadata = False
+                    continue
+                if include_markdown_output and is_markdown_output_schema_error(error):
+                    remember_markdown_output_columns_available(False)
+                    include_markdown_output = False
+                    continue
+                raise
 
     def create_job(
         self,

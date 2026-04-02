@@ -345,6 +345,40 @@ describe("NewJobPage", () => {
     expect(await screen.findByText("job detail")).toBeInTheDocument();
   });
 
+  it("영역이 없어도 자동 전체 인식 안내를 보여주고 saveRegions 없이 실행한다", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/new"]}>
+        <Routes>
+          <Route path="/new" element={<NewJobPage />} />
+          <Route path="/workspace/job/:jobId" element={<div>job detail</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [new File(["fake"], "sample.png", { type: "image/png" })],
+      },
+    });
+
+    await screen.findByText("sample.png");
+    expect(screen.getByText(/영역을 지정하지 않으면 이미지 전체를 자동 인식/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /파이프라인 실행/i }));
+
+    await waitFor(() => expect(createJobMock).toHaveBeenCalledTimes(1));
+    expect(saveRegionsMock).not.toHaveBeenCalled();
+    expect(runPipelineMock).toHaveBeenCalledWith("job-1", {
+      doOcr: true,
+      doImageStylize: true,
+      doExplanation: true,
+    });
+    expect(await screen.findByText("job detail")).toBeInTheDocument();
+  });
+
   it("로그인 사용자의 크레딧이 부족하면 draft를 저장하고 결제 경로로 이동한다", async () => {
     const user = userEvent.setup();
     mockAuthState = {

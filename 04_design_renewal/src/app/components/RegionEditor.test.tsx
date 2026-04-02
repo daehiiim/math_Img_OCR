@@ -22,7 +22,7 @@ describe("RegionEditor", () => {
     expect(onRegionsChange).not.toHaveBeenCalled();
   });
 
-  it("영역 타입 선택 없이 저장 payload를 항상 mixed로 보낸다", async () => {
+  it("포인터 드래그로 만든 영역을 항상 mixed payload로 저장한다", async () => {
     const user = userEvent.setup();
     const onSaveRegions = vi.fn(async () => undefined);
 
@@ -36,10 +36,10 @@ describe("RegionEditor", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /영역 그리기/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^텍스트$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^도형$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^혼합$/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/마우스·손가락·펜 드래그 지원/i)).toBeInTheDocument();
 
     const canvas = screen.getByAltText("uploaded").parentElement as HTMLDivElement;
     vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
@@ -54,9 +54,9 @@ describe("RegionEditor", () => {
       toJSON: () => ({}),
     });
 
-    fireEvent.mouseDown(canvas, { clientX: 20, clientY: 20 });
-    fireEvent.mouseMove(canvas, { clientX: 160, clientY: 120 });
-    fireEvent.mouseUp(canvas);
+    fireEvent.pointerDown(canvas, { clientX: 20, clientY: 20, pointerId: 1, pointerType: "touch" });
+    fireEvent.pointerMove(canvas, { clientX: 160, clientY: 120, pointerId: 1, pointerType: "touch" });
+    fireEvent.pointerUp(canvas, { clientX: 160, clientY: 120, pointerId: 1, pointerType: "touch" });
 
     await user.click(screen.getByRole("button", { name: /영역 저장 \(1개\)/i }));
 
@@ -65,6 +65,8 @@ describe("RegionEditor", () => {
         id: "q1",
         type: "mixed",
         order: 1,
+        inputDevice: "touch",
+        selectionMode: "manual",
       }),
     ]);
   });

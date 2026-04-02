@@ -49,6 +49,9 @@ class Region(BaseModel):
     polygon: list[list[float]] = Field(min_length=4)
     type: Literal["text", "diagram", "mixed"]
     order: int = Field(default=1, ge=1)
+    selection_mode: Literal["manual", "auto_full"] = "manual"
+    input_device: Literal["mouse", "touch", "pen", "system"] | None = None
+    warning_level: Literal["normal", "high_risk"] = "normal"
 
     @field_validator("polygon")
     @classmethod
@@ -72,6 +75,9 @@ class RegionResult(BaseModel):
     polygon: list[list[float]] = Field(default_factory=list)
     type: Literal["text", "diagram", "mixed"] | None = None
     order: int = 1
+    selection_mode: Literal["manual", "auto_full"] = "manual"
+    input_device: Literal["mouse", "touch", "pen", "system"] | None = None
+    warning_level: Literal["normal", "high_risk"] = "normal"
     ocr_text: str | None = None
     explanation: str | None = None
     mathml: str | None = None
@@ -209,6 +215,9 @@ def _is_schema_mismatch_message(message: str) -> bool:
         "image_crop_path",
         "styled_image_path",
         "styled_image_model",
+        "selection_mode",
+        "input_device",
+        "warning_level",
     )
     return any(token in normalized for token in schema_tokens)
 
@@ -277,6 +286,9 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
                 polygon=region.context.polygon,
                 type=region.context.type,
                 order=region.context.order,
+                selection_mode=region.context.selection_mode,
+                input_device=region.context.input_device,
+                warning_level=region.context.warning_level,
                 ocr_text=region.extractor.ocr_text,
                 explanation=region.extractor.explanation,
                 mathml=region.extractor.mathml,

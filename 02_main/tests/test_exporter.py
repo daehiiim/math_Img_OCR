@@ -383,6 +383,61 @@ def test_export_hwpx_hwpforge_mode_raises_when_helper_fails(tmp_path, monkeypatc
         module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
 
 
+def test_export_hwpx_strips_linesegarray_cache_from_direct_section(tmp_path, monkeypatch):
+    """direct HwpForge section에 남은 linesegarray cache는 최종 패키징 전에 제거해야 한다."""
+    module = load_exporter_module()
+    root_path, image_relative_path = make_runtime_paths(module, tmp_path, monkeypatch)
+    export_dir = tmp_path / "exports"
+
+    def fake_settings(_root):
+        """테스트용 direct HwpForge 설정을 반환한다."""
+        return SimpleNamespace(hwpx_skill_dir=None, hwpx_export_engine="hwpforge", hwpforge_mcp_path="dummy")
+
+    def fake_direct_writer(
+        root_path: Path,
+        job,
+        bindata_dir: Path,
+        output_dir: Path,
+        year: str,
+        warnings,
+        runtime_path: str | None,
+        app_root: Path,
+    ):
+        """의도적으로 stale linesegarray가 남은 section을 만든다."""
+        _ = (root_path, job, year, warnings, runtime_path, app_root)
+        bindata_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        section_root = read_style_guide_xml("Contents/section0.xml")
+        paragraph_ns = NS["hp"]
+        for paragraph in section_root.findall(".//hp:p", NS)[:3]:
+            linesegarray = etree.SubElement(paragraph, f"{{{paragraph_ns}}}linesegarray")
+            etree.SubElement(
+                linesegarray,
+                f"{{{paragraph_ns}}}lineseg",
+                textpos="0",
+                vertpos="0",
+                vertsize="1000",
+                textheight="1000",
+                baseline="850",
+                spacing="600",
+                horzpos="0",
+                horzsize="1000",
+                flags="393216",
+            )
+        target_path = output_dir / "section0.direct.xml"
+        target_path.write_bytes(etree.tostring(section_root, encoding="utf-8", xml_declaration=True))
+        return target_path, []
+
+    monkeypatch.setattr(module, "get_settings", fake_settings)
+    monkeypatch.setattr(module, "build_section_via_hwpforge", fake_direct_writer)
+    monkeypatch.setattr(module, "inspect_and_validate_hwpx_via_hwpforge", lambda *_args: None)
+
+    hwpx_path = module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
+    section_root = read_archive_xml(hwpx_path, "Contents/section0.xml")
+
+    assert section_root.findall(".//hp:linesegarray", NS) == []
+
+
 def test_export_hwpx_uses_style_guide_secpr_exactly(tmp_path, monkeypatch):
     """section secPr/pagePr/masterPage는 style guide와 완전히 같아야 한다."""
     module = load_exporter_module()

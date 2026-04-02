@@ -16,6 +16,7 @@ from app.pipeline.figure import (
     crop_image_bytes,
     crop_region_image,
     normalize_svg_xml,
+    preprocess_auto_full_ocr_image,
     read_image_size,
     render_svg_to_png,
     sanitize_svg,
@@ -32,6 +33,7 @@ from app.pipeline.schema import JobPipelineContext, RegionContext, RegionPipelin
 ROOT = Path(__file__).resolve().parents[2]
 _repository_factory: Callable[[], PipelineRepository] | None = None
 EXPLANATION_VERIFICATION_WARNING_TEXT = "해설 검증이 필요합니다. 정답과 풀이의 일치 여부를 자동 확인하지 못했습니다."
+AUTO_FULL_REGION_ID = "auto_full_1"
 
 
 def _coerce_ordered_segments(raw_segments: Any) -> list[dict[str, Any]]:
@@ -210,6 +212,53 @@ def _read_image_size(content: bytes) -> tuple[int, int]:
         return 0, 0
 
 
+def _build_region_polygon(left: int, top: int, right: int, bottom: int) -> list[list[int]]:
+    """좌상단/우하단 좌표를 사각형 polygon으로 변환한다."""
+    return [[left, top], [right, top], [right, bottom], [left, bottom]]
+
+
+def _build_auto_full_region(job: JobPipelineContext) -> RegionPipelineContext:
+    """영역이 비어 있을 때 쓸 전체 이미지 fallback 영역을 만든다."""
+    width = max(1, int(job.image_width or 0))
+    height = max(1, int(job.image_height or 0))
+    return RegionPipelineContext(
+        context=RegionContext(
+            id=AUTO_FULL_REGION_ID,
+            polygon=_build_region_polygon(0, 0, width, height),
+            type="mixed",
+            order=1,
+            selection_mode="auto_full",
+            input_device="system",
+            warning_level="high_risk",
+        )
+    )
+
+
+def _ensure_regions_for_run(job: JobPipelineContext) -> None:
+    """실행 직전 영역이 비어 있으면 전체 이미지 fallback 영역을 채운다."""
+    if job.regions:
+        return
+    job.regions = [_build_auto_full_region(job)]
+
+
+def _build_region_context(raw_region: dict[str, Any]) -> RegionContext:
+    """입력 payload를 저장 가능한 RegionContext로 정규화한다."""
+    return RegionContext(
+        id=raw_region["id"],
+        polygon=raw_region["polygon"],
+        type=raw_region.get("type") or "mixed",
+        order=int(raw_region.get("order", 1)),
+        selection_mode=raw_region.get("selection_mode") or "manual",
+        input_device=raw_region.get("input_device"),
+        warning_level=raw_region.get("warning_level") or "normal",
+    )
+
+
+def _uses_auto_full_selection(region: RegionPipelineContext) -> bool:
+    """현재 영역이 시스템 자동 전체 인식 fallback 인지 판단한다."""
+    return region.context.selection_mode == "auto_full"
+
+
 def read_job(user: PipelineUserContext, job_id: str) -> JobPipelineContext:
     """영구 저장소에서 job과 region 상태를 읽는다."""
     return _get_repository().read_job(user, job_id)
@@ -249,12 +298,7 @@ def save_regions(user: PipelineUserContext, job_id: str, regions_dict: list[dict
         if len(polygon) < 4:
             raise ValueError("polygon must contain at least 4 points")
 
-        region_context = RegionContext(
-            id=raw_region["id"],
-            polygon=polygon,
-            type=raw_region.get("type") or "mixed",
-            order=int(raw_region.get("order", 1)),
-        )
+        region_context = _build_region_context(raw_region)
         regions.append(RegionPipelineContext(context=region_context))
 
     job.regions = regions
@@ -393,6 +437,12 @@ def _process_region(
 
     try:
         crop_bytes = crop_region_image(image_path, region.context.polygon, crop_path)
+        analysis_input_bytes = crop_bytes
+        if _uses_auto_full_selection(region):
+            analysis_input_bytes = preprocess_auto_full_ocr_image(
+                crop_bytes,
+                preserve_geometry=do_image_stylize,
+            )
         crop_storage_path = f"{user.user_id}/{job.job_id}/outputs/{region_id}_crop.png"
         repository.upload_bytes(user, crop_storage_path, crop_bytes, "image/png")
         region.figure.crop_url = crop_storage_path
@@ -400,7 +450,7 @@ def _process_region(
 
         analyzed = analyze_region_with_gpt(
             ROOT,
-            crop_bytes,
+            analysis_input_bytes,
             region.context.type,
             api_key=api_key,
             include_ocr=do_ocr,
@@ -418,7 +468,7 @@ def _process_region(
             try:
                 explanation = generate_explanation_with_gpt(
                     ROOT,
-                    crop_bytes,
+                    analysis_input_bytes,
                     region.extractor.ocr_text or "",
                     region.extractor.mathml or "",
                     api_key=api_key,
@@ -512,8 +562,7 @@ def run_pipeline(
     """선택된 OCR/이미지 생성/해설 작업을 수행하고 결과를 저장한다."""
     repository = _get_repository()
     job = read_job(user, job_id)
-    if not job.regions:
-        raise ValueError("regions not set")
+    _ensure_regions_for_run(job)
 
     job.processing_type = processing_type
     job.status = "running"

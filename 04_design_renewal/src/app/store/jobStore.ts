@@ -15,12 +15,18 @@ import { mapBackendJob } from "./jobMappers";
 
 export type RegionType = "text" | "diagram" | "mixed";
 export type RegionStatus = "pending" | "running" | "completed" | "failed";
+export type SelectionMode = "manual" | "auto_full" | "none";
+export type InputDevice = "mouse" | "touch" | "pen" | "system";
+export type WarningLevel = "normal" | "high_risk";
 
 export interface Region {
   id: string;
   polygon: number[][];
   type: RegionType;
   order: number;
+  selectionMode?: Exclude<SelectionMode, "none">;
+  inputDevice?: InputDevice;
+  warningLevel?: WarningLevel;
   status?: RegionStatus;
   ocrText?: string;
   explanation?: string;
@@ -114,6 +120,9 @@ export function useJobStore() {
               regions: regions.map((region) => ({
                 ...region,
                 type: "mixed",
+                selectionMode: region.selectionMode ?? "manual",
+                inputDevice: region.inputDevice,
+                warningLevel: region.warningLevel ?? "normal",
                 status: "pending",
                 wasCharged: false,
                 ocrCharged: false,
@@ -149,6 +158,9 @@ export function useJobStore() {
           polygon: region.polygon,
           type: "mixed",
           order: region.order,
+          selection_mode: region.selectionMode ?? "manual",
+          input_device: region.inputDevice,
+          warning_level: region.warningLevel ?? "normal",
         }))
       );
 

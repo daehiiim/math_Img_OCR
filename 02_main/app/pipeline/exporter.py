@@ -363,6 +363,7 @@ def _prepare_export_bundle(
         warnings=warnings,
     )
     _repair_inline_equation_layout_metrics(section_path, canonical_template_path, warnings)
+    _strip_section_linesegarray_cache(section_path)
     _apply_bundle_common_updates(work_dir, content_hpf, header_xml_path, images_info, runtime_modules)
     _validate_template_contract(work_dir, content_hpf, header_xml_path, section_path, canonical_template_path)
     return section_path, header_xml_path, content_hpf
@@ -393,6 +394,7 @@ def _prepare_direct_hwpforge_bundle(
     )
     section_path.write_bytes(direct_section_path.read_bytes())
     _repair_inline_equation_layout_metrics(section_path, canonical_template_path, warnings)
+    _strip_section_linesegarray_cache(section_path)
     _apply_bundle_common_updates(work_dir, content_hpf, header_xml_path, images_info, runtime_modules)
     _validate_template_contract(work_dir, content_hpf, header_xml_path, section_path, canonical_template_path)
     return section_path, header_xml_path, content_hpf
@@ -438,6 +440,21 @@ def _repair_inline_equation_layout_metrics(
         section_path.write_bytes(repaired_section_xml)
     except Exception as error:
         warnings.add("HWPX_EQUATION_LAYOUT_REPAIR_FAILED", f"detail={error}")
+
+
+def _strip_section_linesegarray_cache(section_path: Path) -> None:
+    """최종 section0.xml 전체에서 stale linesegarray cache를 제거한다."""
+    tree = etree.parse(str(section_path))
+    root = tree.getroot()
+    removed = False
+    for node in root.findall(".//hp:linesegarray", HWPX_NS):
+        parent = node.getparent()
+        if parent is None:
+            continue
+        parent.remove(node)
+        removed = True
+    if removed:
+        tree.write(str(section_path), encoding="UTF-8", xml_declaration=True)
 
 
 def _apply_hwpforge_section_roundtrip(

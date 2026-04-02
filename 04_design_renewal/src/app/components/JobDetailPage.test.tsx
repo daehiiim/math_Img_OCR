@@ -394,10 +394,30 @@ describe("JobDetailPage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("0 크레딧")).toBeInTheDocument();
+    expect(screen.getByText("3 크레딧")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "영역 편집" }));
+    await user.click(screen.getByRole("button", { name: "영역 편집" }));
 
-    expect(screen.getByText("3 크레딧")).toBeInTheDocument();
+    expect(screen.getByText("6 크레딧")).toBeInTheDocument();
+  });
+
+  it("영역이 없어도 자동 전체 인식 경고와 실행 버튼을 노출한다", () => {
+    mockJob = {
+      ...mockJob,
+      status: "regions_pending",
+      regions: [],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/영역을 지정하지 않으면 이미지 전체를 자동 인식/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^파이프라인 실행$/i })).toBeInTheDocument();
   });
 });

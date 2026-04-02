@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageColor, ImageDraw, ImageOps
+from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageOps
 
 try:
     from svg.path import parse_path as parse_svg_path
@@ -62,6 +62,47 @@ def crop_region_image(image_path: Path, polygon: list[list[float]], output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         cropped.save(output_path, format="PNG")
     return output_path.read_bytes()
+
+
+def _trim_uniform_margins(image: Image.Image) -> Image.Image:
+    """거의 흰 배경만 남은 바깥 여백을 안전하게 줄인다."""
+    grayscale = ImageOps.grayscale(image)
+    mask = ImageOps.invert(grayscale).point(lambda value: 255 if value > 12 else 0)
+    bbox = mask.getbbox()
+    if bbox is None:
+        return image
+    left, top, right, bottom = bbox
+    content_width = right - left
+    content_height = bottom - top
+    if content_width < image.width * 0.4 or content_height < image.height * 0.4:
+        return image
+    padding = 8
+    return image.crop(
+        (max(0, left - padding), max(0, top - padding), min(image.width, right + padding), min(image.height, bottom + padding))
+    )
+
+
+def _downscale_image(image: Image.Image, max_dimension: int) -> Image.Image:
+    """지나치게 큰 이미지는 비율을 유지한 채 축소한다."""
+    longest_side = max(image.width, image.height)
+    if longest_side <= max_dimension:
+        return image
+    scale = max_dimension / longest_side
+    resized_width = max(1, int(round(image.width * scale)))
+    resized_height = max(1, int(round(image.height * scale)))
+    return image.resize((resized_width, resized_height), Image.Resampling.LANCZOS)
+
+
+def preprocess_auto_full_ocr_image(image_bytes: bytes, *, preserve_geometry: bool) -> bytes:
+    """자동 전체 인식용 OCR 입력 이미지를 완만하게 보정한다."""
+    with Image.open(BytesIO(image_bytes)) as img:
+        normalized = normalize_image_orientation(img)
+        contrasted = ImageOps.autocontrast(normalized, cutoff=1)
+        enhanced = ImageEnhance.Contrast(contrasted).enhance(1.08)
+        processed = enhanced if preserve_geometry else _downscale_image(_trim_uniform_margins(enhanced), 2200)
+        buffer = BytesIO()
+        processed.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def crop_image_bytes(image_bytes: bytes, bbox: list[int], output_path: Path) -> bytes:

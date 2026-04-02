@@ -18,6 +18,7 @@ import type { JobExecutionOptions, Region } from "../store/jobStore";
 import { RegionEditor } from "./RegionEditor";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
+import { AUTO_FULL_RISK_MESSAGE, getSelectionMode } from "../lib/regionSelection";
 
 const defaultExecutionOptions: JobExecutionOptions = {
   doOcr: true,
@@ -47,6 +48,8 @@ export function NewJobPage() {
   const [executionOptions, setExecutionOptions] = useState<JobExecutionOptions>(defaultExecutionOptions);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const selectionMode = getSelectionMode(regions);
+  const shouldUseAutoFullFallback = selectionMode === "none";
   const hasSelectedAction =
     executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
   const requiredCredits = calculateRequiredCredits(
@@ -266,10 +269,6 @@ export function NewJobPage() {
 
   const handleRunPipeline = async () => {
     if (!preview || isSubmitting) return;
-    if (regions.length === 0) {
-      toast.error("먼저 영역을 지정하세요.");
-      return;
-    }
     if (!hasSelectedAction) {
       toast.error("실행할 작업을 하나 이상 선택하세요.");
       return;
@@ -293,7 +292,9 @@ export function NewJobPage() {
         preview.height,
         preview.file
       );
-      await saveRegions(jobId, regions);
+      if (!shouldUseAutoFullFallback) {
+        await saveRegions(jobId, regions);
+      }
       await runPipeline(jobId, executionOptions);
       await refreshProfile();
       await clearGuestDraft();
@@ -467,9 +468,17 @@ export function NewJobPage() {
                     <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
                   </div>
                   <p className="mt-1 text-muted-foreground">
-                    현재 편집 중인 draft 영역 기준 예상 차감입니다.
+                    {shouldUseAutoFullFallback
+                      ? "영역 없이 실행하면 전체 이미지 1개 기준 예상 차감을 보여줍니다."
+                      : "현재 편집 중인 draft 영역 기준 예상 차감입니다."}
                   </p>
                 </div>
+
+                {shouldUseAutoFullFallback ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
+                    {AUTO_FULL_RISK_MESSAGE}
+                  </div>
+                ) : null}
 
                 <Button
                   onClick={() => void handleRunPipeline()}

@@ -301,6 +301,59 @@ def test_save_regions_replaces_existing_regions(monkeypatch):
     assert [region.context.id for region in saved_job.regions] == ["q3"]
 
 
+def test_run_pipeline_creates_auto_full_region_when_no_regions_are_saved(monkeypatch):
+    """영역이 비어 있으면 전체 이미지를 fallback 영역으로 만들어 처리해야 한다."""
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(40, 30))
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "전체 이미지 OCR",
+            "mathml": "<math>x</math>",
+            "raw_transcript": "전체 이미지 OCR",
+            "ordered_segments": [{"type": "text", "content": "전체 이미지 OCR", "source_order": 0}],
+            "has_stylizable_image": False,
+            "image_bbox": None,
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "자동 전체 해설")
+
+    result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=True,
+        do_image_stylize=False,
+        do_explanation=True,
+    )
+    saved_job = orchestrator.read_job(user, job.job_id)
+    saved_region = saved_job.regions[0]
+
+    assert result["status"] == "completed"
+    assert len(saved_job.regions) == 1
+    assert saved_region.context.id == "auto_full_1"
+    assert saved_region.context.selection_mode == "auto_full"
+    assert saved_region.context.input_device == "system"
+    assert saved_region.context.warning_level == "high_risk"
+    assert saved_region.context.polygon == [[0, 0], [40, 0], [40, 30], [0, 30]]
+    assert saved_region.extractor.ocr_text == "전체 이미지 OCR"
+    assert saved_region.extractor.explanation == "자동 전체 해설"
+    assert saved_region.figure.crop_url in repository.assets
+
+
 def test_save_edited_svg_increments_version_and_updates_asset_paths(monkeypatch, tmp_path):
     repository = install_memory_repository(monkeypatch)
     user = make_user()
@@ -1163,3 +1216,164 @@ def test_supabase_repository_save_job_falls_back_when_markdown_columns_are_missi
     assert "problem_markdown" not in client.upsert_payloads[1][0]
     assert "explanation_markdown" not in client.upsert_payloads[1][0]
     assert "markdown_version" not in client.upsert_payloads[1][0]
+
+
+def test_supabase_repository_read_job_falls_back_when_region_metadata_columns_are_missing():
+    schema_compat_module._markdown_output_columns_available = None
+    schema_compat_module._region_metadata_columns_available = None
+
+    class MetadataFallbackClient:
+        """region 메타 컬럼만 없는 구스키마를 흉내 낸다."""
+
+        def __init__(self) -> None:
+            self.region_selects: list[str] = []
+
+        def select(self, table: str, *, params: dict[str, object]) -> list[dict]:
+            if table == "ocr_jobs":
+                return [
+                    {
+                        "id": "job-123",
+                        "file_name": "sample.png",
+                        "source_image_path": "user-123/job-123/input/sample.png",
+                        "image_width": 32,
+                        "image_height": 24,
+                        "processing_type": "service_api",
+                        "status": "completed",
+                        "last_error": None,
+                        "hwpx_export_path": None,
+                        "created_at": "2026-04-02T00:00:00+00:00",
+                        "updated_at": "2026-04-02T00:00:00+00:00",
+                    }
+                ]
+            if table == "ocr_job_regions":
+                select_value = str(params.get("select") or "")
+                self.region_selects.append(select_value)
+                if "selection_mode" in select_value:
+                    raise SupabaseApiError('column selection_mode does not exist in relation "ocr_job_regions"')
+                return [
+                    {
+                        "region_key": "q1",
+                        "polygon": [[0, 0], [8, 0], [8, 8], [0, 8]],
+                        "region_type": "mixed",
+                        "region_order": 1,
+                        "status": "completed",
+                        "ocr_text": "문제 본문",
+                        "explanation": "해설 본문",
+                        "mathml": "<math>x</math>",
+                        "problem_markdown": "문제 $x$",
+                        "explanation_markdown": "해설 $x$",
+                        "markdown_version": "mathocr_markdown_bridge_v1",
+                        "raw_transcript": "문제 본문",
+                        "ordered_segments": [],
+                        "question_type": None,
+                        "parsed_choices": [],
+                        "resolved_answer_index": None,
+                        "resolved_answer_value": None,
+                        "answer_confidence": None,
+                        "verification_status": None,
+                        "verification_warnings": [],
+                        "reason_summary": None,
+                        "model_used": "gpt-test",
+                        "openai_request_id": "req-test",
+                        "svg_path": None,
+                        "edited_svg_path": None,
+                        "edited_svg_version": 0,
+                        "crop_path": None,
+                        "image_crop_path": None,
+                        "styled_image_path": None,
+                        "styled_image_model": None,
+                        "png_rendered_path": None,
+                        "processing_ms": 10,
+                        "error_reason": None,
+                        "was_charged": False,
+                        "ocr_charged": False,
+                        "image_charged": False,
+                        "explanation_charged": False,
+                        "charged_at": None,
+                    }
+                ]
+            raise AssertionError(f"unexpected table: {table}")
+
+    repository = object.__new__(repository_module.SupabasePipelineRepository)
+    client = MetadataFallbackClient()
+    repository._client = lambda user: client
+
+    saved_job = repository.read_job(make_user(), "job-123")
+
+    assert len(client.region_selects) == 2
+    assert "selection_mode" in client.region_selects[0]
+    assert "selection_mode" not in client.region_selects[1]
+    assert saved_job.regions[0].context.selection_mode == "manual"
+    assert saved_job.regions[0].extractor.problem_markdown == "문제 $x$"
+
+
+def test_supabase_repository_save_job_falls_back_when_region_metadata_columns_are_missing():
+    schema_compat_module._markdown_output_columns_available = None
+    schema_compat_module._region_metadata_columns_available = None
+
+    class MetadataFallbackClient:
+        """region 메타 컬럼 upsert 실패를 재현하는 테스트 클라이언트다."""
+
+        def __init__(self) -> None:
+            self.upsert_payloads: list[list[dict[str, object]]] = []
+
+        def update(self, table: str, *, filters: dict[str, object], payload: dict[str, object]) -> list[dict]:
+            return [payload]
+
+        def select(self, table: str, *, params: dict[str, object]) -> list[dict]:
+            if table == "ocr_job_regions":
+                return []
+            raise AssertionError(f"unexpected table: {table}")
+
+        def delete(self, table: str, *, filters: dict[str, object]) -> None:
+            raise AssertionError("delete should not be called")
+
+        def upsert(self, table: str, *, payload: list[dict[str, object]], on_conflict: str) -> list[dict]:
+            self.upsert_payloads.append(payload)
+            if "selection_mode" in payload[0]:
+                raise SupabaseApiError('column selection_mode does not exist in relation "ocr_job_regions"')
+            return payload
+
+    repository = object.__new__(repository_module.SupabasePipelineRepository)
+    client = MetadataFallbackClient()
+    repository._client = lambda user: client
+
+    job = JobPipelineContext(
+        job_id="job-123",
+        file_name="sample.png",
+        image_url="user-123/job-123/input/sample.png",
+        image_width=32,
+        image_height=24,
+        processing_type="service_api",
+        status="completed",
+        created_at="2026-04-02T00:00:00+00:00",
+        updated_at="2026-04-02T00:00:00+00:00",
+        regions=[
+            RegionPipelineContext(
+                context=RegionContext(
+                    id="q1",
+                    polygon=[[0, 0], [8, 0], [8, 8], [0, 8]],
+                    type="mixed",
+                    order=1,
+                    selection_mode="manual",
+                    input_device="touch",
+                    warning_level="normal",
+                ),
+                extractor=ExtractorContext(
+                    ocr_text="문제 본문",
+                    problem_markdown="문제 $x$",
+                    explanation_markdown="해설 $x$",
+                    markdown_version="mathocr_markdown_bridge_v1",
+                ),
+                status="completed",
+                success=True,
+            )
+        ],
+    )
+
+    repository.save_job(make_user(), job)
+
+    assert len(client.upsert_payloads) == 2
+    assert "selection_mode" in client.upsert_payloads[0][0]
+    assert "selection_mode" not in client.upsert_payloads[1][0]
+    assert client.upsert_payloads[1][0]["problem_markdown"] == "문제 $x$"

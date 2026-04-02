@@ -21,6 +21,13 @@ import { useAuth } from "../context/AuthContext";
 import { useJobs } from "../context/JobContext";
 import { calculateRequiredCredits } from "../lib/executionCredits";
 import { type ProgressJobStatus, getJobStepIndex } from "../lib/jobPresentation";
+import {
+  AUTO_FULL_LOW_CONFIDENCE_MESSAGE,
+  AUTO_FULL_RISK_MESSAGE,
+  getSelectionMode,
+  isAutoFullRegion,
+  isLowConfidenceAutoFullRegion,
+} from "../lib/regionSelection";
 import type { JobExecutionOptions, JobStatus, Region } from "../store/jobStore";
 import { copyToClipboard } from "../utils/clipboard";
 import { ResultsViewer } from "./ResultsViewer";
@@ -82,6 +89,8 @@ export function JobDetailPage() {
 
   const job = getJob(jobId || "");
   const activeRegions = draftRegions ?? job?.regions ?? [];
+  const selectionMode = getSelectionMode(activeRegions);
+  const shouldUseAutoFullFallback = selectionMode === "none";
   const requiredCredits = calculateRequiredCredits(
     executionOptions,
     Boolean(user?.openAiConnected),
@@ -91,6 +100,8 @@ export function JobDetailPage() {
     executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
   const exportableRegionCount = (job?.regions ?? []).filter(isExportableRegion).length;
   const verificationWarningCount = getVerificationWarningCount(job?.regions ?? []);
+  const hasAutoFullResult = (job?.regions ?? []).some(isAutoFullRegion);
+  const hasLowConfidenceAutoFullResult = (job?.regions ?? []).some(isLowConfidenceAutoFullRegion);
   const canExportHwpx =
     exportableRegionCount > 0 &&
     (job?.status === "completed" || job?.status === "failed" || job?.status === "exported");
@@ -288,6 +299,8 @@ export function JobDetailPage() {
   }
 
   const currentStep = Math.max(getJobStepIndex(job.status, statusSteps), 0);
+  const canRunAutoFullFallback = job.status === "regions_pending" && shouldUseAutoFullFallback;
+  const canRunQueuedSelection = job.status === "queued";
   const runButtonDisabled = isRunning || !hasSelectedAction || (user?.credits ?? 0) < requiredCredits;
   const selectionDisabled = job.status === "running";
 
@@ -373,6 +386,15 @@ export function JobDetailPage() {
         </CardContent>
       </Card>
 
+      {hasAutoFullResult ? (
+        <Card className="mb-6 border-amber-200 bg-amber-50/80">
+          <CardContent className="py-4 text-[13px] text-amber-950">
+            <p>{AUTO_FULL_RISK_MESSAGE}</p>
+            {hasLowConfidenceAutoFullResult ? <p className="mt-2 text-amber-800">{AUTO_FULL_LOW_CONFIDENCE_MESSAGE}</p> : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card>
@@ -385,6 +407,11 @@ export function JobDetailPage() {
                 이미지 위에 드래그하여 OCR 처리할 영역을 지정하세요.
                 저장된 여러 영역은 순서대로 하나의 HWPX 문서로 합쳐집니다.
               </CardDescription>
+              {shouldUseAutoFullFallback ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
+                  {AUTO_FULL_RISK_MESSAGE}
+                </p>
+              ) : null}
             </CardHeader>
             <CardContent>
               <RegionEditor
@@ -476,7 +503,9 @@ export function JobDetailPage() {
                     <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
                   </div>
                   <p className="mt-1 text-muted-foreground">
-                    선택한 문제 수 기준으로 잔액을 먼저 확인하고, 실행 후 실제 성공한 작업만 차감합니다.
+                    {shouldUseAutoFullFallback
+                      ? "영역 없이 실행하면 전체 이미지 1개 기준 예상 차감을 먼저 보여줍니다."
+                      : "선택한 문제 수 기준으로 잔액을 먼저 확인하고, 실행 후 실제 성공한 작업만 차감합니다."}
                   </p>
                   {verificationWarningCount > 0 ? (
                     <p className="mt-1 text-amber-700">검증 경고 {verificationWarningCount}개가 있어 결과를 다시 확인하세요.</p>
@@ -488,14 +517,21 @@ export function JobDetailPage() {
                   ) : null}
                 </div>
 
-              {(job.status === "created" || job.status === "regions_pending") ? (
+              {job.status === "created" ? (
                 <div className="text-center py-2">
                   <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-[13px] text-muted-foreground">먼저 영역을 지정하고 저장하세요.</p>
                 </div>
               ) : null}
 
-              {job.status === "queued" ? (
+              {job.status === "regions_pending" && !canRunAutoFullFallback ? (
+                <div className="text-center py-2">
+                  <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-[13px] text-muted-foreground">영역을 저장하거나 전체 이미지 인식으로 실행하세요.</p>
+                </div>
+              ) : null}
+
+              {canRunQueuedSelection || canRunAutoFullFallback ? (
                 <Button onClick={() => void handleRun()} className="w-full gap-2" disabled={runButtonDisabled}>
                   <Play className="w-4 h-4" />
                   파이프라인 실행

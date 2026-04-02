@@ -16,6 +16,9 @@ export interface BackendRegion {
   status: BackendRegionStatus;
   type?: "text" | "diagram" | "mixed";
   order?: number;
+  selection_mode?: "manual" | "auto_full";
+  input_device?: "mouse" | "touch" | "pen" | "system" | null;
+  warning_level?: "normal" | "high_risk";
   polygon?: number[][];
   ocr_text?: string | null;
   explanation?: string | null;
@@ -57,6 +60,9 @@ export interface RegionPayload {
   polygon: number[][];
   type: "text" | "diagram" | "mixed";
   order: number;
+  selection_mode?: "manual" | "auto_full";
+  input_device?: "mouse" | "touch" | "pen" | "system";
+  warning_level?: "normal" | "high_risk";
 }
 
 export interface RunPipelineOptions {

@@ -819,3 +819,43 @@
 - 배포 영향:
   - 백엔드 및 환경 변수 변경은 없다.
   - 프런트 정적 빌드를 재배포해야 운영 도메인에서 `https://mathhwp.vercel.app/rss.xml` 제출 URL이 실제로 노출된다.
+
+## 2026-04-02 14:35:09 KST
+
+- HWPX 수식 출력 시 한/글 첫 open 에서 글자 간격이 틀어지는 구조적 버그를 수정했다.
+- 아키텍처 변경:
+  - [hwpforge_json_builder.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_json_builder.py)의 `_clone_paragraph()`가 `deepcopy` 직후 재귀적으로 stale layout cache 키(`linesegarray`, `hp:linesegarray`, `line_segment_array`)를 제거하도록 바꿨다.
+  - [exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/exporter.py)에 `_strip_section_linesegarray_cache()`를 추가하고 legacy/direct HWPX bundle 공통 경로에서 `section0.xml` write 전에 `.//hp:linesegarray`를 전부 제거하도록 넣었다.
+  - [error_patterns.md](/D:/03_PROJECT/05_mathOCR/error_patterns.md)에 `hp:linesegarray` cache를 clone 단계와 최종 write 직전에 모두 제거해야 한다는 예방 규칙을 추가했다.
+- TDD/검증:
+  - [test_hwpforge_json_builder.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_hwpforge_json_builder.py)에 `_clone_paragraph()`가 stale cache를 복제하지 않는 회귀 테스트를 추가했다.
+  - [test_exporter.py](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_exporter.py)에 direct HwpForge section에 의도적으로 `hp:linesegarray`를 주입한 뒤 최종 패키지에서 모두 제거되는지 확인하는 회귀 테스트를 추가했다.
+  - `PYTHONPATH=/D:/03_PROJECT/05_mathOCR/.tmp/pydeps-latest` 기준 `02_main/tests/test_hwpforge_json_builder.py`, `02_main/tests/test_exporter.py` 전체가 `36 passed`로 통과했다.
+- 대안 검토:
+  - 대안 1: `repair_equation_widths()`만 더 보강하는 방식은 box metric만 고치고 HWP layout cache 오염 자체를 제거하지 못해 제외했다.
+  - 대안 2: direct HwpForge 경로에만 제거 로직을 넣는 방식은 legacy/reference renderer fallback에서 같은 재현을 막지 못하므로 공통 bundle write 단계 정리로 선택했다.
+- 배포 영향:
+  - 배포 환경 변수 변경은 없다.
+  - 백엔드 export 코드 변경이므로 다음 백엔드 배포/이미지 빌드에는 포함되어야 한다.
+
+## 2026-04-02 14:55:05 KST
+
+- 수동 영역 지정 중심 OCR UX를 확장해, region이 0개인 job도 서버가 전체 이미지 fallback region을 생성해 실행할 수 있도록 바꿨다.
+- 아키텍처 변경:
+  - [orchestrator.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/orchestrator.py)에 auto full-image region 생성 로직과 `auto_full` 전용 전처리 분기를 추가했다.
+  - [schema.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/schema.py), [main.py](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py), [repository.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/repository.py), [schema_compat.py](/D:/03_PROJECT/05_mathOCR/02_main/app/schema_compat.py)에 `selection_mode`, `input_device`, `warning_level` 메타데이터와 점진적 스키마 호환 fallback을 추가했다.
+  - [figure.py](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/figure.py)에 auto_full 모드 전용 여백 trim, 대비 보정, 회전 정규화, 다운스케일 전처리를 추가했다.
+  - [2026-04-02_region_selection_metadata.sql](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-02_region_selection_metadata.sql)과 [supabase_saas_init.sql](/D:/03_PROJECT/05_mathOCR/02_main/schemas/supabase_saas_init.sql)에 region metadata 컬럼 추가 스키마를 반영했다.
+  - [RegionEditor.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/RegionEditor.tsx)를 Pointer Events 기반으로 재구성해 마우스/터치/펜 단일 경로로 영역 생성, 모서리 resize, 삭제를 지원하도록 바꿨다.
+  - [NewJobPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx), [JobDetailPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.tsx), [ResultsViewer.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ResultsViewer.tsx)에 자동 전체 인식 경고, mode 배지, 저신뢰 재지정 안내를 추가했다.
+- 검증:
+  - `py -m pytest 02_main/tests -q` -> `174 passed`
+  - `cd 04_design_renewal && npm run test:run` -> `148 passed`
+  - `cd 04_design_renewal && npm run build` -> production build 성공, 기존 chunk size warning만 유지
+- 대안 검토:
+  - 대안 1: 프런트에서만 빈 region을 막고 강제로 하나 그리게 하는 방식은 모바일 UX 개선 목표와 충돌해 제외했다.
+  - 대안 2: auto_full region을 프런트가 항상 만들어 보내는 방식은 백엔드 방어가 약해지므로 서버 fallback 생성 구조를 기본으로 선택했다.
+- 배포 영향:
+  - 신규 환경 변수는 없다.
+  - 백엔드 배포 전에 region metadata 컬럼 마이그레이션을 적용해야 한다.
+  - 프런트 정적 빌드와 백엔드 이미지를 함께 재배포해야 운영에 자동 전체 OCR/모바일 영역 지정 UX가 반영된다.
