@@ -2,9 +2,9 @@ import { Link, useLocation } from "react-router";
 import {
   LayoutDashboard,
   Upload,
-  Cpu,
   UserRound,
 } from "lucide-react";
+import { BrandLogo } from "./BrandLogo";
 import { cn } from "./ui/utils";
 
 const navItems = [
@@ -17,6 +17,7 @@ interface AppSidebarProps {
   isAccountOpen: boolean;
 }
 
+/** 작업실 왼쪽 사이드바의 브랜드와 주요 이동 메뉴를 렌더링한다. */
 export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
   const location = useLocation();
 
@@ -24,9 +25,7 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
     <aside className="liquid-sidebar-shell flex min-h-screen w-64 flex-col">
       <div className="border-b border-white/55 p-5">
         <div className="flex items-center gap-2.5">
-          <div className="liquid-logo-mark flex h-8 w-8 items-center justify-center rounded-xl text-primary-foreground">
-            <Cpu className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <BrandLogo className="h-8 w-8 rounded-xl" />
           <div>
             <h1 className="text-[15px]">MathHWP</h1>
           </div>

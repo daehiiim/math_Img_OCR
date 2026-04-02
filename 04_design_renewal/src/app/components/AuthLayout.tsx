@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { ImageIcon, KeyRound, LogOut, Settings } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { BrandLogo } from "./BrandLogo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 
+/** 인증 관련 화면 공통 헤더와 본문 레이아웃을 렌더링한다. */
 export function AuthLayout() {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -20,9 +22,7 @@ export function AuthLayout() {
     <div className="liquid-shell liquid-shell--auth flex min-h-screen flex-col">
       <header className="liquid-header-shell flex h-16 shrink-0 items-center justify-between px-5 sm:px-6">
         <Link to={isAuthenticated ? "/workspace" : "/"} className="flex items-center gap-2">
-          <div className="liquid-logo-mark flex h-8 w-8 items-center justify-center rounded-xl text-white">
-            <span className="text-[11px] text-white tracking-tight">M</span>
-          </div>
+          <BrandLogo className="h-8 w-8 rounded-xl" />
           <span className="text-[14px] tracking-[-0.02em] text-foreground">MathHWP</span>
         </Link>
 

@@ -3,7 +3,9 @@ import { useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { motion } from "motion/react";
 import { resolvePostLoginPath } from "../lib/authFlow";
+import { BrandLogo } from "./BrandLogo";
 
+/** 로그인 진입 화면과 인증 버튼을 렌더링한다. */
 export function LoginPage() {
   const navigate = useNavigate();
   const {
@@ -62,9 +64,7 @@ export function LoginPage() {
       className="liquid-page-shell liquid-page-shell--auth w-full max-w-[400px]"
     >
       <div className="liquid-frost-panel flex flex-col items-center rounded-[32px] p-10 text-center">
-        <div className="liquid-logo-mark mb-7 flex h-14 w-14 items-center justify-center rounded-[20px] text-white">
-          <span className="text-[18px] text-white tracking-tight">M</span>
-        </div>
+        <BrandLogo className="mb-7 h-14 w-14 rounded-[20px]" />
 
         <h1 className="mb-2 text-[22px] tracking-[-0.02em] text-foreground">MathHWP</h1>
         <p className="mb-9 max-w-[300px] text-[14px] leading-relaxed text-muted-foreground">

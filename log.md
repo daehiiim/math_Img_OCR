@@ -859,3 +859,22 @@
   - 신규 환경 변수는 없다.
   - 백엔드 배포 전에 region metadata 컬럼 마이그레이션을 적용해야 한다.
   - 프런트 정적 빌드와 백엔드 이미지를 함께 재배포해야 운영에 자동 전체 OCR/모바일 영역 지정 UX가 반영된다.
+
+## 2026-04-02 15:23:00 KST
+
+- 사용자 제공 [logo.png](/D:/03_PROJECT/05_mathOCR/00_private/홍보용카드뉴스/logo.png) 기준으로 프런트 브랜드 아이콘과 파비콘을 통일했다.
+- 아키텍처 변경:
+  - [BrandLogo.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/BrandLogo.tsx)를 추가해 공통 브랜드 로고 렌더링을 한 곳으로 모았다.
+  - [AppSidebar.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AppSidebar.tsx), [AuthLayout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AuthLayout.tsx), [LoginPage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/LoginPage.tsx), [StudioLayout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/StudioLayout.tsx)에서 기존 문자/아이콘 로고를 공통 이미지 로고로 교체했다.
+  - [index.html](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html)에 `rel="icon"`, `rel="apple-touch-icon"`을 추가했고, [siteSeo.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.ts)의 구조화 데이터 로고 경로를 `/logo.png`로 바꿨다.
+  - 미사용 [favicon.svg](/D:/03_PROJECT/05_mathOCR/04_design_renewal/public/favicon.svg)는 제거하고 [public/logo.png](/D:/03_PROJECT/05_mathOCR/04_design_renewal/public/logo.png)를 새 정적 자산으로 추가했다.
+- TDD/검증:
+  - [BrandLogo.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/BrandLogo.test.tsx), [indexHtml.test.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/indexHtml.test.ts)를 추가하고 [siteSeo.test.ts](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.test.ts)를 갱신해 로고 컴포넌트/파비콘 링크/SEO 로고 경로 회귀를 고정했다.
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- indexHtml.test.ts src/app/components/BrandLogo.test.tsx src/app/seo/siteSeo.test.ts src/app/components/AuthLayout.test.tsx src/app/components/StudioLayout.test.tsx src/app/components/Layout.test.tsx` 기준 `17 passed`.
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run build` 성공. 기존 chunk size warning만 유지됐다.
+- 대안 검토:
+  - 대안 1: `favicon.svg`만 교체하는 방식은 화면 내부 브랜드 아이콘이 계속 분리돼 보여 제외했다.
+  - 대안 2: 각 레이아웃마다 개별 `<img>`를 직접 심는 방식은 이후 로고 변경 시 수정 지점이 늘어나므로 공통 컴포넌트 방식으로 선택했다.
+- 배포 영향:
+  - 백엔드/환경 변수 변경은 없다.
+  - 프런트 정적 빌드를 재배포해야 운영 사이트의 헤더 로고와 파비콘이 실제로 바뀐다.

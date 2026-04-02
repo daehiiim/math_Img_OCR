@@ -79,6 +79,9 @@ describe("siteSeo", () => {
   it("홈 구조화 데이터는 웹사이트와 소프트웨어 앱 정보를 함께 제공한다", () => {
     const structuredData = buildHomeStructuredData(DEFAULT_SITE_URL);
     const schemaTypes = structuredData.map((entry) => entry["@type"]);
+    const organizationEntry = structuredData.find(
+      (entry) => entry["@type"] === "Organization"
+    );
 
     expect(schemaTypes).toEqual(
       expect.arrayContaining(["WebSite", "SoftwareApplication", "Organization"])
@@ -86,6 +89,9 @@ describe("siteSeo", () => {
     expect(structuredData[0]).toMatchObject({
       name: "MathHWP",
       url: "https://mathhwp.vercel.app",
+    });
+    expect(organizationEntry).toMatchObject({
+      logo: "https://mathhwp.vercel.app/logo.png",
     });
   });
 });

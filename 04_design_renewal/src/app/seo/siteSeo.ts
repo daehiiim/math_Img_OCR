@@ -141,7 +141,7 @@ export function buildHomeStructuredData(siteUrl: string): StructuredDataEntry[] 
       "@type": "Organization",
       name: SITE_NAME,
       url: siteUrl,
-      logo: buildAbsoluteUrl(siteUrl, "/favicon.svg"),
+      logo: buildAbsoluteUrl(siteUrl, "/logo.png"),
     },
   ];
 }
