@@ -878,3 +878,45 @@
 - 배포 영향:
   - 백엔드/환경 변수 변경은 없다.
   - 프런트 정적 빌드를 재배포해야 운영 사이트의 헤더 로고와 파비콘이 실제로 바뀐다.
+## 2026-04-02 15:27 KST
+
+- 요청: 현재 웹사이트의 첫 홈 화면(`/`)을 Figma 플러그인으로 새 디자인 파일에 옮겨 달라는 요청을 처리했다.
+- 확인: 운영 프런트는 [`04_design_renewal/package.json`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/package.json) 기준 Vite 앱이며 홈 화면은 [`PublicHomePage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 에서 백엔드 의존 없이 단독 렌더 가능함을 확인했다.
+- 처리: 로컬 dev server를 `127.0.0.1:5173` 에서 기동하고 [`04_design_renewal/index.html`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/index.html) head에 Figma capture script를 추가한 뒤 홈 화면을 캡처했다.
+- 산출물: 새 Figma 파일은 [MathHWP Home Page](https://www.figma.com/design/txRQz0NvtWRp7S2jPH3yCB) 로 생성됐다.
+- 상태: 재캡처를 위해 capture script는 현재 `index.html`에 유지했고, 필요 시 후속 세션에서 제거 가능하다.
+
+## 2026-04-02 16:xx KST
+
+- 사용자와 비홈 화면 리디자인 범위를 확정했다.
+  - 홈(`/`) 제외 전 라우트 전체 적용
+  - 글라스 강도는 중간 수준
+  - `Pretendard` self-host 방식 채택
+  - 공통 테마/레이아웃부터 단계 적용
+- 사용자가 제공한 참고 이미지의 핵심을 `밝은 공기감`, `pill navigation`, `얇은 블루 포인트`, `가벼운 유리 표면`으로 해석했다.
+- 아키텍처 결정:
+  - [theme.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/theme.css) 의 `liquid-shell` 스코프를 비홈 전용 시각 시스템의 중심으로 사용한다.
+  - [fonts.css](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/styles/fonts.css) 에 self-host Pretendard를 추가하고 전역 stack을 교체한다.
+  - 공통 셸([Layout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/Layout.tsx), [StudioLayout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/StudioLayout.tsx), [AuthLayout.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AuthLayout.tsx))을 먼저 정리한 뒤 페이지를 단계 적용한다.
+- 문서화:
+  - 설계 문서 [2026-04-02-non-home-liquid-glass-design.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-04-02-non-home-liquid-glass-design.md)를 추가했다.
+  - 구현 계획 문서 [2026-04-02-non-home-liquid-glass-plan.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-04-02-non-home-liquid-glass-plan.md)를 추가했다.
+- 스킬/도구 판단:
+  - `frontend-design`, `web-design-guidelines`, `vercel-react-best-practices`가 주요 적용 후보라고 정리했다.
+  - VibeIndex 기준으로 이번 범위는 추가 설치 없이 현재 세션 스킬로 처리 가능하다고 판단했다.
+- 배포 영향:
+  - 이번 단계는 계획 문서 작성만 수행했다.
+  - 실제 구현이 시작되더라도 현재 합의 범위는 프런트 정적 빌드 재배포만 필요하고, 백엔드/환경 변수 변경은 없다.
+
+## 2026-04-02 18:40 KST
+
+- 요청: 홈 화면 본문 카피를 새 문구로 교체해 달라는 요청을 반영했다.
+- 처리:
+  - [PublicHomePage.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.tsx) 의 히어로 헤드라인을 `타이핑은 힘드니까. / 알아서 만들어주니까.` 로 변경했다.
+  - 같은 파일의 중앙 하이라이트 보조 문구를 `무료로 이용하세요.` 로 변경했다.
+  - [PublicHomePage.test.tsx](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/PublicHomePage.test.tsx) 기대 문구를 함께 갱신해 홈 카피 회귀를 고정했다.
+- 검증:
+  - `cd D:\\03_PROJECT\\05_mathOCR\\04_design_renewal && npm run test:run -- src/app/components/PublicHomePage.test.tsx` 기준 `1 file, 8 tests passed`.
+- 배포 영향:
+  - 백엔드/환경 변수 변경은 없다.
+  - 운영 반영에는 프런트 정적 빌드 재배포가 필요하다.

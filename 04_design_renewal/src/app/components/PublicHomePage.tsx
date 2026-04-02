@@ -35,8 +35,8 @@ type LandingCardPanelProps = {
 };
 
 const heroWordRows = [
-  ["수학", "수식을", "HWPX로,"],
-  ["완벽한", "감각으로."],
+  ["타이핑은", "힘드니까."],
+  ["알아서", "만들어주니까."],
 ];
 
 const heroMediaVisualTokens = {
@@ -184,7 +184,7 @@ function MainFeatureSection() {
                 <span className="block md:whitespace-nowrap">{mainFeatureHeadingLines[0]}</span>
                 <span className="block">{mainFeatureHeadingLines[1]}</span>
               </h2>
-              <p className="text-sm font-medium leading-8 tracking-[0.08em] text-neutral-300 md:text-base">사진만 찍으면 바로 출력가능한 한글파일로 변환해줍니다.</p>
+              <p className="text-sm font-medium leading-8 tracking-[0.08em] text-neutral-300 md:text-base">무료로 이용하세요.</p>
             </div>
           </div>
         </div>

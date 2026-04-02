@@ -12,39 +12,57 @@ export function StudioLayout() {
 
   return (
     <div className="liquid-shell liquid-shell--studio min-h-screen">
-      <header className="liquid-header-shell border-b-0">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-3">
-            <BrandLogo className="h-10 w-10 rounded-2xl" />
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">MathHWP</p>
-              <p className="text-[15px] tracking-[-0.02em] text-foreground">문제 이미지 작업실</p>
-            </div>
-          </Link>
+      <header className="liquid-header-shell sticky top-4 z-20 mx-auto mt-4 w-[min(100%-1.5rem,1200px)] rounded-[32px] border border-white/70 px-4 py-4 shadow-[0_28px_72px_-48px_rgba(86,118,164,0.42)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-3">
+              <BrandLogo className="h-10 w-10 rounded-[24px]" />
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">MathHWP</p>
+                <p className="text-[15px] tracking-[-0.02em] text-foreground">문제 이미지 작업실</p>
+              </div>
+            </Link>
+            <span className="liquid-chip liquid-chip--accent hidden rounded-full px-3 py-1.5 text-[12px] text-muted-foreground sm:inline-flex">
+              공개 작업실
+            </span>
+          </div>
 
-          <div className="flex items-center gap-2">
+          <div
+            aria-label="작업 상태"
+            className="liquid-chip liquid-chip--accent flex flex-wrap items-center gap-2 rounded-full px-4 py-2 text-[12px] text-muted-foreground"
+          >
             {isAuthenticated && user ? (
               <>
-                <div className="liquid-chip liquid-chip--accent hidden rounded-full px-3 py-1.5 text-[12px] text-muted-foreground sm:block">
-                  <span className="flex items-center gap-2">
-                    <span className="flex items-center gap-1.5">
-                      <ImageIcon className="h-3.5 w-3.5" />
-                      {`${user.credits}개 이미지 남음`}
-                    </span>
-                    {user.openAiConnected ? (
-                      <span className="flex items-center gap-1.5 text-emerald-600">
-                        <KeyRound className="h-3.5 w-3.5" />
-                        OpenAI 연결됨
-                      </span>
-                    ) : null}
+                <span className="flex items-center gap-1.5">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  <span className="text-foreground">{`${user.credits}개 이미지 남음`}</span>
+                </span>
+                {user.openAiConnected ? (
+                  <span className="flex items-center gap-1.5 text-sky-700">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    OpenAI 연결됨
                   </span>
-                </div>
-                <Button variant="outline" onClick={() => navigate("/workspace")}>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    OpenAI 미연결
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-foreground">로그인하면 작업 상태를 이어서 볼 수 있습니다.</span>
+            )}
+          </div>
+
+          <div aria-label="주요 작업" className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            {isAuthenticated && user ? (
+              <>
+                <Button variant="outline" className="rounded-full px-4" onClick={() => navigate("/workspace")}>
                   내 작업실
                 </Button>
                 <Button
                   variant="ghost"
-                  className="gap-2"
+                  className="rounded-full px-4"
                   onClick={() => {
                     void logout();
                     navigate("/");
@@ -56,10 +74,12 @@ export function StudioLayout() {
               </>
             ) : (
               <>
-                <Button variant="ghost" onClick={() => navigate("/pricing")}>
+                <Button variant="ghost" className="rounded-full px-4" onClick={() => navigate("/pricing")}>
                   가격
                 </Button>
-                <Button onClick={() => navigate("/login")}>로그인</Button>
+                <Button className="rounded-full px-4" onClick={() => navigate("/login")}>
+                  로그인
+                </Button>
               </>
             )}
           </div>

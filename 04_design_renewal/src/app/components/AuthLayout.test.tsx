@@ -49,8 +49,10 @@ describe("AuthLayout", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("4개 이미지 남음")).toBeInTheDocument();
-    expect(screen.getByText("OpenAI 연결됨")).toBeInTheDocument();
+    expect(screen.getByRole("banner")).toHaveClass("liquid-header-shell", "rounded-[32px]");
+    expect(screen.getByLabelText("인증 상태")).toHaveTextContent("4개 이미지 남음");
+    expect(screen.getByLabelText("인증 상태")).toHaveTextContent("OpenAI 연결됨");
+    expect(screen.getByRole("button", { name: "계정 메뉴 열기" })).toBeInTheDocument();
   });
 
   it("홈과 분리된 비홈 리퀴드 셸 스코프를 적용한다", () => {
@@ -68,5 +70,6 @@ describe("AuthLayout", () => {
       "liquid-shell",
       "liquid-shell--auth"
     );
+    expect(screen.getByLabelText("주요 작업")).toBeInTheDocument();
   });
 });

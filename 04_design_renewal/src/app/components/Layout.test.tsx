@@ -52,6 +52,9 @@ describe("Layout", () => {
 
     await user.click(screen.getByRole("button", { name: "내 계정" }));
 
+    expect(screen.getByRole("heading", { name: "계정 요약" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "연결 상태" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "계정 작업" })).toBeInTheDocument();
     expect(screen.getByText("김수학")).toBeInTheDocument();
     expect(screen.getByText("math@example.com")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
@@ -79,5 +82,7 @@ describe("Layout", () => {
       "liquid-shell",
       "liquid-shell--workspace"
     );
+    expect(screen.getByRole("heading", { name: "작업 탐색" })).toBeInTheDocument();
+    expect(screen.getByText("workspace").closest(".liquid-page-shell")).toBeInTheDocument();
   });
 });

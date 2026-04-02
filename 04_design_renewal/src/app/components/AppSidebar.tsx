@@ -22,20 +22,23 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
   const location = useLocation();
 
   return (
-    <aside className="liquid-sidebar-shell flex min-h-screen w-64 flex-col">
-      <div className="border-b border-white/55 p-5">
-        <div className="flex items-center gap-2.5">
-          <BrandLogo className="h-8 w-8 rounded-xl" />
-          <div>
-            <h1 className="text-[15px]">MathHWP</h1>
-          </div>
+    <aside className="liquid-sidebar-shell flex min-h-full w-[17.5rem] shrink-0 flex-col rounded-[32px] border border-white/70 px-3 py-4 shadow-[0_28px_72px_-52px_rgba(86,118,164,0.42)]">
+      <div className="liquid-chip flex items-center gap-3 rounded-[28px] px-3 py-3">
+        <BrandLogo className="h-10 w-10 rounded-[22px]" />
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Workspace</p>
+          <h1 className="text-[15px] tracking-[-0.02em] text-foreground">MathHWP</h1>
         </div>
       </div>
 
-      <nav className="flex-1 p-3">
-        <p className="text-[11px] text-muted-foreground px-3 mb-2 uppercase tracking-wider">
-          메인
+      <div className="px-3 pt-5">
+        <h2 className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">작업 탐색</h2>
+        <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+          대시보드와 새 작업 흐름을 한 컬럼에서 빠르게 오간다.
         </p>
+      </div>
+
+      <nav aria-label="작업 탐색" className="flex-1 px-1 pt-4">
         <ul className="space-y-0.5">
           {navItems.map((item) => {
             const isActive =
@@ -58,7 +61,7 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
               </li>
             );
           })}
-          <li>
+          <li className="pt-2">
             <button
               type="button"
               onClick={onOpenAccount}
@@ -75,9 +78,12 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
         </ul>
       </nav>
 
-      <div className="border-t border-white/55 p-4">
-        <div className="liquid-inline-note rounded-2xl px-3 py-3 text-[11px] text-muted-foreground">
+      <div className="space-y-3 border-t border-white/60 px-3 pt-4">
+        <div className="liquid-chip liquid-chip--accent rounded-[24px] px-3 py-3 text-[11px] text-muted-foreground">
           업로드부터 HWPX 내보내기까지 한 흐름으로 정리했습니다.
+        </div>
+        <div className="liquid-inline-note rounded-[24px] px-3 py-3 text-[11px] leading-5 text-muted-foreground">
+          현재 화면의 상태는 오른쪽 본문 보드에서 이어집니다.
         </div>
       </div>
     </aside>

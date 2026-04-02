@@ -877,6 +877,31 @@ def test_consume_job_region_credits_charges_exportable_regions_only_once():
     assert store.ledger_entries[-1]["delta"] == -2
 
 
+def test_supabase_billing_store_grants_signup_bonus_for_first_profile(monkeypatch):
+    """신규 profile 생성 시 무료 3크레딧과 signup bonus 원장을 함께 남긴다."""
+    monkeypatch.setattr("app.billing.get_settings", lambda root_path: _build_auth_settings())
+    store = SupabaseBillingStore(Path("."))
+    user_client = RecordingSupabaseClient(select_rows={"profiles": []})
+    admin_client = RecordingSupabaseClient()
+    monkeypatch.setattr(store, "_user_client", lambda user: user_client)
+    monkeypatch.setattr(store, "_billing_write_client", lambda: admin_client)
+
+    profile = store.get_or_create_profile(make_user())
+
+    profile_insert = next(
+        entry for entry in user_client.operations if entry["method"] == "insert" and entry["table"] == "profiles"
+    )
+    ledger_insert = next(
+        entry for entry in admin_client.operations if entry["method"] == "insert" and entry["table"] == "credit_ledger"
+    )
+
+    assert profile.credits_balance == 3
+    assert profile_insert["payload"]["credits_balance"] == 3
+    assert ledger_insert["payload"]["reason"] == "signup_bonus"
+    assert ledger_insert["payload"]["delta"] == 3
+    assert ledger_insert["payload"]["balance_after"] == 3
+
+
 def test_supabase_billing_store_uses_admin_client_for_action_charge_writes(monkeypatch):
     monkeypatch.setattr(
         "app.billing.get_settings",

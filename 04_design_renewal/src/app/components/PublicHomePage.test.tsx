@@ -65,13 +65,14 @@ describe("PublicHomePage", () => {
 
     expect(screen.queryByRole("banner")).not.toBeInTheDocument();
     expect(screen.getAllByText("MathHWP")).toHaveLength(1);
-    expect(screen.getByRole("heading", { name: /수학\s*수식을\s*HWPX로,\s*완벽한\s*감각으로\./ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /타이핑은\s*힘드니까\.\s*알아서\s*만들어주니까\./ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /수학문제 직접 타이핑하느라\s*힘들지 않았나요\?/ })).toBeInTheDocument();
     expect(screen.getByText("사진을 올리세요")).toBeInTheDocument();
     expect(screen.getByText("결과를 확인하세요")).toBeInTheDocument();
     expect(screen.getByText("당신의 작업 방식을")).toBeInTheDocument();
     expect(screen.getByText("혁신할 준비가 되셨나요?")).toBeInTheDocument();
-    expect(screen.queryByText("무료로 이용하세요")).not.toBeInTheDocument();
+    expect(screen.getByText("무료로 이용하세요.")).toBeInTheDocument();
+    expect(screen.queryByText("사진만 찍으면 바로 출력가능한 한글파일로 변환해줍니다.")).not.toBeInTheDocument();
     expect(screen.queryByText("Photo to HWPX")).not.toBeInTheDocument();
     expect(screen.queryByText("사진에서 구조를 읽고, 최종 결과를 HWPX까지 연결하는 수학 OCR 워크플로우.")).not.toBeInTheDocument();
     expect(screen.queryByText("문제 사진이 곧,")).not.toBeInTheDocument();

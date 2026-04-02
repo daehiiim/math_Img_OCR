@@ -1,32 +1,31 @@
 Done
-- 영역 미지정 시 backend가 full-image fallback region(`auto_full`)을 생성해 OCR/해설/export 흐름을 그대로 태우도록 구현했다.
-- region metadata(`selection_mode`, `input_device`, `warning_level`)를 backend/frontend에 반영하고, 결과 화면에서 자동 전체 인식 배지와 저신뢰 안내를 표시하도록 정리했다.
-- `RegionEditor`를 Pointer Events 기반으로 교체해 모바일/태블릿에서 손가락/펜으로 영역 생성, 모서리 resize, 삭제가 가능하게 했다.
-- backend `pytest 174 passed`, frontend `npm run test:run 148 passed`, `npm run build` 성공까지 확인했다.
+- 비홈 화면 리퀴드 글라스 리디자인 방향을 확정했고, 설계 문서와 구현 계획 문서를 작성했다.
+- 홈(`/`) 제외 전 라우트, Pretendard self-host, 단계 적용 순서, 참고 이미지 해석 기준을 문서로 고정했다.
 
 In Progress
-- 최우선 과제: 운영 DB migration 적용 후 실제 모바일 브라우저 smoke QA
-- 진행 상태: 코드와 로컬 검증은 끝났고, 아직 [2026-04-02_region_selection_metadata.sql](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-02_region_selection_metadata.sql) 운영 반영과 iOS Safari/iPad Safari/Android Chrome 실기기 확인은 남아 있다.
-- 다음 단계: migration 적용 -> backend/frontend 재배포 -> 모바일에서 무영역 실행, 드래그 선택, resize, delete, 결과 배지까지 순서대로 확인
+- 최우선 과제: 비홈 화면 리퀴드 글라스 리디자인 구현 준비
+- 진행 상태: 설계는 [2026-04-02-non-home-liquid-glass-design.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-04-02-non-home-liquid-glass-design.md), 구현 순서는 [2026-04-02-non-home-liquid-glass-plan.md](/D:/03_PROJECT/05_mathOCR/docs/plans/2026-04-02-non-home-liquid-glass-plan.md) 로 정리했다.
+- 다음 단계: Pretendard self-host 추가 -> 비홈 전역 토큰 교체 -> 공통 셸/primitive -> `/workspace`/`/new` -> 인증/결제 화면 순으로 구현
 
 Next
-- auto_full 저신뢰 판정 threshold를 실데이터 기준으로 미세 조정
-- auto_full 전처리(trim/contrast/downscale)가 실제 문제지 샘플에서 과보정되지 않는지 점검
+- `04_design_renewal/index.html` 에 남아 있는 Figma capture script 유지 여부 결정
+- 기존 mobile auto_full QA와 새 비홈 리디자인 구현 일정 충돌 여부 조정
 
 Related Files
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\orchestrator.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\figure.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\repository.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\pipeline\schema.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\main.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\app\schema_compat.py`
-- `D:\03_PROJECT\05_mathOCR\02_main\schemas\2026-04-02_region_selection_metadata.sql`
-- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\RegionEditor.tsx`
+- `D:\03_PROJECT\05_mathOCR\docs\plans\2026-04-02-non-home-liquid-glass-design.md`
+- `D:\03_PROJECT\05_mathOCR\docs\plans\2026-04-02-non-home-liquid-glass-plan.md`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\styles\fonts.css`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\styles\theme.css`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\Layout.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\StudioLayout.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\AuthLayout.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\AppSidebar.tsx`
+- `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\DashboardPage.tsx`
 - `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\NewJobPage.tsx`
 - `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\JobDetailPage.tsx`
 - `D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app\components\ResultsViewer.tsx`
-- `D:\03_PROJECT\05_mathOCR\error_patterns.md`
 
 Last State
-- `2026-04-02 14:55 KST` 기준 auto_full fallback, mobile pointer selection, metadata compat 구현과 로컬 테스트/빌드 검증까지 완료됐다.
-- 신규 환경 변수는 없고, 운영 반영에는 backend DB migration + backend/frontend 재배포가 필요하다.
+- `2026-04-02 16:xx KST` 기준 구현은 시작하지 않았고, 비홈 전용 리디자인 기준서와 작업 순서만 확정했다.
+- 이번 리디자인은 프런트 범위이며 백엔드 API/환경 변수 변경은 없다.
+- 현재 작업트리에는 사용자/이전 세션 변경과 `.tmp` 삭제 흔적이 많아, 구현 시 필요한 파일만 선별해서 건드려야 한다.

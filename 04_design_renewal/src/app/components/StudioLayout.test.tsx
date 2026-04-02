@@ -43,8 +43,9 @@ describe("StudioLayout", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("9개 이미지 남음")).toBeInTheDocument();
-    expect(screen.getByText("OpenAI 연결됨")).toBeInTheDocument();
+    expect(screen.getByRole("banner")).toHaveClass("liquid-header-shell", "rounded-[32px]");
+    expect(screen.getByLabelText("작업 상태")).toHaveTextContent("9개 이미지 남음");
+    expect(screen.getByLabelText("작업 상태")).toHaveTextContent("OpenAI 연결됨");
   });
 
   it("작업실 공개 셸에도 비홈 리퀴드 스코프를 적용한다", () => {
@@ -62,5 +63,6 @@ describe("StudioLayout", () => {
       "liquid-shell",
       "liquid-shell--studio"
     );
+    expect(screen.getByLabelText("주요 작업")).toBeInTheDocument();
   });
 });
