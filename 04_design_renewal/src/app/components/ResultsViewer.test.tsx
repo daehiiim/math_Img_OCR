@@ -132,15 +132,15 @@ describe("ResultsViewer", () => {
   it("Markdown 필드가 있으면 기존 OCR 텍스트보다 우선해서 렌더링한다", () => {
     const region = makeRegion({
       ocrText: "기존 OCR",
-      problemMarkdown: "새 문제 $x+1$",
+      problemMarkdown: String.raw`1. 새 문제 $\frac{1}{2}$`,
     });
 
     render(<ResultsViewer regions={[region]} />);
 
     const panel = screen.getByRole("tabpanel", { name: /ocr 결과/i });
 
-    expect(within(panel).getByText(/새 문제/)).toBeInTheDocument();
-    expect(within(panel).getByText("x+1")).toBeInTheDocument();
+    expect(within(panel).getByText(/1\. 새 문제/)).toBeInTheDocument();
+    expect(within(panel).getByText(String.raw`\frac{1}{2}`)).toBeInTheDocument();
     expect(within(panel).queryByText("기존 OCR")).not.toBeInTheDocument();
   });
 

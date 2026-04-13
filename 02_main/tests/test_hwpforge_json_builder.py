@@ -267,14 +267,14 @@ def test_build_hwpforge_export_ir_prefers_markdown_fields_when_present(tmp_path)
     job = make_reference_like_job(image_path)
     job.regions[0].extractor.problem_markdown = "\n".join(
         [
-            "닮음 관계를 이용해 값을 구하시오.",
-            "① $2$ ② $5/3$ ③ $11/4$ ④ $8/3$ ⑤ $7/2$",
+            "1. 닮음 관계를 이용해 값을 구하시오.",
+            r"① $2$ ② $\frac{5}{3}$ ③ $\frac{11}{4}$ ④ $\frac{8}{3}$ ⑤ $\frac{7}{2}$",
         ]
     )
     job.regions[0].extractor.explanation_markdown = "\n".join(
         [
             "첫째 줄",
-            "$ANGLE QPR = ANGLE SRT$ 이다.",
+            r"$\triangle QPR$ 와 $\frac{1}{2}$ 이다.",
         ]
     )
 
@@ -289,4 +289,4 @@ def test_build_hwpforge_export_ir_prefers_markdown_fields_when_present(tmp_path)
     assert warnings.items == []
     assert export_ir["regions"][0]["stem"] == "닮음 관계를 이용해 값을 구하시오."
     assert export_ir["regions"][0]["choices"] == ["2", "5/3", "11/4", "8/3", "7/2"]
-    assert export_ir["regions"][0]["explanation_lines"] == ["첫째 줄", "<math>ANGLE QPR = ANGLE SRT</math> 이다."]
+    assert export_ir["regions"][0]["explanation_lines"] == ["첫째 줄", "<math>△ QPR</math> 와 <math>1/2</math> 이다."]

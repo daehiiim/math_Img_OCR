@@ -7,14 +7,81 @@ import {
 import { BrandLogo } from "./BrandLogo";
 import { cn } from "./ui/utils";
 
-const navItems = [
+export const workspaceNavItems = [
   { path: "/workspace", label: "대시보드", icon: LayoutDashboard },
   { path: "/new", label: "새 작업", icon: Upload },
 ];
 
+interface WorkspaceNavListProps {
+  pathname: string;
+  onNavigate?: () => void;
+  onOpenAccount: () => void;
+  isAccountOpen: boolean;
+  listClassName?: string;
+  itemClassName?: string;
+}
+
 interface AppSidebarProps {
   onOpenAccount: () => void;
   isAccountOpen: boolean;
+}
+
+/** 현재 경로가 워크스페이스 탐색 항목과 일치하는지 계산한다. */
+export function isWorkspaceNavItemActive(pathname: string, itemPath: string) {
+  return itemPath === "/workspace" ? pathname === "/workspace" : pathname.startsWith(itemPath);
+}
+
+/** 워크스페이스 공용 탐색 링크와 계정 버튼 목록을 렌더링한다. */
+export function WorkspaceNavList({
+  pathname,
+  onNavigate,
+  onOpenAccount,
+  isAccountOpen,
+  listClassName,
+  itemClassName,
+}: WorkspaceNavListProps) {
+  return (
+    <ul className={cn("space-y-0.5", listClassName)}>
+      {workspaceNavItems.map((item) => {
+        const isActive = isWorkspaceNavItemActive(pathname, item.path);
+        return (
+          <li key={item.path}>
+            <Link
+              to={item.path}
+              onClick={onNavigate}
+              data-active={isActive}
+              className={cn(
+                "liquid-sidebar-link flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] transition-colors",
+                isActive ? "text-foreground" : "text-muted-foreground",
+                itemClassName
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          </li>
+        );
+      })}
+      <li className="pt-2">
+        <button
+          type="button"
+          onClick={() => {
+            onNavigate?.();
+            onOpenAccount();
+          }}
+          data-active={isAccountOpen}
+          className={cn(
+            "liquid-sidebar-link flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] transition-colors",
+            isAccountOpen ? "text-foreground" : "text-muted-foreground",
+            itemClassName
+          )}
+        >
+          <UserRound className="h-4 w-4" />
+          내 계정
+        </button>
+      </li>
+    </ul>
+  );
 }
 
 /** 작업실 왼쪽 사이드바의 브랜드와 주요 이동 메뉴를 렌더링한다. */
@@ -39,53 +106,12 @@ export function AppSidebar({ onOpenAccount, isAccountOpen }: AppSidebarProps) {
       </div>
 
       <nav aria-label="작업 탐색" className="flex-1 px-1 pt-4">
-        <ul className="space-y-0.5">
-          {navItems.map((item) => {
-            const isActive =
-              item.path === "/workspace"
-                ? location.pathname === "/workspace"
-                : location.pathname.startsWith(item.path);
-            return (
-              <li key={item.path}>
-                <Link
-                  to={item.path}
-                  data-active={isActive}
-                  className={cn(
-                    "liquid-sidebar-link flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] transition-colors",
-                    isActive ? "text-foreground" : "text-muted-foreground"
-                  )}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
-          <li className="pt-2">
-            <button
-              type="button"
-              onClick={onOpenAccount}
-              data-active={isAccountOpen}
-              className={cn(
-                "liquid-sidebar-link flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] transition-colors",
-                isAccountOpen ? "text-foreground" : "text-muted-foreground"
-              )}
-            >
-              <UserRound className="w-4 h-4" />
-              내 계정
-            </button>
-          </li>
-        </ul>
+        <WorkspaceNavList
+          pathname={location.pathname}
+          onOpenAccount={onOpenAccount}
+          isAccountOpen={isAccountOpen}
+        />
       </nav>
-
-      <div className="space-y-3 border-t border-white/60 px-3 pt-4">
-        <div className="liquid-chip liquid-chip--accent rounded-[24px] px-3 py-3 text-[11px] text-muted-foreground">
-          업로드부터 HWPX 내보내기까지 한 흐름으로 정리했습니다.
-        </div>
-        <div className="liquid-inline-note rounded-[24px] px-3 py-3 text-[11px] leading-5 text-muted-foreground">
-          현재 화면의 상태는 오른쪽 본문 보드에서 이어집니다.
-        </div>
-      </div>
     </aside>
   );
 }

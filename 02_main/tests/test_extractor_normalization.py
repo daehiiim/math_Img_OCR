@@ -105,7 +105,7 @@ def test_analyze_region_with_gpt_preserves_numbered_lines_after_first_line(monke
 
 
 def test_analyze_region_with_gpt_prefers_ordered_segments_for_raw_and_display_fields(monkeypatch):
-    """ordered segment가 있으면 raw transcript와 표시용 수식 정규화를 함께 유지한다."""
+    """ordered segment가 있으면 raw transcript는 보존하고 legacy OCR만 파생해야 한다."""
 
     def fake_post(*args, **kwargs):
         model_payload = {
@@ -143,8 +143,8 @@ def test_analyze_region_with_gpt_prefers_ordered_segments_for_raw_and_display_fi
     assert result["raw_transcript"] == "1. 정답은 <math>\\frac{3}{2}</math> 이다.\n① <math>1</math> ② <math>3/2</math>"
     assert result["ocr_text"] == "정답은 <math>3/2</math> 이다.\n① <math>1</math> ② <math>3/2</math>"
     assert result["ordered_segments"] == [
-        {"type": "text", "content": "정답은 ", "source_order": 0},
-        {"type": "math", "content": "3/2", "source_order": 1},
+        {"type": "text", "content": "1. 정답은 ", "source_order": 0},
+        {"type": "math", "content": "\\frac{3}{2}", "source_order": 1},
         {"type": "text", "content": " 이다.\n① ", "source_order": 2},
         {"type": "math", "content": "1", "source_order": 3},
         {"type": "text", "content": " ② ", "source_order": 4},
@@ -153,7 +153,7 @@ def test_analyze_region_with_gpt_prefers_ordered_segments_for_raw_and_display_fi
 
 
 def test_generate_explanation_with_gpt_returns_structured_answer_payload(monkeypatch):
-    """해설 생성은 검증용 정답 정보와 정규화된 줄 배열을 함께 반환한다."""
+    """해설 생성은 Markdown+LaTeX와 검증용 정답 정보를 함께 반환한다."""
 
     def fake_post(*args, **kwargs):
         return FakeResponse(
@@ -190,9 +190,9 @@ def test_generate_explanation_with_gpt_returns_structured_answer_payload(monkeyp
     )
 
     assert result == {
-        "explanation_lines": ["1. 따라서 <math>△ABC</math> 와 <math>∠AOB = 30°</math> 를 사용한다."],
+        "explanation_lines": ["1. 따라서 $\\triangle ABC$ 와 $\\angle AOB = 30^\\circ$ 를 사용한다."],
         "final_answer_index": 3,
-        "final_answer_value": "<math>9/4</math>",
+        "final_answer_value": "$\\frac{9}{4}$",
         "confidence": 0.87,
         "reason_summary": "닮음비를 이용해 값을 결정한다.",
     }

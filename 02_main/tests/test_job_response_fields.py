@@ -70,7 +70,7 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
             mathml="<math>x</math>",
             problem_markdown="문제 $x$",
             explanation_markdown="설명 $x$",
-            markdown_version="mathocr_markdown_bridge_v1",
+            markdown_version="mathocr_markdown_latex_v2",
             raw_transcript="1. 문제 <math>x</math>",
             ordered_segments=[
                 {"type": "text", "content": "문제 ", "source_order": 0},
@@ -122,7 +122,7 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
     assert payload["regions"][0]["warning_level"] == "normal"
     assert payload["regions"][0]["problem_markdown"] == "문제 $x$"
     assert payload["regions"][0]["explanation_markdown"] == "설명 $x$"
-    assert payload["regions"][0]["markdown_version"] == "mathocr_markdown_bridge_v1"
+    assert payload["regions"][0]["markdown_version"] == "mathocr_markdown_latex_v2"
     assert payload["regions"][0]["raw_transcript"] == "1. 문제 <math>x</math>"
     assert payload["regions"][0]["ordered_segments"] == [
         {"type": "text", "content": "문제 ", "source_order": 0},
@@ -233,6 +233,49 @@ def test_download_hwpx_uses_fixed_filename(monkeypatch):
         == "attachment; filename*=UTF-8''%EC%83%9D%EC%84%B1%EA%B2%B0%EA%B3%BC.hwpx"
     )
     assert response.content == b"hwpx-bytes"
+
+
+def test_export_hwpx_returns_runtime_missing_detail(monkeypatch):
+    user = AuthenticatedUser(user_id="user-123", access_token="token-123")
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    monkeypatch.setattr(
+        "app.main.pipeline.execute_hwpx_export",
+        lambda current_user, job_id: (_ for _ in ()).throw(
+            ValueError("문서 생성 엔진이 준비되지 않았습니다. 관리자에게 문의하세요.")
+        ),
+    )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/jobs/job-123/export/hwpx")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "문서 생성 엔진이 준비되지 않았습니다. 관리자에게 문의하세요."
+
+
+def test_export_hwpx_returns_template_apply_failure_detail(monkeypatch):
+    user = AuthenticatedUser(user_id="user-123", access_token="token-123")
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    monkeypatch.setattr(
+        "app.main.pipeline.execute_hwpx_export",
+        lambda current_user, job_id: (_ for _ in ()).throw(
+            ValueError("텍스트 추출은 완료됐지만 문서 양식 적용에 실패했습니다. Markdown 결과는 저장되어 있으니 다시 내보내기 하세요.")
+        ),
+    )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/jobs/job-123/export/hwpx")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "텍스트 추출은 완료됐지만 문서 양식 적용에 실패했습니다. Markdown 결과는 저장되어 있으니 다시 내보내기 하세요."
+    )
 
 
 def test_save_regions_returns_schema_mismatch_detail_for_supabase_error(monkeypatch):

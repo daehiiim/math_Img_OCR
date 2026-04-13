@@ -472,10 +472,7 @@ def test_execute_hwpx_export_wraps_exporter_error(monkeypatch):
     with pytest.raises(ValueError) as exc_info:
         orchestrator.execute_hwpx_export(user, job.job_id)
 
-    assert (
-        str(exc_info.value)
-        == "HWPX export failed: HWPX export runtime not found. checked: C:/runtime missing: scripts/xml_primitives.py"
-    )
+    assert str(exc_info.value) == "문서 생성 엔진이 준비되지 않았습니다. 관리자에게 문의하세요."
 
 
 def test_run_pipeline_uses_user_api_key_and_persists_processing_type(monkeypatch):
@@ -549,8 +546,13 @@ def test_run_pipeline_persists_markdown_outputs(monkeypatch):
         include_image_detection: bool = False,
     ):
         return {
-            "ocr_text": "문제 본문 <math>x+1</math>",
-            "mathml": "<math>x+1</math>",
+            "ocr_text": "1. 문제 본문 <math>1/2</math>",
+            "mathml": "<math>1/2</math>",
+            "raw_transcript": r"1. 문제 본문 <math>\frac{1}{2}</math>",
+            "ordered_segments": [
+                {"type": "text", "content": "1. 문제 본문 ", "source_order": 0},
+                {"type": "math", "content": r"\frac{1}{2}", "source_order": 1},
+            ],
             "has_stylizable_image": False,
             "image_bbox": None,
             "model_used": "gpt-test",
@@ -558,7 +560,17 @@ def test_run_pipeline_persists_markdown_outputs(monkeypatch):
         }
 
     monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
-    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "해설 본문 <math>AB</math>")
+    monkeypatch.setattr(
+        orchestrator,
+        "generate_explanation_with_gpt",
+        lambda *args, **kwargs: {
+            "explanation_lines": [r"해설 본문 $\triangle ABC$"],
+            "final_answer_index": None,
+            "final_answer_value": None,
+            "confidence": None,
+            "reason_summary": None,
+        },
+    )
 
     orchestrator.run_pipeline(
         user,
@@ -572,9 +584,9 @@ def test_run_pipeline_persists_markdown_outputs(monkeypatch):
     saved_job = orchestrator.read_job(user, job.job_id)
     saved_region = saved_job.regions[0]
 
-    assert saved_region.extractor.problem_markdown == "문제 본문 $x+1$"
-    assert saved_region.extractor.explanation_markdown == "해설 본문 $AB$"
-    assert saved_region.extractor.markdown_version == "mathocr_markdown_bridge_v1"
+    assert saved_region.extractor.problem_markdown == r"1. 문제 본문 $\frac{1}{2}$"
+    assert saved_region.extractor.explanation_markdown == r"해설 본문 $\triangle ABC$"
+    assert saved_region.extractor.markdown_version == "mathocr_markdown_latex_v2"
 
 
 def test_run_pipeline_builds_problem_markdown_from_ordered_segments(monkeypatch):
@@ -600,12 +612,12 @@ def test_run_pipeline_builds_problem_markdown_from_ordered_segments(monkeypatch)
         include_image_detection: bool = False,
     ):
         return {
-            "ocr_text": "문제 본문",
-            "mathml": "<math>x+1</math>",
-            "raw_transcript": "1. 문제 본문 <math>x+1</math>",
+            "ocr_text": "1. 문제 본문 <math>1/2</math>",
+            "mathml": "<math>1/2</math>",
+            "raw_transcript": r"1. 문제 본문 <math>\frac{1}{2}</math>",
             "ordered_segments": [
-                {"type": "text", "content": "문제 본문 ", "source_order": 0},
-                {"type": "math", "content": "x+1", "source_order": 1},
+                {"type": "text", "content": "1. 문제 본문 ", "source_order": 0},
+                {"type": "math", "content": r"\frac{1}{2}", "source_order": 1},
             ],
             "has_stylizable_image": False,
             "image_bbox": None,
@@ -631,11 +643,11 @@ def test_run_pipeline_builds_problem_markdown_from_ordered_segments(monkeypatch)
     )
     saved_region = orchestrator.read_job(user, job.job_id).regions[0]
 
-    assert saved_region.extractor.raw_transcript == "1. 문제 본문 <math>x+1</math>"
-    assert saved_region.extractor.problem_markdown == "문제 본문 $x+1$"
+    assert saved_region.extractor.raw_transcript == r"1. 문제 본문 <math>\frac{1}{2}</math>"
+    assert saved_region.extractor.problem_markdown == r"1. 문제 본문 $\frac{1}{2}$"
     assert saved_region.extractor.ordered_segments == [
-        {"type": "text", "content": "문제 본문 ", "source_order": 0},
-        {"type": "math", "content": "x+1", "source_order": 1},
+        {"type": "text", "content": "1. 문제 본문 ", "source_order": 0},
+        {"type": "math", "content": r"\frac{1}{2}", "source_order": 1},
     ]
 
 
@@ -662,11 +674,11 @@ def test_run_pipeline_replaces_mismatched_multiple_choice_explanation_with_warni
         include_image_detection: bool = False,
     ):
         return {
-            "ocr_text": "값은?\n① <math>1</math> ② <math>2</math> ③ <math>3</math> ④ <math>4</math> ⑤ <math>5</math>",
+            "ocr_text": "1. 값은?\n① <math>1</math> ② <math>2</math> ③ <math>3</math> ④ <math>4</math> ⑤ <math>5</math>",
             "mathml": "<math>1</math>\n<math>2</math>\n<math>3</math>\n<math>4</math>\n<math>5</math>",
             "raw_transcript": "1. 값은?\n① <math>1</math> ② <math>2</math> ③ <math>3</math> ④ <math>4</math> ⑤ <math>5</math>",
             "ordered_segments": [
-                {"type": "text", "content": "값은?\n① ", "source_order": 0},
+                {"type": "text", "content": "1. 값은?\n① ", "source_order": 0},
                 {"type": "math", "content": "1", "source_order": 1},
                 {"type": "text", "content": " ② ", "source_order": 2},
                 {"type": "math", "content": "2", "source_order": 3},
@@ -688,9 +700,9 @@ def test_run_pipeline_replaces_mismatched_multiple_choice_explanation_with_warni
         orchestrator,
         "generate_explanation_with_gpt",
         lambda *args, **kwargs: {
-            "explanation_lines": ["따라서 정답은 <math>5</math> 이다."],
+            "explanation_lines": [r"따라서 정답은 $5$ 이다."],
             "final_answer_index": 2,
-            "final_answer_value": "<math>5</math>",
+            "final_answer_value": "5",
             "confidence": 0.91,
             "reason_summary": "비교 계산 결과를 선택했다.",
         },
@@ -710,7 +722,7 @@ def test_run_pipeline_replaces_mismatched_multiple_choice_explanation_with_warni
     assert saved_region.extractor.question_type == "multiple_choice"
     assert saved_region.extractor.parsed_choices == ["1", "2", "3", "4", "5"]
     assert saved_region.extractor.resolved_answer_index == 2
-    assert saved_region.extractor.resolved_answer_value == "<math>5</math>"
+    assert saved_region.extractor.resolved_answer_value == "5"
     assert saved_region.extractor.verification_status == "warning"
     assert saved_region.extractor.verification_warnings
     assert (
@@ -1201,7 +1213,7 @@ def test_supabase_repository_save_job_falls_back_when_markdown_columns_are_missi
                     explanation="해설 본문",
                     problem_markdown="문제 $x$",
                     explanation_markdown="해설 $x$",
-                    markdown_version="mathocr_markdown_bridge_v1",
+                    markdown_version="mathocr_markdown_latex_v2",
                 ),
                 status="completed",
                 success=True,
@@ -1262,7 +1274,7 @@ def test_supabase_repository_read_job_falls_back_when_region_metadata_columns_ar
                         "mathml": "<math>x</math>",
                         "problem_markdown": "문제 $x$",
                         "explanation_markdown": "해설 $x$",
-                        "markdown_version": "mathocr_markdown_bridge_v1",
+                        "markdown_version": "mathocr_markdown_latex_v2",
                         "raw_transcript": "문제 본문",
                         "ordered_segments": [],
                         "question_type": None,
@@ -1363,7 +1375,7 @@ def test_supabase_repository_save_job_falls_back_when_region_metadata_columns_ar
                     ocr_text="문제 본문",
                     problem_markdown="문제 $x$",
                     explanation_markdown="해설 $x$",
-                    markdown_version="mathocr_markdown_bridge_v1",
+                    markdown_version="mathocr_markdown_latex_v2",
                 ),
                 status="completed",
                 success=True,

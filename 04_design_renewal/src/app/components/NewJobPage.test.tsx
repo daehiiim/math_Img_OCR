@@ -195,9 +195,9 @@ describe("NewJobPage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("heading", { name: "새 작업 생성" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "사진 변환" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "메인 캔버스 진입 패널" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "실행 도크" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "실행 도크" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "파일 선택" })).toBeInTheDocument();
     expect(screen.queryByText(/데모 이미지/)).not.toBeInTheDocument();
   });

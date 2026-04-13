@@ -39,7 +39,8 @@ describe("LoginPage", () => {
 
     expect(screen.getByRole("region", { name: "진입 허브" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "로컬 테스트로 로그인" })).toBeInTheDocument();
-    expect(screen.getByText("Google 없이 로컬 프로필로 바로 진입합니다.")).toBeInTheDocument();
+    expect(screen.queryByText("Workspace Access")).not.toBeInTheDocument();
+    expect(screen.queryByText("MathHWP")).not.toBeInTheDocument();
   });
 
   it("인증 설정이 없으면 한국어 안내를 보여주고 로그인 버튼을 비활성화한다", () => {
@@ -67,6 +68,8 @@ describe("LoginPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Google 계정으로 로그인" })).toBeDisabled();
     expect(screen.getByRole("region", { name: "진입 허브" })).toBeInTheDocument();
+    expect(screen.queryByText("Workspace Access")).not.toBeInTheDocument();
+    expect(screen.queryByText("Google OAuth")).not.toBeInTheDocument();
   });
 
   it("mock 로그인 완료 후에는 원래 요청 경로로 바로 복귀한다", async () => {

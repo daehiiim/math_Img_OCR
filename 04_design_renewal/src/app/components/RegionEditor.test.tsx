@@ -39,7 +39,7 @@ describe("RegionEditor", () => {
     expect(screen.queryByRole("button", { name: /^텍스트$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^도형$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^혼합$/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/마우스·손가락·펜 드래그 지원/i)).toBeInTheDocument();
+    expect(screen.queryByText(/마우스·손가락·펜 드래그 지원/i)).not.toBeInTheDocument();
 
     const canvas = screen.getByAltText("uploaded").parentElement as HTMLDivElement;
     vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({

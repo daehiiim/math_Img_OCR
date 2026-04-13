@@ -27,7 +27,8 @@ from app.pipeline.schema import JobPipelineContext
 
 ROOT = Path(__file__).resolve().parents[2]
 LOGGER = logging.getLogger(__name__)
-TEMPLATE_ERROR_MESSAGE = "문서 템플릿을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
+EXPORT_RUNTIME_MISSING_DETAIL = "문서 생성 엔진이 준비되지 않았습니다. 관리자에게 문의하세요."
+EXPORT_APPLY_FAILED_DETAIL = "텍스트 추출은 완료됐지만 문서 양식 적용에 실패했습니다. Markdown 결과는 저장되어 있으니 다시 내보내기 하세요."
 RUNTIME_SKILL_NAME = "hwpxskill-math"
 CANONICAL_TEMPLATE_NAME = "style_guide.hwpx"
 KOREA_TZ = ZoneInfo("Asia/Seoul")
@@ -336,7 +337,9 @@ def export_hwpx(root_path: Path, job: JobPipelineContext, export_dir: Path) -> P
         warnings.emit()
         error_code = getattr(error, "code", "HWPX_EXPORT_FAILED")
         LOGGER.exception("hwpx export failed code=%s detail=%s", error_code, error)
-        raise ValueError(TEMPLATE_ERROR_MESSAGE) from error
+        if error_code == TEMPLATE_RUNTIME_MISSING_CODE or "runtime not found" in str(error).lower():
+            raise ValueError(EXPORT_RUNTIME_MISSING_DETAIL) from error
+        raise ValueError(EXPORT_APPLY_FAILED_DETAIL) from error
     warnings.emit()
     return hwpx_path
 

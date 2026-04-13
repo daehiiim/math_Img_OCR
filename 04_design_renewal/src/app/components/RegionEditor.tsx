@@ -121,7 +121,6 @@ export function RegionEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const supportsTouchSelection = typeof window !== "undefined" && "PointerEvent" in window;
 
   useEffect(() => {
     setRegions(initialRegions.map((region) => ({ ...region, type: "mixed" })));
@@ -267,9 +266,6 @@ export function RegionEditor({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="rounded-lg bg-muted px-3 py-1.5 text-[12px] text-muted-foreground">
-          {supportsTouchSelection ? "마우스·손가락·펜 드래그 지원" : "마우스 드래그로 영역 지정"}
-        </div>
         <Button variant="ghost" size="sm" onClick={() => updateRegions(() => [])} disabled={disabled || regions.length === 0}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
           초기화

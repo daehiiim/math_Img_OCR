@@ -18,6 +18,7 @@ from app.pipeline.hwpx_math_layout import (
     normalize_hwp_equation_script,
     split_math_text,
 )
+from app.pipeline.markdown_contract import markdown_to_hwp_legacy_markup
 
 HP_NS = "http://www.hancom.co.kr/hwpml/2011/paragraph"
 HC_NS = "http://www.hancom.co.kr/hwpml/2011/core"
@@ -125,8 +126,25 @@ def collect_exportable_regions(job: Any) -> list[Any]:
     return [
         region
         for region in regions
-        if (region.extractor.ocr_text or "").strip() or (region.extractor.explanation or "").strip()
+        if (region.extractor.problem_markdown or "").strip()
+        or (region.extractor.explanation_markdown or "").strip()
+        or (region.extractor.ocr_text or "").strip()
+        or (region.extractor.explanation or "").strip()
     ]
+
+
+def _resolve_problem_source(region: Any) -> str:
+    """문항 export에 사용할 problem 본문을 Markdown 우선순위로 고른다."""
+    if region.extractor.problem_markdown:
+        return markdown_to_hwp_legacy_markup(region.extractor.problem_markdown) or ""
+    return region.extractor.ocr_text or ""
+
+
+def _resolve_explanation_source(region: Any) -> str:
+    """문항 export에 사용할 explanation 본문을 Markdown 우선순위로 고른다."""
+    if region.extractor.explanation_markdown:
+        return markdown_to_hwp_legacy_markup(region.extractor.explanation_markdown) or ""
+    return region.extractor.explanation or ""
 
 
 def append_region(
@@ -142,14 +160,14 @@ def append_region(
     images_info: list[dict[str, str]],
 ) -> None:
     """문항 하나를 problem/picture/choice/explanation subtree로 붙인다."""
-    parsed = parse_problem_text(region.extractor.ocr_text or "")
+    parsed = parse_problem_text(_resolve_problem_source(region))
     root.append(build_problem_paragraph(profile, parsed.stem, number, year, idgen))
     root.append(clone_static_paragraph(profile.problem_gap, idgen))
     append_picture_paragraph(root, profile.picture, root_path, bindata_dir, region, idgen, warnings, images_info)
     if parsed.choices is not None:
         append_choice_paragraph(root, profile, parsed.choices, idgen)
         root.append(clone_static_paragraph(profile.choice_gap, idgen))
-    append_explanation_paragraphs(root, profile, region.extractor.explanation or "", idgen)
+    append_explanation_paragraphs(root, profile, _resolve_explanation_source(region), idgen)
 
 
 def build_problem_paragraph(
@@ -271,6 +289,10 @@ def parse_choices(choice_text: str) -> tuple[str, ...] | None:
 def normalize_choice_value(raw_value: str) -> str:
     """선택지 문자열에서 단일 `<math>` wrapper를 제거한다."""
     value = raw_value.strip()
+    if "$" in value:
+        legacy_markup = markdown_to_hwp_legacy_markup(value)
+        if legacy_markup:
+            value = legacy_markup
     if not has_math_tag(value):
         return normalize_export_text(value)
     segments = split_math_text(value)

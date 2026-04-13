@@ -305,7 +305,7 @@ export function JobDetailPage() {
   const selectionDisabled = job.status === "running";
 
   return (
-    <div className="liquid-workspace-page mx-auto max-w-5xl p-6 lg:p-8">
+    <div className="liquid-workspace-page mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <section
         aria-label="작업 상태 surface"
         className="liquid-frost-panel liquid-frost-panel--soft mb-6 rounded-[32px] p-5 sm:p-6"
@@ -318,7 +318,7 @@ export function JobDetailPage() {
               type="button"
               aria-label="대시보드로 돌아가기"
               onClick={() => navigate("/workspace")}
-              className="liquid-chip rounded-full"
+              className="liquid-chip h-11 w-11 rounded-full"
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
@@ -543,7 +543,7 @@ export function JobDetailPage() {
               ) : null}
 
               {canRunQueuedSelection || canRunAutoFullFallback ? (
-                <Button onClick={() => void handleRun()} size="pill" className="w-full gap-2" disabled={runButtonDisabled}>
+                <Button onClick={() => void handleRun()} size="pill" className="min-h-11 w-full gap-2" disabled={runButtonDisabled}>
                   <Play className="w-4 h-4" />
                   파이프라인 실행
                 </Button>
@@ -570,7 +570,7 @@ export function JobDetailPage() {
                         : job.lastError || "오류 내용을 확인하세요."}
                     </p>
                   </div>
-                  <Button onClick={() => void handleRun()} size="pill" className="w-full gap-2" variant="glass" disabled={runButtonDisabled}>
+                  <Button onClick={() => void handleRun()} size="pill" className="min-h-11 w-full gap-2" variant="glass" disabled={runButtonDisabled}>
                     <Play className="w-4 h-4" />
                     재시도
                   </Button>
@@ -626,7 +626,7 @@ export function JobDetailPage() {
                   </div>
                   <Button
                     onClick={() => void handleExport()}
-                    className="w-full gap-2"
+                    className="min-h-11 w-full gap-2"
                     variant="glass"
                     size="pill"
                     disabled={isExporting}
@@ -636,7 +636,7 @@ export function JobDetailPage() {
                   </Button>
                 </div>
               ) : (
-                <Button onClick={() => void handleExport()} className="w-full gap-2" variant="glass" size="pill" disabled={isExporting}>
+                <Button onClick={() => void handleExport()} className="min-h-11 w-full gap-2" variant="glass" size="pill" disabled={isExporting}>
                   <Download className="w-4 h-4" />
                   {isExporting ? "내보내는 중..." : "HWPX 내보내기"}
                 </Button>
@@ -651,36 +651,6 @@ export function JobDetailPage() {
               </CardContent>
             </Card>
           ) : null}
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-[14px]">API 참조</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {[
-                  { method: "POST", path: "/jobs", done: true },
-                  { method: "PUT", path: "/jobs/{id}/regions", done: currentStep >= 1 },
-                  { method: "POST", path: "/jobs/{id}/run", done: currentStep >= 2 },
-                  { method: "GET", path: "/jobs/{id}", done: currentStep >= 2 },
-                  { method: "POST", path: "/jobs/{id}/export/hwpx", done: currentStep >= 4 },
-                ].map((api) => (
-                  <div
-                    key={api.path}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded text-[11px] ${
-                      api.done ? "bg-emerald-50" : "bg-muted/30"
-                    }`}
-                  >
-                    <Badge variant={api.done ? "default" : "outline"} className="text-[9px] px-1.5 py-0 shrink-0">
-                      {api.method}
-                    </Badge>
-                    <span className="font-mono truncate flex-1">{api.path}</span>
-                    {api.done ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : null}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </aside>
       </div>
     </div>

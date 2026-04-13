@@ -3,7 +3,6 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from typing import Any
 
 from app.pipeline.hwpx_math_layout import (
@@ -15,6 +14,7 @@ from app.pipeline.hwpx_math_layout import (
     split_math_text,
 )
 from app.pipeline.hwpx_reference_renderer import collect_exportable_regions, copy_region_image, parse_problem_text
+from app.pipeline.markdown_contract import markdown_to_hwp_legacy_markup
 
 PARAGRAPH_LAYOUT_CACHE_KEYS = ("linesegarray", "hp:linesegarray", "line_segment_array")
 
@@ -83,24 +83,7 @@ def _get_explanation_lines(region: Any) -> list[str]:
 
 def _restore_legacy_math_markup(value: str) -> str:
     """Markdown `$...$` 수식을 기존 `<math>...</math>` 형태로 되돌린다."""
-    restored = re.sub(r"\$\$(.+?)\$\$", _replace_math_block, value, flags=re.DOTALL)
-    return re.sub(r"\$(.+?)\$", _replace_math_inline, restored, flags=re.DOTALL)
-
-
-def _replace_math_block(match: re.Match[str]) -> str:
-    """block 수식을 legacy markup으로 치환한다."""
-    return _wrap_math_tag(match.group(1))
-
-
-def _replace_math_inline(match: re.Match[str]) -> str:
-    """inline 수식을 legacy markup으로 치환한다."""
-    return _wrap_math_tag(match.group(1))
-
-
-def _wrap_math_tag(raw_value: str) -> str:
-    """수식 문자열을 정리한 뒤 `<math>` wrapper로 감싼다."""
-    value = str(raw_value or "").strip()
-    return f"<math>{value}</math>" if value else ""
+    return markdown_to_hwp_legacy_markup(value) or ""
 
 
 def build_exported_document_from_template(

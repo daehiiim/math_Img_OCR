@@ -58,7 +58,7 @@ export function getRouteSeo(pathname: string): RouteSeo {
 
   if (normalizedPath === "/new") {
     return {
-      title: "새 작업 생성 | 수식 이미지 변환 작업실 | MathHWP",
+      title: "사진 변환 | 수식 이미지 변환 작업실 | MathHWP",
       description:
         "PNG, JPG, JPEG 수식 이미지를 업로드하고 영역을 지정해 MathHWP 작업실에서 OCR, 해설, HWPX 변환 워크플로를 시작하세요.",
       canonicalPath: "/new",

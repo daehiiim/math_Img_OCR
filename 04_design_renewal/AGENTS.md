@@ -1,0 +1,1 @@
+ui/ux design은 shadcn/ui를 사용할 것. 

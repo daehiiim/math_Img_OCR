@@ -22,7 +22,13 @@ export function AuthLayout() {
 
   return (
     <div className="liquid-shell liquid-shell--auth flex min-h-screen flex-col">
-      <header className="liquid-header-shell sticky top-4 z-20 mx-auto mt-4 w-[min(100%-1.5rem,1200px)] rounded-[32px] border border-white/70 px-4 py-4 shadow-[0_28px_72px_-48px_rgba(86,118,164,0.42)]">
+      <header
+        className="liquid-header-shell sticky z-20 mx-auto w-[min(100%-1.5rem,1200px)] rounded-[32px] border border-white/70 px-4 py-4 shadow-[0_28px_72px_-48px_rgba(86,118,164,0.42)]"
+        style={{
+          marginTop: "calc(env(safe-area-inset-top) + 1rem)",
+          top: "calc(env(safe-area-inset-top) + 1rem)",
+        }}
+      >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <Link to={isAuthenticated ? "/workspace" : "/"} className="flex items-center gap-2.5">
@@ -115,10 +121,10 @@ export function AuthLayout() {
             </>
           ) : (
             <div aria-label="주요 작업" className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-              <Button variant="ghost" className="rounded-full px-4" onClick={() => navigate("/pricing")}>
+              <Button variant="ghost" className="min-h-11 rounded-full px-4" onClick={() => navigate("/pricing")}>
                 가격
               </Button>
-              <Button className="rounded-full px-4" onClick={() => navigate("/login")}>
+              <Button className="min-h-11 rounded-full px-4" onClick={() => navigate("/login")}>
                 로그인
               </Button>
             </div>

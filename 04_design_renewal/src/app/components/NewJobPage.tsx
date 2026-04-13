@@ -309,7 +309,7 @@ export function NewJobPage() {
   };
 
   return (
-    <div className="liquid-workspace-page mx-auto max-w-[1480px] p-4 sm:p-6 lg:p-8">
+    <div className="liquid-workspace-page mx-auto max-w-[1200px] p-3 sm:p-6 lg:p-8">
       <input
         ref={fileInputRef}
         type="file"
@@ -324,76 +324,42 @@ export function NewJobPage() {
       />
 
       <div className="mb-8">
-        <h1>새 작업 생성</h1>
-        <p className="text-muted-foreground text-[14px] mt-1">
-          파일 선택과 영역 지정은 로그인 없이 진행하고, 파이프라인 실행 직전에만 로그인합니다.
-        </p>
+        <h1>사진 변환</h1>
       </div>
 
       {!preview ? (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <section aria-label="메인 캔버스 진입 패널" className="liquid-new-job-entry min-w-0">
-            <Card className="liquid-frost-panel--soft mx-auto mb-6 max-w-4xl">
-              <CardContent className="pt-6">
-                <div
-                  className={`liquid-dashed-dropzone rounded-[28px] border-2 border-dashed p-12 text-center transition-colors ${
-                    dragActive
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/40"
-                  }`}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={handleDrop}
+        <section aria-label="메인 캔버스 진입 패널" className="liquid-new-job-entry mx-auto min-w-0 max-w-4xl">
+          <Card className="liquid-frost-panel--soft">
+            <CardContent className="pt-6">
+              <div
+                className={`liquid-dashed-dropzone rounded-[28px] border-2 border-dashed p-6 text-center transition-colors sm:p-10 ${
+                  dragActive ? "border-primary bg-primary/5" : "hover:border-primary/40"
+                }`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragActive(true);
+                }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={handleDrop}
+              >
+                <Upload className="mx-auto mb-4 h-7 w-7 text-muted-foreground/78" />
+                <h3 className="mb-1 text-[15px]">이미지를 드래그하거나 클릭하여 업로드</h3>
+                <p className="mb-4 text-[13px] text-muted-foreground">
+                  PNG, JPG, JPEG 형식 지원 · 10MB 이하
+                </p>
+                <Button
+                  variant="glass"
+                  size="pill"
+                  onClick={openFilePicker}
+                  className="min-h-11 gap-2 px-6"
                 >
-                  <Upload className="mx-auto mb-4 h-7 w-7 text-muted-foreground/78" />
-                  <h3 className="mb-1 text-[15px]">이미지를 드래그하거나 클릭하여 업로드</h3>
-                  <p className="mb-4 text-[13px] text-muted-foreground">
-                    PNG, JPG, JPEG 형식 지원 · 10MB 이하
-                  </p>
-                  <Button
-                    variant="glass"
-                    size="pill"
-                    onClick={openFilePicker}
-                    className="gap-2"
-                  >
-                    <ImageIcon className="w-4 h-4" />
-                    파일 선택
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </section>
-
-          <section aria-label="실행 도크" className="liquid-new-job-dock space-y-6 xl:sticky xl:top-6">
-            <Card className="liquid-frost-panel--soft">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-[14px]">
-                  <Sparkles className="w-4 h-4" />
-                  실행 도크
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="liquid-inline-note rounded-[22px] p-3 text-[12px] text-muted-foreground">
-                  이미지를 올리면 왼쪽 메인 보드에서 영역을 지정하고, 오른쪽 도크에서 실행 옵션과 차감 예측을 바로 조정할 수 있습니다.
-                </div>
-                <div className="space-y-2">
-                  {[
-                    "1. 이미지 업로드 후 메타 정보와 캔버스를 확인합니다.",
-                    "2. 필요한 영역만 지정하거나 전체 자동 인식을 선택합니다.",
-                    "3. 실행 직전에만 로그인 또는 결제를 유도합니다.",
-                  ].map((item) => (
-                    <div key={item} className="liquid-chip rounded-[20px] px-3 py-2 text-[12px] text-muted-foreground">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </section>
-        </div>
+                  <ImageIcon className="h-4 w-4" />
+                  파일 선택
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <section aria-label="메인 캔버스 보드" className="liquid-new-job-board min-w-0">
@@ -407,7 +373,7 @@ export function NewJobPage() {
                     variant="glass"
                     size="pill"
                     onClick={resetDraftSelection}
-                    className="gap-2 self-start"
+                    className="min-h-11 gap-2 self-start"
                   >
                     <X className="w-4 h-4" />
                     다른 파일 선택
@@ -513,7 +479,7 @@ export function NewJobPage() {
                 <Button
                   onClick={() => void handleRunPipeline()}
                   size="pill"
-                  className="w-full gap-2"
+                  className="min-h-11 w-full gap-2"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? "파이프라인 실행 중..." : "파이프라인 실행"}

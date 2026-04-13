@@ -1,0 +1,92 @@
+<h2>관리자 대시보드 진입 구조 비교</h2>
+<p class="subtitle">모바일 우선 기준으로, 계정 시트에서 관리자 인증 후 어떤 화면으로 이어질지 비교합니다. 추천안은 A입니다.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. 계정 시트 인증 후 전용 관리자 보드</div>
+        <div class="mockup-body">
+          <div class="mock-nav">내 계정 시트</div>
+          <div class="mock-content" style="margin-top:12px; min-height:auto;">
+            계정 요약
+            <div class="placeholder" style="margin-top:8px;">계정 작업</div>
+            <button class="mock-button" style="margin-top:8px; width:100%;">관리자 모드</button>
+            <input class="mock-input" placeholder="관리자 비밀번호 입력" style="margin-top:8px;" />
+          </div>
+          <div class="mock-content" style="margin-top:14px; min-height:auto; border-style:dashed;">
+            /workspace/admin
+            <div class="split" style="margin-top:10px;">
+              <div class="placeholder">오늘 실패 작업 수</div>
+              <div class="placeholder">OpenAI 호출 누락 건</div>
+            </div>
+            <div class="placeholder" style="margin-top:10px;">사용자별 최근 실행</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>전용 관리자 페이지로 이동</h3>
+      <p>인증은 계정 시트에서 시작하고, 성공하면 별도 보드에서 지표와 운영 조회를 본다.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>장점</h4>
+          <ul>
+            <li>모바일에서 정보 밀도가 높아도 구조가 무너지지 않습니다.</li>
+            <li>추후 운영 기능이 늘어나도 계정 시트가 비대해지지 않습니다.</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>단점</h4>
+          <ul>
+            <li>라우트와 관리자 세션 설계가 추가됩니다.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. 계정 시트 내부 확장형 관리자 패널</div>
+        <div class="mockup-body">
+          <div class="mock-nav">내 계정 시트</div>
+          <div class="mock-content" style="margin-top:12px; min-height:auto;">
+            계정 요약
+            <div class="placeholder" style="margin-top:8px;">계정 작업</div>
+            <button class="mock-button" style="margin-top:8px; width:100%;">관리자 모드 열기</button>
+            <input class="mock-input" placeholder="비밀번호 입력" style="margin-top:8px;" />
+            <div class="placeholder" style="margin-top:12px;">오늘 실패 작업 수</div>
+            <div class="placeholder" style="margin-top:8px;">OpenAI 호출 누락 건</div>
+            <div class="placeholder" style="margin-top:8px;">사용자별 최근 실행</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>계정 시트 안에서 바로 운영 조회</h3>
+      <p>페이지 이동 없이 계정 시트 하단을 관리자 영역으로 확장한다.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>장점</h4>
+          <ul>
+            <li>구현이 더 빠르고 진입 흐름이 짧습니다.</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>단점</h4>
+          <ul>
+            <li>모바일에서 시트 길이가 길어져 사용성이 급격히 떨어집니다.</li>
+            <li>향후 운영 기능 추가 시 계정 시트 책임이 과도해집니다.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">추천</p>
+  <p>A안: 계정 시트는 인증 진입점만 맡고, 관리자 정보는 전용 보드로 분리하는 구성이 현재 구조와 모바일 사용성에 가장 적합합니다.</p>
+</div>

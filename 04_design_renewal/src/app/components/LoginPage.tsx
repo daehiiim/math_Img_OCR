@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
-import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { motion } from "motion/react";
 import { resolvePostLoginPath } from "../lib/authFlow";
@@ -66,39 +66,9 @@ export function LoginPage() {
     >
       <section
         aria-label="진입 허브"
-        className="liquid-frost-panel liquid-frost-panel--soft flex flex-col items-center rounded-[32px] p-10 text-center"
+        className="liquid-frost-panel liquid-frost-panel--soft flex flex-col items-center rounded-[32px] px-6 py-10 text-center sm:px-8"
       >
-        <div className="mb-6 flex flex-wrap justify-center gap-2">
-          <span className="liquid-chip liquid-chip--accent rounded-full px-4 py-2 text-[12px] font-medium text-foreground">
-            Workspace Access
-          </span>
-          <span className="liquid-chip rounded-full px-4 py-2 text-[12px] text-foreground/72">
-            {isLocalUiMock ? "Local Mock" : "Google OAuth"}
-          </span>
-        </div>
-        <BrandLogo className="mb-7 h-14 w-14 rounded-[20px]" />
-
-        <h1 className="mb-2 text-[22px] tracking-[-0.02em] text-foreground">MathHWP</h1>
-        <p className="mb-9 max-w-[300px] text-[14px] leading-relaxed text-muted-foreground">
-          수학 이미지를 업로드하여 HWPX 문서로 자동 변환합니다.
-        </p>
-
-        <div className="mb-7 grid w-full gap-2 text-left">
-          <div className="liquid-feature-row flex items-center gap-2.5 rounded-[20px] px-4 py-3">
-            <Sparkles className="h-4 w-4 shrink-0 text-[#4da3ff]" />
-            <span className="text-[13px] text-foreground/80">
-              업로드 직전에 필요한 인증만 수행하는 가벼운 진입 흐름입니다.
-            </span>
-          </div>
-          <div className="liquid-feature-row flex items-center gap-2.5 rounded-[20px] px-4 py-3">
-            <ShieldCheck className="h-4 w-4 shrink-0 text-[#4da3ff]" />
-            <span className="text-[13px] text-foreground/80">
-              {isLocalUiMock
-                ? "로컬 프로필로 즉시 진입해 화면 흐름을 검증할 수 있습니다."
-                : "인증 후 OpenAI 연결과 결제 흐름으로 자연스럽게 이어집니다."}
-            </span>
-          </div>
-        </div>
+        <BrandLogo className="mb-8 h-16 w-16 rounded-[24px]" />
 
         <button
           type="button"
@@ -135,11 +105,6 @@ export function LoginPage() {
             <p className="text-[12px] text-rose-600">{authErrorMessage}</p>
           </div>
         )}
-        <p className="mt-5 text-[12px] text-muted-foreground">
-          {isLocalUiMock
-            ? "Google 없이 로컬 프로필로 바로 진입합니다."
-            : "이미지를 올리는 순간에만 로그인하도록 동작합니다."}
-        </p>
       </section>
     </motion.div>
   );

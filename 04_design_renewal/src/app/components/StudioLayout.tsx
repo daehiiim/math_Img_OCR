@@ -12,7 +12,13 @@ export function StudioLayout() {
 
   return (
     <div className="liquid-shell liquid-shell--studio min-h-screen">
-      <header className="liquid-header-shell sticky top-4 z-20 mx-auto mt-4 w-[min(100%-1.5rem,1200px)] rounded-[32px] border border-white/70 px-4 py-4 shadow-[0_28px_72px_-48px_rgba(86,118,164,0.42)]">
+      <header
+        className="liquid-header-shell sticky z-20 mx-auto w-[min(100%-1.5rem,1200px)] rounded-[32px] border border-white/70 px-4 py-4 shadow-[0_28px_72px_-48px_rgba(86,118,164,0.42)]"
+        style={{
+          marginTop: "calc(env(safe-area-inset-top) + 1rem)",
+          top: "calc(env(safe-area-inset-top) + 1rem)",
+        }}
+      >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center gap-3">
@@ -57,12 +63,12 @@ export function StudioLayout() {
           <div aria-label="주요 작업" className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             {isAuthenticated && user ? (
               <>
-                <Button variant="outline" className="rounded-full px-4" onClick={() => navigate("/workspace")}>
+                <Button variant="outline" className="min-h-11 rounded-full px-4" onClick={() => navigate("/workspace")}>
                   내 작업실
                 </Button>
                 <Button
                   variant="ghost"
-                  className="rounded-full px-4"
+                  className="min-h-11 rounded-full px-4"
                   onClick={() => {
                     void logout();
                     navigate("/");
@@ -74,10 +80,10 @@ export function StudioLayout() {
               </>
             ) : (
               <>
-                <Button variant="ghost" className="rounded-full px-4" onClick={() => navigate("/pricing")}>
+                <Button variant="ghost" className="min-h-11 rounded-full px-4" onClick={() => navigate("/pricing")}>
                   가격
                 </Button>
-                <Button className="rounded-full px-4" onClick={() => navigate("/login")}>
+                <Button className="min-h-11 rounded-full px-4" onClick={() => navigate("/login")}>
                   로그인
                 </Button>
               </>

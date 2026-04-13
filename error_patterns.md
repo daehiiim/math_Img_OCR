@@ -7,6 +7,8 @@
 - compact inline width lookup은 raw script 문자열 그대로 비교하지 않는다. `ANGLE`/`∠`, 공백 차이를 제거한 canonical key로 answer 샘플과 reference 폭을 매칭한다.
 - 해설 mixed 문단에서 같은 script가 문맥마다 다른 equation box로 저장되면 실패로 본다. 특히 짧은 산술식이 `width=8386`, `height=1125`, `baseLine=85` 로 남아 있으면 export 전에 `script별 width + height=975 + baseLine=86` 규칙으로 다시 보정한다.
 - OCR 원문은 `ordered_segments`와 `raw_transcript`를 함께 저장하고, plain text는 재작성하지 않는다. 정규화는 `math` segment와 export 파생 필드에만 제한한다.
+- Markdown-first 파이프라인에서는 `math` segment를 저장 시점에 HWP script로 바꾸지 않는다. DB와 API에는 LaTeX를 유지하고, export 직전에만 `<math>...</math>` + HWP 친화 스크립트로 변환한다.
+- canonical 시험지 양식은 generic `md -> hwpx` 결과로 통째로 대체하지 않는다. `masterpage`·`content.hpf`·manifest는 canonical bundle을 유지하고, 문항 본문 section만 patch한다.
 - 객관식 해설은 자유문장만 저장하지 않는다. 구조화된 정답 번호/값을 선택지와 대조해 불일치 시 해설 원문 대신 검증 경고 문구로 대체한다.
 - Pydantic 모델에 `TypedDict`를 넣을 때 Cloud Run Python 3.10 런타임을 유지한다면 `typing.TypedDict`를 쓰지 않는다. 반드시 `typing_extensions.TypedDict`를 사용하고 호환 분기 schema 재구성 테스트로 확인한다.
 - 짧은 원본 타임랩스를 긴 루프로 늘릴 때 광류 보간으로 대부분 프레임을 합성하지 않는다. 합성 프레임 비율이 높아지면 잔상과 버벅임이 생기므로, 먼저 자연스럽게 이어지는 원본 프레임 루프 구간을 찾고 그 구간 반복을 우선 검토한다.
@@ -18,3 +20,4 @@
 - HWPX 문단 템플릿을 복제하거나 `section0.xml`을 패키징할 때는 `hp:linesegarray` 레이아웃 캐시를 남기지 않는다. stale cache가 남으면 한글이 파일 open 직후 잘못된 글자 간격을 렌더링하므로 clone 단계와 최종 write 직전에 모두 제거한다.
 - 선택형 DB 컬럼을 점진 도입할 때는 schema compatibility fallback을 기능별 컬럼군으로 분리한다. 새 metadata 컬럼 누락이 기존 optional select/upsert 경로까지 함께 꺼지지 않도록 읽기/쓰기 회귀 테스트를 같이 둔다.
 - 신규 적립 reason을 추가할 때는 앱 상수와 `credit_ledger_reason_check`를 같은 변경 묶음으로 갱신하고, 최초 적립 회귀 테스트까지 함께 확인한다.
+- Radix primitive를 감싼 UI wrapper는 plain function으로 남기지 않는다. `Trigger`/`Close`/`Overlay`/`Content`처럼 ref가 전달될 수 있는 컴포넌트는 `React.forwardRef` 또는 원시 primitive 직접 export로 유지하고, 시트 열기·닫기 상호작용까지 콘솔 경고 없이 검증한다.

@@ -379,7 +379,10 @@ def test_export_hwpx_hwpforge_mode_raises_when_helper_fails(tmp_path, monkeypatc
         lambda *_args, **_kwargs: (_ for _ in ()).throw(module.HwpxTemplateError("HWPFORGE_SECTION_BUILD_FAILED", "forced hwpforge failure")),
     )
 
-    with pytest.raises(ValueError, match="문서 템플릿을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."):
+    with pytest.raises(
+        ValueError,
+        match="텍스트 추출은 완료됐지만 문서 양식 적용에 실패했습니다. Markdown 결과는 저장되어 있으니 다시 내보내기 하세요.",
+    ):
         module.export_hwpx(root_path, make_export_job(image_relative_path.as_posix()), export_dir)
 
 

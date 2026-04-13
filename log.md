@@ -979,3 +979,54 @@
 - 후속 참고:
   - 빌드는 통과했지만 `assets/index-*.js` 가 약 `839 kB` 로 chunk size warning이 남아 있다.
   - 이는 기능 오류가 아니라 번들 분할 후보이며, 시각 QA 이후 성능 최적화 차수로 분리해도 된다.
+
+## 2026-04-13 09:25 KST
+
+- 요청: iPhone 14 기준(`390x844 CSS px`, `19.5:9`)으로 모바일 UI를 다시 다듬고, 불필요한 안내 문구·도크·사이드바 노이즈를 제거했다.
+- 아키텍처 결정:
+  - 데스크톱 좌측 사이드바는 유지하고, 모바일에서는 [`Layout.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/Layout.tsx) 상단 헤더 + 우상단 메뉴 시트 구조로 분기했다.
+  - 워크스페이스 탐색 항목은 [`AppSidebar.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AppSidebar.tsx) 의 공용 렌더러로 묶고, 모바일 메뉴 [`WorkspaceMobileMenu.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/WorkspaceMobileMenu.tsx) 에 재사용했다.
+  - 로그인 타이밍과 비즈니스 플로우는 유지하고, 이번 차수는 텍스트 정리와 모바일 레이아웃 안전성에만 집중했다.
+- 처리:
+  - [`Layout.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/Layout.tsx), [`AuthLayout.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AuthLayout.tsx), [`StudioLayout.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/StudioLayout.tsx) 에 safe-area inset과 44px 이상 터치 타깃을 반영했다.
+  - [`NewJobPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx) 제목을 `사진 변환`으로 바꾸고, 업로드 전 `실행 도크`와 로그인 안내 문구를 제거했다.
+  - [`LoginPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/LoginPage.tsx) 에서 보조 설명을 모두 제거하고 로고 + 로그인 버튼 + 오류 블록만 남겼다.
+  - [`RegionEditor.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/RegionEditor.tsx) 의 `마우스·손가락·펜 드래그 지원` 칩을 제거했고, [`JobDetailPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.tsx) 의 `API 참조` 카드를 삭제했다.
+  - [`siteSeo.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/seo/siteSeo.ts) 의 `/new` SEO title을 `사진 변환` 기준으로 맞췄다.
+  - [`ui/sheet.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ui/sheet.tsx) 의 `Trigger/Close/Overlay/Content/Title/Description` 래퍼를 ref-safe하게 정리하고, [`sheet.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ui/sheet.test.tsx) 와 [`Layout.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/Layout.test.tsx) 에 모바일 메뉴 회귀 검증을 추가했다.
+- 검증:
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/ui/sheet.test.tsx src/app/components/Layout.test.tsx` 기준 `2 files, 5 tests passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run` 기준 `41 files, 161 tests passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run build` 기준 프로덕션 빌드 통과.
+- 이슈 및 후속:
+  - Playwright MCP 세션이 중간에 종료되어 iPhone 14 실브라우저 QA는 재실행이 필요하다.
+  - 빌드는 통과했지만 `assets/index-*.js` chunk warning은 그대로 남아 있어, 필요하면 다음 차수에서 라우트 분할로 분리 대응하면 된다.
+- 배포 영향:
+  - 이번 단계는 프런트 정적 자산/컴포넌트 변경만 포함한다.
+  - 백엔드 배포 환경, 인증 시점, 외부 API, 라우트 구조 변경은 없다.
+
+## 2026-04-13 09:25 KST
+
+- 요청: Markdown-first HWPX 하이브리드 전환 계획을 실제 백엔드/export 경로에 반영했다.
+- 아키텍처 결정:
+  - OCR 저장 계약의 진실원천은 [`problem_markdown`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/schema.py) / `explanation_markdown` 으로 두고, `ordered_segments` 는 plain text 보존 + math LaTeX 저장으로 고정했다.
+  - [`ocr_text`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/schema.py) / `explanation` / `mathml` 은 과도기 호환 필드로 유지하되, export 시 입력 소스로는 직접 쓰지 않고 Markdown에서 파생하도록 바꿨다.
+  - direct HwpForge writer와 legacy reference renderer fallback 모두 export 직전에만 Markdown LaTeX를 HWP 친화 `<math>` 스크립트로 변환하도록 통일했다.
+  - HWPX export 실패는 `runtime 누락` 과 `양식 적용 실패` 두 문구로 분리했다.
+- 처리:
+  - [`markdown_contract.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/markdown_contract.py) 를 `mathocr_markdown_latex_v2` 계약으로 교체하고 `ordered_segments -> Markdown`, `legacy -> Markdown`, `Markdown -> HWP legacy markup` 유틸을 추가했다.
+  - [`extractor.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/extractor.py) 에서 `ordered_segments/raw_transcript` 는 raw-preserving 저장, `ocr_text` 는 legacy fallback 파생, 해설 생성은 Markdown+LaTeX 응답 정규화로 바꿨다.
+  - [`orchestrator.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/orchestrator.py) 에서 `problem_markdown/explanation_markdown` 저장 우선순위와 객관식 검증 흐름을 정리하고, 수동 export 에러 문구를 분리했다.
+  - [`hwpforge_json_builder.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpforge_json_builder.py) 와 [`hwpx_reference_renderer.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/hwpx_reference_renderer.py) 가 Markdown을 source of truth로 읽도록 바꿨다.
+  - [`exporter.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/exporter.py) 에서 runtime 누락/일반 실패 사용자 메시지를 분리했다.
+  - 배포 보강용 migration [`2026-04-13_markdown_first_hwpx_v2.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_markdown_first_hwpx_v2.sql) 을 추가했고, [`error_patterns.md`](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 에 Markdown-first/HWPX 규칙을 추가했다.
+  - 회귀 테스트로 [`test_markdown_contract.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_markdown_contract.py) 를 새로 추가했고 [`test_pipeline_storage.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_pipeline_storage.py), [`test_extractor_normalization.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_extractor_normalization.py), [`test_hwpforge_json_builder.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_hwpforge_json_builder.py), [`test_exporter.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_exporter.py), [`test_job_response_fields.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_job_response_fields.py) 기대값을 v2 계약으로 올렸다.
+  - 프런트는 기존 Markdown preview 경로가 이미 맞아 있어 [`jobMappers.test.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobMappers.test.ts), [`ResultsViewer.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ResultsViewer.test.tsx) 회귀만 갱신했다.
+- 검증:
+  - `D:\03_PROJECT\05_mathOCR\.tmp\pydeps-latest\bin\pytest.exe 02_main/tests/test_markdown_contract.py 02_main/tests/test_extractor_normalization.py 02_main/tests/test_hwpforge_json_builder.py 02_main/tests/test_pipeline_storage.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_exporter.py -q` 기준 `74 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/store/jobMappers.test.ts src/app/components/ResultsViewer.test.tsx` 기준 `2 files, 13 tests passed`.
+- 배포 영향:
+  - 백엔드 코드와 Supabase 스키마가 함께 변경됐다.
+  - 운영 반영 전 [`2026-04-13_markdown_first_hwpx_v2.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_markdown_first_hwpx_v2.sql) 적용이 필요하다.
+  - HWPX export 정상 동작에는 백엔드 컨테이너에 HwpForge runtime bundle이 포함되거나 `HWPFORGE_MCP_PATH` 가 유효해야 한다.
+  - 초기 운영값은 `HWPX_EXPORT_ENGINE=auto` 유지가 전제다.

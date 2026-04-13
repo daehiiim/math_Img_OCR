@@ -26,6 +26,8 @@ from app.pipeline.markdown_contract import (
     MARKDOWN_VERSION,
     bridge_legacy_markup_to_markdown,
     has_markdown_output,
+    markdown_to_hwp_legacy_markup,
+    ordered_segments_to_markdown,
 )
 from app.pipeline.repository import PipelineRepository, PipelineUserContext, build_repository_from_settings
 from app.pipeline.schema import JobPipelineContext, RegionContext, RegionPipelineContext
@@ -34,6 +36,8 @@ ROOT = Path(__file__).resolve().parents[2]
 _repository_factory: Callable[[], PipelineRepository] | None = None
 EXPLANATION_VERIFICATION_WARNING_TEXT = "해설 검증이 필요합니다. 정답과 풀이의 일치 여부를 자동 확인하지 못했습니다."
 AUTO_FULL_REGION_ID = "auto_full_1"
+EXPORT_RUNTIME_MISSING_DETAIL = "문서 생성 엔진이 준비되지 않았습니다. 관리자에게 문의하세요."
+EXPORT_APPLY_FAILED_DETAIL = "텍스트 추출은 완료됐지만 문서 양식 적용에 실패했습니다. Markdown 결과는 저장되어 있으니 다시 내보내기 하세요."
 
 
 def _coerce_ordered_segments(raw_segments: Any) -> list[dict[str, Any]]:
@@ -59,17 +63,6 @@ def _coerce_ordered_segments(raw_segments: Any) -> list[dict[str, Any]]:
             }
         )
     return sorted(segments, key=lambda segment: segment["source_order"])
-
-
-def _ordered_segments_to_markup(segments: list[dict[str, Any]]) -> str:
-    """ordered segment 목록을 inline math markup 문자열로 합친다."""
-    parts: list[str] = []
-    for segment in segments:
-        if segment["type"] == "math":
-            parts.append(f"<math>{segment['content']}</math>")
-            continue
-        parts.append(segment["content"])
-    return "".join(parts)
 
 
 def _clear_ocr_outputs(region: RegionPipelineContext) -> None:
@@ -108,7 +101,11 @@ def _normalize_explanation_payload(result: Any) -> dict[str, Any]:
     """구형 문자열 해설과 신형 구조화 해설을 공통 payload로 맞춘다."""
     if not isinstance(result, dict):
         text = str(result or "").strip()
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        lines = [
+            bridge_legacy_markup_to_markdown(line.strip()) or line.strip()
+            for line in text.splitlines()
+            if line.strip()
+        ]
         return {
             "explanation_lines": lines,
             "final_answer_index": None,
@@ -117,12 +114,20 @@ def _normalize_explanation_payload(result: Any) -> dict[str, Any]:
             "reason_summary": None,
         }
     lines = result.get("explanation_lines")
-    normalized_lines = [str(line).strip() for line in lines or [] if str(line).strip()]
+    normalized_lines = [
+        bridge_legacy_markup_to_markdown(str(line).strip()) or str(line).strip()
+        for line in lines or []
+        if str(line).strip()
+    ]
     confidence = result.get("confidence")
     return {
         "explanation_lines": normalized_lines,
         "final_answer_index": _coerce_answer_index(result.get("final_answer_index")),
-        "final_answer_value": str(result.get("final_answer_value") or "").strip() or None,
+        "final_answer_value": (
+            bridge_legacy_markup_to_markdown(str(result.get("final_answer_value") or "").strip())
+            or str(result.get("final_answer_value") or "").strip()
+            or None
+        ),
         "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
         "reason_summary": str(result.get("reason_summary") or "").strip() or None,
     }
@@ -131,13 +136,16 @@ def _normalize_explanation_payload(result: Any) -> dict[str, Any]:
 def _store_problem_metadata(region: RegionPipelineContext, analyzed: dict[str, Any]) -> None:
     """OCR 결과를 region extractor 필드와 객관식 메타데이터에 반영한다."""
     ordered_segments = _coerce_ordered_segments(analyzed.get("ordered_segments"))
-    problem_source = _ordered_segments_to_markup(ordered_segments) or (analyzed.get("ocr_text") or "")
     region.extractor.ocr_text = (analyzed.get("ocr_text") or "") or None
     region.extractor.mathml = (analyzed.get("mathml") or "") or None
     region.extractor.raw_transcript = (analyzed.get("raw_transcript") or "") or None
     region.extractor.ordered_segments = ordered_segments
-    region.extractor.problem_markdown = bridge_legacy_markup_to_markdown(problem_source) if problem_source else None
-    parsed_problem = parse_problem_text(problem_source) if problem_source else parse_problem_text("")
+    problem_markdown = ordered_segments_to_markdown(ordered_segments)
+    if not problem_markdown:
+        problem_markdown = bridge_legacy_markup_to_markdown(region.extractor.raw_transcript or region.extractor.ocr_text)
+    region.extractor.problem_markdown = problem_markdown
+    problem_parse_source = markdown_to_hwp_legacy_markup(problem_markdown) if problem_markdown else (region.extractor.ocr_text or "")
+    parsed_problem = parse_problem_text(problem_parse_source or "")
     region.extractor.question_type = "multiple_choice" if parsed_problem.choices is not None else "free_response"
     region.extractor.parsed_choices = list(parsed_problem.choices or ())
 
@@ -169,7 +177,8 @@ def _resolve_multiple_choice_warnings(
 def _store_explanation_metadata(region: RegionPipelineContext, explanation_result: Any) -> None:
     """해설 구조화 응답을 저장하고 객관식이면 일치 여부를 검증한다."""
     payload = _normalize_explanation_payload(explanation_result)
-    explanation_text = "\n".join(payload["explanation_lines"]).strip()
+    explanation_markdown = "\n".join(payload["explanation_lines"]).strip() or None
+    explanation_text = markdown_to_hwp_legacy_markup(explanation_markdown) if explanation_markdown else None
     region.extractor.resolved_answer_index = payload["final_answer_index"]
     region.extractor.resolved_answer_value = payload["final_answer_value"]
     region.extractor.answer_confidence = payload["confidence"]
@@ -184,12 +193,11 @@ def _store_explanation_metadata(region: RegionPipelineContext, explanation_resul
         region.extractor.verification_status = "warning" if region.extractor.verification_warnings else "verified"
         if region.extractor.verification_status == "warning":
             explanation_text = EXPLANATION_VERIFICATION_WARNING_TEXT
+            explanation_markdown = EXPLANATION_VERIFICATION_WARNING_TEXT
     else:
-        region.extractor.verification_status = "verified" if explanation_text else "unverified"
+        region.extractor.verification_status = "verified" if explanation_markdown else "unverified"
     region.extractor.explanation = explanation_text or None
-    region.extractor.explanation_markdown = (
-        bridge_legacy_markup_to_markdown(region.extractor.explanation) if region.extractor.explanation else None
-    )
+    region.extractor.explanation_markdown = explanation_markdown
 
 
 def _utc_now() -> str:
@@ -713,6 +721,12 @@ def _materialize_job_for_export(
     return materialized
 
 
+def _is_runtime_missing_export_error(message: str) -> bool:
+    """export 실패 문자열이 runtime 누락 계열인지 판별한다."""
+    normalized = message.lower()
+    return "runtime not found" in normalized or "template runtime missing" in normalized or "hwpx export runtime" in normalized
+
+
 def execute_hwpx_export(user: PipelineUserContext, job_id: str) -> dict:
     """완료된 OCR 결과를 HWPX로 내보내고 Storage에 저장한다."""
     repository = _get_repository()
@@ -733,8 +747,15 @@ def execute_hwpx_export(user: PipelineUserContext, job_id: str) -> dict:
             hwpx_path = export_hwpx(temp_root, materialized_job, export_dir)
             storage_path = f"{user.user_id}/{job_id}/exports/{job_id}.hwpx"
             repository.upload_bytes(user, storage_path, hwpx_path.read_bytes(), "application/hwp+zip")
+    except ValueError as error:
+        message = str(error)
+        if _is_runtime_missing_export_error(message):
+            raise ValueError(EXPORT_RUNTIME_MISSING_DETAIL) from error
+        raise ValueError(message if message in (EXPORT_RUNTIME_MISSING_DETAIL, EXPORT_APPLY_FAILED_DETAIL) else EXPORT_APPLY_FAILED_DETAIL) from error
     except Exception as error:
-        raise ValueError(f"HWPX export failed: {error}") from error
+        if _is_runtime_missing_export_error(str(error)):
+            raise ValueError(EXPORT_RUNTIME_MISSING_DETAIL) from error
+        raise ValueError(EXPORT_APPLY_FAILED_DETAIL) from error
 
     job.status = "exported"
     job.hwpx_export_path = storage_path

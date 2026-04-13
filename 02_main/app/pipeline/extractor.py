@@ -12,6 +12,7 @@ from typing import Any
 import requests
 
 from app.config import SUPPORTED_NANO_BANANA_PROMPT_VERSIONS, get_settings
+from app.pipeline.markdown_contract import bridge_legacy_markup_to_markdown, markdown_to_hwp_legacy_markup, ordered_segments_to_markdown
 
 logger = logging.getLogger(__name__)
 SUPPORTED_STYLIZABLE_IMAGE_KINDS = {"geometry", "illustration", "generic"}
@@ -137,6 +138,18 @@ def _normalize_stylizable_image_kind(kind: str | None) -> str:
 def _strip_problem_number_prefix(text: str) -> str:
     """OCR 본문 줄 앞의 문제 번호를 제거한다."""
     return PROBLEM_NUMBER_PREFIX_PATTERN.sub("", text, count=1)
+
+
+def _normalize_latex_expression(text: str) -> str:
+    """OCR이 돌려준 수식 문자열을 저장용 LaTeX 조각으로 정리한다."""
+    normalized = str(text or "").replace("\r\n", "\n").strip()
+    if normalized.startswith("<math>") and normalized.endswith("</math>"):
+        normalized = normalized[6:-7].strip()
+    if normalized.startswith("$$") and normalized.endswith("$$"):
+        normalized = normalized[2:-2].strip()
+    elif normalized.startswith("$") and normalized.endswith("$") and normalized.count("$") == 2:
+        normalized = normalized[1:-1].strip()
+    return normalized
 
 
 def _normalize_math_expression(text: str) -> str:
@@ -303,18 +316,14 @@ def _wrap_segment_content(segment_type: str, content: str) -> str:
 
 
 def _normalize_ordered_segments(raw_segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """ordered segment의 평문은 보존하고 math만 정규화한다."""
+    """ordered segment를 raw-preserving 저장 형식으로 정리한다."""
     normalized_segments: list[dict[str, Any]] = []
-    stripped_first_problem_number = False
     for segment in raw_segments:
         content = segment["content"].replace("\r\n", "\n")
         if segment["type"] == "math":
-            normalized_content = _normalize_math_expression(content)
+            normalized_content = _normalize_latex_expression(content)
         else:
             normalized_content = content
-            if normalized_content.strip() and not stripped_first_problem_number:
-                normalized_content = _strip_problem_number_prefix(normalized_content)
-                stripped_first_problem_number = True
         normalized_segments.append(
             {
                 "type": segment["type"],
@@ -330,13 +339,22 @@ def _join_segment_text(segments: list[dict[str, Any]]) -> str:
     return "".join(_wrap_segment_content(segment["type"], segment["content"]) for segment in segments)
 
 
+def _build_legacy_ocr_text_from_segments(segments: list[dict[str, Any]]) -> str | None:
+    """ordered segment를 호환용 legacy OCR 텍스트로 파생한다."""
+    markdown = ordered_segments_to_markdown(segments)
+    legacy_markup = markdown_to_hwp_legacy_markup(markdown)
+    if not legacy_markup:
+        return None
+    return _normalize_ocr_text(legacy_markup)
+
+
 def _extract_ordered_segment_payload(parsed: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None]:
-    """ordered segment가 있으면 raw transcript와 표시용 본문을 함께 복원한다."""
+    """ordered segment가 있으면 raw transcript와 호환용 OCR 텍스트를 함께 복원한다."""
     raw_segments = _coerce_ordered_segments(parsed.get("ordered_segments"))
     if not raw_segments:
         return None, [], None
     normalized_segments = _normalize_ordered_segments(raw_segments)
-    return _join_segment_text(raw_segments), normalized_segments, _join_segment_text(normalized_segments)
+    return _join_segment_text(normalized_segments), normalized_segments, _build_legacy_ocr_text_from_segments(normalized_segments)
 
 
 def _build_fallback_raw_transcript(text_blocks: list[str]) -> str | None:
@@ -350,11 +368,15 @@ def _normalize_explanation_payload(parsed: dict[str, Any]) -> dict[str, Any]:
     raw_lines = parsed.get("explanation_lines")
     normalized_lines: list[str] = []
     if isinstance(raw_lines, list):
-        normalized_lines = [_normalize_explanation_text(str(line).strip()) for line in raw_lines if str(line).strip()]
+        normalized_lines = [
+            bridge_legacy_markup_to_markdown(str(line).strip()) or ""
+            for line in raw_lines
+            if str(line).strip()
+        ]
     final_answer_value = parsed.get("final_answer_value")
     normalized_answer_value = None
     if isinstance(final_answer_value, str) and final_answer_value.strip():
-        normalized_answer_value = _normalize_explanation_text(final_answer_value.strip())
+        normalized_answer_value = bridge_legacy_markup_to_markdown(final_answer_value.strip()) or final_answer_value.strip()
     confidence = parsed.get("confidence")
     return {
         "explanation_lines": normalized_lines,
@@ -513,9 +535,9 @@ A) Text and Formulas
     {"type":"text","content":"exact raw text","source_order":0}
   or
     {"type":"math","content":"formula only","source_order":1}
-- For `math` segments, keep the exact recognized formula content without `<math>` wrappers in the JSON field.
+- For `math` segments, keep the exact recognized formula content in LaTeX without `<math>` wrappers.
 - Do NOT rewrite plain text.
-- You may normalize formula syntax only enough to be representable in Hancom Office Equation Script.
+- You may normalize formula syntax only enough to be valid LaTeX.
 - Also fill the legacy `text_blocks` and `formulas` arrays for backward compatibility.
 
 
@@ -650,8 +672,9 @@ def generate_explanation_with_gpt(
         "`final_answer_index` must be the multiple-choice answer number when available, otherwise null. "
         "`final_answer_value` must be the final answer text or formula when available, otherwise null. "
         "`confidence` must be a number between 0 and 1 when available, otherwise null. "
-        "Convert mathematical formulas into Hancom Office Equation Script and strictly wrap formulas with `<math>...</math>` tags. "
-        "Do not use LaTeX delimiters. Do not return markdown fences.\n"
+        "Write every explanation line as Markdown text. "
+        "Render every formula in LaTeX using `$...$` or `$$...$$`. "
+        "Do not use `<math>` tags. Do not return markdown fences.\n"
         + "OCR text: " + (ocr_text or "") + "\n"
         + "MathML: " + (mathml or "")
     )
