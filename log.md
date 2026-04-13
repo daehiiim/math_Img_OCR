@@ -1053,3 +1053,23 @@
   - 이번 단계는 백엔드/프런트가 함께 변경됐다.
   - 운영 반영 전 백엔드 런타임에 `ADMIN_MODE_PASSWORD`, `ADMIN_MODE_SESSION_SECRET`, `ADMIN_MODE_SESSION_TTL_MINUTES=30` 환경 변수를 추가해야 한다.
   - DB 마이그레이션은 없다.
+
+## 2026-04-13 18:56 KST
+
+- 요청: 영역 미지정 시 전체 페이지 fallback 대신 OpenAI 비전 기반 자동 문항 분할을 추가하고, 자동 분할 과금을 `페이지당 1토큰(= 내부 credit 1)`으로 분리했다.
+- 아키텍처 결정:
+  - 자동 분할은 새 API [`POST /jobs/{job_id}/regions/auto-detect`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py) 로 분리하고, 저장 메타는 `selection_mode=auto_detected`, `auto_detect_confidence` 로 유지했다.
+  - 자동 분할 과금은 region action 과금과 섞지 않고 [`ocr_jobs.auto_detect_charged`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_auto_detect_regions.sql) 플래그 기반 job 1회 차감으로 분리했다.
+  - 기본 실행 경로의 `auto_full` 전체페이지 fallback은 제거했고, 이제 영역이 없으면 먼저 자동 분할 또는 수동 저장을 요구한다.
+- 처리:
+  - 백엔드에 [`region_detector.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/region_detector.py), [`orchestrator.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/orchestrator.py), [`billing.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/billing.py) 변경을 반영했다.
+  - DB migration [`2026-04-13_auto_detect_regions.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_auto_detect_regions.sql) 을 추가하고 [`supabase_saas_init.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/supabase_saas_init.sql), [`2026-04-13_markdown_first_hwpx_v2.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_markdown_first_hwpx_v2.sql) 도 동기화했다.
+  - 프런트 [`NewJobPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx), [`JobDetailPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.tsx), [`RegionEditor.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/RegionEditor.tsx), [`ResultsViewer.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/ResultsViewer.tsx) 를 자동 분할 UX로 교체했다.
+  - 프런트 상태/API [`jobApi.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/api/jobApi.ts), [`jobStore.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobStore.ts), [`jobMappers.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobMappers.ts), [`regionSelection.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/regionSelection.ts), [`executionCredits.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/executionCredits.ts) 를 새 계약으로 맞췄다.
+- 검증:
+  - `py -3 -m pytest 02_main/tests/test_pipeline_storage.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_billing.py` 기준 `80 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- NewJobPage.test.tsx JobDetailPage.test.tsx ResultsViewer.test.tsx jobApi.test.ts jobStore.test.tsx jobMappers.test.ts` 기준 `6 files, 44 tests passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run build` 통과.
+- 배포 영향:
+  - 이번 단계는 백엔드/프런트와 Supabase 스키마가 함께 변경됐다.
+  - 운영 반영 전 [`2026-04-13_auto_detect_regions.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_auto_detect_regions.sql) 마이그레이션을 먼저 적용해야 한다.

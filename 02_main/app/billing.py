@@ -33,6 +33,7 @@ POLAR_REQUIRED_CURRENCY = "krw"
 POLAR_DEFAULT_BILLING_COUNTRY = "KR"
 SIGNUP_BONUS_CREDITS = 3
 SIGNUP_BONUS_REASON = "signup_bonus"
+AUTO_DETECT_CHARGE_REASON = "auto_detect_charge"
 CHECKOUT_ADDRESS_FIELDS = ("country", "line1", "line2", "postal_code", "city", "state")
 CHECKOUT_BILLING_FIELD_NAMES = ("country", "state", "city", "postal_code", "line1", "line2")
 JOB_ACTION_REASON_MAP = {
@@ -159,6 +160,18 @@ class BillingStoreProtocol(Protocol):
     ) -> dict: ...
 
     def consume_job_credit(self, user: AuthenticatedUser, job_id: str) -> dict: ...
+
+    def ensure_job_auto_detect_credits_available(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict: ...
+
+    def consume_job_auto_detect_credits(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict: ...
 
     def ensure_job_region_credits_available(
         self,
@@ -883,6 +896,81 @@ class SupabaseBillingStore:
         )
         return {"charged": True, "credits_balance": new_balance}
 
+    def _read_job_auto_detect_charge_state(self, client: SupabaseClient, job_id: str) -> dict[str, Any]:
+        """자동 분할 1회 과금 여부를 확인하기 위한 job 상태를 읽는다."""
+        rows = client.select(
+            "ocr_jobs",
+            params={
+                "select": "id,auto_detect_charged,auto_detect_charged_at",
+                "id": f"eq.{job_id}",
+            },
+        )
+        if not rows:
+            raise FileNotFoundError(f"job not found: {job_id}")
+        return rows[0]
+
+    def ensure_job_auto_detect_credits_available(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict:
+        """자동 분할을 실행하기 전에 1회 차감 여지가 있는지 점검한다."""
+        client = self._user_client(user)
+        job_row = self._read_job_auto_detect_charge_state(client, job_id)
+        profile = self.get_or_create_profile(user)
+        required_credits = 0 if bool(job_row.get("auto_detect_charged")) else 1
+        if profile.credits_balance < required_credits:
+            raise ValueError("insufficient credits")
+        return {
+            "required_credits": required_credits,
+            "credits_balance": profile.credits_balance,
+        }
+
+    def consume_job_auto_detect_credits(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict:
+        """자동 분할이 처음 성공했을 때만 job당 1크레딧을 차감한다."""
+        client = self._user_client(user)
+        job_row = self._read_job_auto_detect_charge_state(client, job_id)
+        profile = self.get_or_create_profile(user)
+        if bool(job_row.get("auto_detect_charged")):
+            return {"charged": False, "charged_count": 0, "credits_balance": profile.credits_balance}
+        if profile.credits_balance <= 0:
+            raise ValueError("insufficient credits")
+
+        new_balance = profile.credits_balance - 1
+        charged_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+        admin_client = self._billing_write_client()
+        admin_client.update(
+            "profiles",
+            filters={"user_id": f"eq.{user.user_id}"},
+            payload={
+                "credits_balance": new_balance,
+                "used_credits": profile.used_credits + 1,
+            },
+        )
+        admin_client.insert(
+            "credit_ledger",
+            {
+                "user_id": user.user_id,
+                "job_id": job_id,
+                "delta": -1,
+                "balance_after": new_balance,
+                "reason": AUTO_DETECT_CHARGE_REASON,
+            },
+        )
+        admin_client.update(
+            "ocr_jobs",
+            filters={"id": f"eq.{job_id}"},
+            payload={
+                "auto_detect_charged": True,
+                "auto_detect_charged_at": charged_at,
+            },
+        )
+        return {"charged": True, "charged_count": 1, "credits_balance": new_balance}
+
     def _read_job_region_charge_rows(self, client: SupabaseClient, job_id: str) -> list[dict[str, Any]]:
         """region 단위 과금 상태와 결과 텍스트를 조회한다."""
         rows = client.select(
@@ -1396,6 +1484,22 @@ class BillingService:
     def consume_job_credit(self, user: AuthenticatedUser, job_id: str) -> dict:
         """성공한 OCR job에 대한 1회 차감을 수행한다."""
         return self._store.consume_job_credit(user, job_id)
+
+    def ensure_job_auto_detect_credits_available(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict:
+        """자동 분할 1회 차감이 필요한지와 잔액을 확인한다."""
+        return self._store.ensure_job_auto_detect_credits_available(user, job_id)
+
+    def consume_job_auto_detect_credits(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict:
+        """자동 분할이 성공 저장됐을 때만 1회 차감을 수행한다."""
+        return self._store.consume_job_auto_detect_credits(user, job_id)
 
     def ensure_job_region_credits_available(
         self,

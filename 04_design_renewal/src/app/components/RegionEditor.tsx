@@ -14,7 +14,7 @@ import {
   type ResizeHandle,
   type RegionRect,
 } from "../lib/regionGeometry";
-import { AUTO_FULL_RISK_MESSAGE } from "../lib/regionSelection";
+import { AUTO_DETECT_GUIDE_MESSAGE, isAutoDetectedRegion } from "../lib/regionSelection";
 import type { InputDevice, Region } from "../store/jobStore";
 import { Button } from "./ui/button";
 
@@ -51,6 +51,9 @@ type PointerInteraction = DrawInteraction | ResizeInteraction;
 const REGION_BORDER_COLOR = "#2563eb";
 const REGION_FILL_COLOR = "rgba(37, 99, 235, 0.12)";
 const REGION_LABEL_COLOR = "#1d4ed8";
+const AUTO_DETECT_BORDER_COLOR = "#d97706";
+const AUTO_DETECT_FILL_COLOR = "rgba(245, 158, 11, 0.14)";
+const AUTO_DETECT_LABEL_COLOR = "#b45309";
 const RESIZE_HANDLES: ResizeHandle[] = ["nw", "ne", "se", "sw"];
 
 /** 새 수동 영역을 생성한다. */
@@ -75,6 +78,7 @@ function applyManualRect(region: Region, rect: RegionRect, inputDevice: InputDev
     selectionMode: "manual",
     inputDevice,
     warningLevel: "normal",
+    autoDetectConfidence: undefined,
   };
 }
 
@@ -274,7 +278,7 @@ export function RegionEditor({
 
       {regions.length === 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
-          <p>{AUTO_FULL_RISK_MESSAGE}</p>
+          <p>{AUTO_DETECT_GUIDE_MESSAGE}</p>
           <p className="mt-1 text-amber-800">영역을 만든 뒤 모서리 핸들로 크기를 조절할 수 있습니다.</p>
         </div>
       ) : null}
@@ -292,24 +296,28 @@ export function RegionEditor({
 
         {regions.map((region) => {
           const previewRect = getPreviewRect(interaction, region.id) ?? getRectFromPolygon(region.polygon);
+          const autoDetectedRegion = isAutoDetectedRegion(region);
+          const borderColor = autoDetectedRegion ? AUTO_DETECT_BORDER_COLOR : REGION_BORDER_COLOR;
+          const fillColor = autoDetectedRegion ? AUTO_DETECT_FILL_COLOR : REGION_FILL_COLOR;
+          const labelColor = autoDetectedRegion ? AUTO_DETECT_LABEL_COLOR : REGION_LABEL_COLOR;
           return (
             <div
               key={region.id}
-              className="absolute rounded-sm border-2"
+              className={`absolute rounded-sm border-2 ${autoDetectedRegion ? "border-dashed" : ""}`}
               style={{
                 left: toPercent(previewRect.left, imageWidth),
                 top: toPercent(previewRect.top, imageHeight),
                 width: toPercent(previewRect.right - previewRect.left, imageWidth),
                 height: toPercent(previewRect.bottom - previewRect.top, imageHeight),
-                borderColor: REGION_BORDER_COLOR,
-                backgroundColor: REGION_FILL_COLOR,
+                borderColor,
+                backgroundColor: fillColor,
               }}
             >
               <span
                 className="absolute left-0 top-0 rounded-br-sm px-1.5 py-0.5 text-[10px] text-white"
-                style={{ backgroundColor: REGION_LABEL_COLOR }}
+                style={{ backgroundColor: labelColor }}
               >
-                {region.id}
+                {autoDetectedRegion ? `AI ${region.id}` : region.id}
               </span>
 
               {!disabled ? (
@@ -331,7 +339,8 @@ export function RegionEditor({
                       key={`${region.id}-${handle}`}
                       type="button"
                       aria-label={`${region.id} ${handle} 크기 조절`}
-                      className={`absolute h-3.5 w-3.5 rounded-full border border-white bg-primary shadow-sm ${getHandleClassName(handle)}`}
+                      className={`absolute h-3.5 w-3.5 rounded-full border border-white shadow-sm ${getHandleClassName(handle)}`}
+                      style={{ backgroundColor: labelColor }}
                       onPointerDown={(event) => handleResizePointerDown(event, region.id, handle)}
                     />
                   ))}

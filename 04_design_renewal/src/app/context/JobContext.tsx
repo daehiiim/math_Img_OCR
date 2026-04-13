@@ -1,10 +1,11 @@
 import React, { createContext, useContext } from "react";
 import { useJobStore, type Job, type JobExecutionOptions, type Region } from "../store/jobStore";
-import type { RunPipelineResult } from "../api/jobApi";
+import type { AutoDetectRegionsResult, RunPipelineResult } from "../api/jobApi";
 
 interface JobContextType {
   jobs: Job[];
   createJob: (fileName: string, imageUrl: string, width: number, height: number, imageFile: File) => Promise<string>;
+  autoDetectRegions: (jobId: string) => Promise<AutoDetectRegionsResult>;
   saveRegions: (jobId: string, regions: Region[]) => Promise<void>;
   runPipeline: (jobId: string, options: JobExecutionOptions) => Promise<RunPipelineResult>;
   hydrateJob: (jobId: string) => Promise<Job>;

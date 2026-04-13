@@ -8,7 +8,7 @@ RegionType = Literal["text", "diagram", "mixed"]
 OrderedSegmentType = Literal["text", "math"]
 QuestionType = Literal["multiple_choice", "free_response"]
 VerificationStatus = Literal["verified", "warning", "unverified"]
-SelectionMode = Literal["manual", "auto_full"]
+SelectionMode = Literal["manual", "auto_full", "auto_detected"]
 InputDevice = Literal["mouse", "touch", "pen", "system"]
 WarningLevel = Literal["normal", "high_risk"]
 
@@ -23,6 +23,7 @@ class RegionContext(BaseModel):
     selection_mode: SelectionMode = "manual"
     input_device: Optional[InputDevice] = None
     warning_level: WarningLevel = "normal"
+    auto_detect_confidence: Optional[float] = None
 
 
 class OrderedSegment(TypedDict):

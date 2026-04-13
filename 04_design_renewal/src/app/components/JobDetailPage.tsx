@@ -22,10 +22,13 @@ import { useJobs } from "../context/JobContext";
 import { calculateRequiredCredits } from "../lib/executionCredits";
 import { type ProgressJobStatus, getJobStepIndex } from "../lib/jobPresentation";
 import {
+  AUTO_DETECT_GUIDE_MESSAGE,
+  AUTO_DETECT_LOW_CONFIDENCE_MESSAGE,
   AUTO_FULL_LOW_CONFIDENCE_MESSAGE,
   AUTO_FULL_RISK_MESSAGE,
-  getSelectionMode,
+  isAutoDetectedRegion,
   isAutoFullRegion,
+  isLowConfidenceAutoDetectedRegion,
   isLowConfidenceAutoFullRegion,
 } from "../lib/regionSelection";
 import type { JobExecutionOptions, JobStatus, Region } from "../store/jobStore";
@@ -52,6 +55,7 @@ const defaultExecutionOptions: JobExecutionOptions = {
   doImageStylize: true,
   doExplanation: true,
 };
+const AUTO_DETECT_REQUIRED_CREDITS = 1;
 
 function isResultVisible(status: JobStatus): boolean {
   return status === "running" || status === "completed" || status === "failed" || status === "exported";
@@ -76,7 +80,7 @@ export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { refreshProfile, user } = useAuth();
-  const { getJob, saveRegions, runPipeline, hydrateJob, exportHwpx } = useJobs();
+  const { autoDetectRegions, getJob, saveRegions, runPipeline, hydrateJob, exportHwpx } = useJobs();
   const [isRunning, setIsRunning] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -89,8 +93,7 @@ export function JobDetailPage() {
 
   const job = getJob(jobId || "");
   const activeRegions = draftRegions ?? job?.regions ?? [];
-  const selectionMode = getSelectionMode(activeRegions);
-  const shouldUseAutoFullFallback = selectionMode === "none";
+  const hasSavedRegions = (job?.regions.length ?? 0) > 0;
   const requiredCredits = calculateRequiredCredits(
     executionOptions,
     Boolean(user?.openAiConnected),
@@ -100,7 +103,9 @@ export function JobDetailPage() {
     executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
   const exportableRegionCount = (job?.regions ?? []).filter(isExportableRegion).length;
   const verificationWarningCount = getVerificationWarningCount(job?.regions ?? []);
+  const hasAutoDetectedResult = (job?.regions ?? []).some(isAutoDetectedRegion);
   const hasAutoFullResult = (job?.regions ?? []).some(isAutoFullRegion);
+  const hasLowConfidenceAutoDetectedResult = (job?.regions ?? []).some(isLowConfidenceAutoDetectedRegion);
   const hasLowConfidenceAutoFullResult = (job?.regions ?? []).some(isLowConfidenceAutoFullRegion);
   const canExportHwpx =
     exportableRegionCount > 0 &&
@@ -238,6 +243,41 @@ export function JobDetailPage() {
     }
   }, [executionOptions, hasSelectedAction, jobId, refreshProfile, requiredCredits, runPipeline, user?.credits]);
 
+  const handleAutoDetect = useCallback(async () => {
+    if (!jobId) {
+      return;
+    }
+    if ((user?.credits ?? 0) < AUTO_DETECT_REQUIRED_CREDITS) {
+      toast.error("AI 자동 문항 찾기에는 1토큰이 필요합니다.", {
+        description: "크레딧을 충전한 뒤 다시 시도하세요.",
+      });
+      return;
+    }
+
+    setIsRunning(true);
+    setActionError(null);
+
+    try {
+      const result = await autoDetectRegions(jobId);
+      await refreshProfile();
+      if (result.review_required) {
+        toast("AI가 문항을 찾았지만 검토가 필요합니다.", {
+          description: "박스를 확인하고 필요하면 수정한 뒤 실행하세요.",
+        });
+      } else {
+        toast.success("AI 자동 문항 찾기가 완료되었습니다.", {
+          description: `${result.detected_count}개 영역을 찾았습니다.`,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI 자동 문항 찾기 중 오류가 발생했습니다.";
+      setActionError(message);
+      toast.error(message);
+    } finally {
+      setIsRunning(false);
+    }
+  }, [autoDetectRegions, jobId, refreshProfile, user?.credits]);
+
   const handleExport = useCallback(async () => {
     if (!jobId) {
       return;
@@ -299,9 +339,10 @@ export function JobDetailPage() {
   }
 
   const currentStep = Math.max(getJobStepIndex(job.status, statusSteps), 0);
-  const canRunAutoFullFallback = job.status === "regions_pending" && shouldUseAutoFullFallback;
   const canRunQueuedSelection = job.status === "queued";
-  const runButtonDisabled = isRunning || !hasSelectedAction || (user?.credits ?? 0) < requiredCredits;
+  const canAutoDetect = job.status !== "running" && job.status !== "completed" && job.status !== "exported";
+  const runButtonDisabled =
+    isRunning || !hasSelectedAction || (user?.credits ?? 0) < requiredCredits || !hasSavedRegions;
   const selectionDisabled = job.status === "running";
 
   return (
@@ -406,6 +447,17 @@ export function JobDetailPage() {
         </Card>
       ) : null}
 
+      {hasAutoDetectedResult ? (
+        <Card className="mb-6 border-amber-200 bg-amber-50/80">
+          <CardContent className="py-4 text-[13px] text-amber-950">
+            <p>{AUTO_DETECT_GUIDE_MESSAGE}</p>
+            {hasLowConfidenceAutoDetectedResult ? (
+              <p className="mt-2 text-amber-800">{AUTO_DETECT_LOW_CONFIDENCE_MESSAGE}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section aria-label="결과 보드 surface" className="lg:col-span-2 space-y-6">
           <Card>
@@ -418,9 +470,9 @@ export function JobDetailPage() {
                 이미지 위에 드래그하여 OCR 처리할 영역을 지정하세요.
                 저장된 여러 영역은 순서대로 하나의 HWPX 문서로 합쳐집니다.
               </CardDescription>
-              {shouldUseAutoFullFallback ? (
+              {!hasSavedRegions ? (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
-                  {AUTO_FULL_RISK_MESSAGE}
+                  {AUTO_DETECT_GUIDE_MESSAGE}
                 </p>
               ) : null}
             </CardHeader>
@@ -514,9 +566,7 @@ export function JobDetailPage() {
                     <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
                   </div>
                   <p className="mt-1 text-muted-foreground">
-                    {shouldUseAutoFullFallback
-                      ? "영역 없이 실행하면 전체 이미지 1개 기준 예상 차감을 먼저 보여줍니다."
-                      : "선택한 문제 수 기준으로 잔액을 먼저 확인하고, 실행 후 실제 성공한 작업만 차감합니다."}
+                    자동인식은 페이지당 1토큰, OCR/해설/이미지 생성은 선택한 영역 기준으로 계산합니다.
                   </p>
                   {verificationWarningCount > 0 ? (
                     <p className="mt-1 text-amber-700">검증 경고 {verificationWarningCount}개가 있어 결과를 다시 확인하세요.</p>
@@ -535,14 +585,28 @@ export function JobDetailPage() {
                 </div>
               ) : null}
 
-              {job.status === "regions_pending" && !canRunAutoFullFallback ? (
+              {job.status === "regions_pending" && !hasSavedRegions ? (
                 <div className="text-center py-2">
                   <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-[13px] text-muted-foreground">영역을 저장하거나 전체 이미지 인식으로 실행하세요.</p>
+                  <p className="text-[13px] text-muted-foreground">AI 자동 문항 찾기 또는 수동 영역 저장 후 실행하세요.</p>
                 </div>
               ) : null}
 
-              {canRunQueuedSelection || canRunAutoFullFallback ? (
+              {!hasSavedRegions && canAutoDetect ? (
+                <Button onClick={() => void handleAutoDetect()} size="pill" className="min-h-11 w-full gap-2" disabled={isRunning}>
+                  <Sparkles className="w-4 h-4" />
+                  AI가 문항 찾기 · 1토큰
+                </Button>
+              ) : null}
+
+              {hasSavedRegions && canAutoDetect ? (
+                <Button onClick={() => void handleAutoDetect()} size="pill" className="min-h-11 w-full gap-2" variant="glass" disabled={isRunning}>
+                  <Sparkles className="w-4 h-4" />
+                  AI가 문항 다시 찾기
+                </Button>
+              ) : null}
+
+              {canRunQueuedSelection ? (
                 <Button onClick={() => void handleRun()} size="pill" className="min-h-11 w-full gap-2" disabled={runButtonDisabled}>
                   <Play className="w-4 h-4" />
                   파이프라인 실행

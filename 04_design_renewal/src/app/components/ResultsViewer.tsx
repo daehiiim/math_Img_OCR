@@ -2,7 +2,14 @@ import { FileText, Image } from "lucide-react";
 
 import type { Region } from "../store/jobStore";
 import { parseMathMarkupPreview } from "../lib/mathMarkupPreview";
-import { AUTO_FULL_LOW_CONFIDENCE_MESSAGE, isAutoFullRegion, isLowConfidenceAutoFullRegion } from "../lib/regionSelection";
+import {
+  AUTO_DETECT_LOW_CONFIDENCE_MESSAGE,
+  AUTO_FULL_LOW_CONFIDENCE_MESSAGE,
+  isAutoDetectedRegion,
+  isAutoFullRegion,
+  isLowConfidenceAutoDetectedRegion,
+  isLowConfidenceAutoFullRegion,
+} from "../lib/regionSelection";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -122,7 +129,9 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
         const exportable = isExportableRegion(region);
         const verificationWarnings = getVerificationWarnings(region);
         const verificationWarningVisible = hasVerificationWarning(region);
+        const autoDetectedRegion = isAutoDetectedRegion(region);
         const autoFullRegion = isAutoFullRegion(region);
+        const lowConfidenceAutoDetected = isLowConfidenceAutoDetectedRegion(region);
         const lowConfidenceAutoFull = isLowConfidenceAutoFullRegion(region);
 
         return (
@@ -139,6 +148,11 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
                   {region.id}
                 </CardTitle>
                 <div className="flex flex-wrap items-center gap-2">
+                  {autoDetectedRegion ? (
+                    <Badge variant="outline" className="gap-1 rounded-full border-amber-300 bg-amber-50 px-[8px] py-[2px] text-amber-800">
+                      AI 자동 분할
+                    </Badge>
+                  ) : null}
                   {autoFullRegion ? (
                     <Badge variant="outline" className="gap-1 rounded-full border-amber-300 bg-amber-50 px-[8px] py-[2px] text-amber-800">
                       자동 전체 인식
@@ -195,6 +209,14 @@ export function ResultsViewer({ regions }: ResultsViewerProps) {
               <CardContent className="pt-0">
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <p className="text-[12px] text-amber-900">{AUTO_FULL_LOW_CONFIDENCE_MESSAGE}</p>
+                </div>
+              </CardContent>
+            ) : null}
+
+            {lowConfidenceAutoDetected ? (
+              <CardContent className="pt-0">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-[12px] text-amber-900">{AUTO_DETECT_LOW_CONFIDENCE_MESSAGE}</p>
                 </div>
               </CardContent>
             ) : null}

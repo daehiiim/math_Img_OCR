@@ -301,57 +301,105 @@ def test_save_regions_replaces_existing_regions(monkeypatch):
     assert [region.context.id for region in saved_job.regions] == ["q3"]
 
 
-def test_run_pipeline_creates_auto_full_region_when_no_regions_are_saved(monkeypatch):
-    """영역이 비어 있으면 전체 이미지를 fallback 영역으로 만들어 처리해야 한다."""
+def test_run_pipeline_requires_saved_regions_before_execution(monkeypatch):
+    """영역이 없으면 먼저 자동 분할 또는 수동 지정을 요구해야 한다."""
     repository = install_memory_repository(monkeypatch)
     user = make_user()
     job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(40, 30))
 
-    def fake_analyze_region_with_gpt(
+    with pytest.raises(ValueError, match="먼저 AI 자동 분할 또는 수동 영역 지정을 완료해 주세요."):
+        orchestrator.run_pipeline(
+            user,
+            job.job_id,
+            api_key="sk-user-1234567890",
+            processing_type="user_api_key",
+            do_ocr=True,
+            do_image_stylize=False,
+            do_explanation=True,
+        )
+
+    assert repository.read_job(user, job.job_id).regions == []
+
+
+def test_auto_detect_regions_saves_detected_regions_with_metadata(monkeypatch):
+    """자동 분할이 성공하면 auto_detected 메타데이터를 저장해야 한다."""
+    install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(120, 160))
+
+    def fake_detect_problem_regions_with_gpt(
         root_path: Path,
-        crop_image_bytes: bytes,
-        region_type: str,
-        api_key: str | None = None,
+        image_bytes: bytes,
         *,
-        include_ocr: bool = True,
-        include_image_detection: bool = False,
+        image_width: int,
+        image_height: int,
+        api_key: str | None = None,
     ):
-        return {
-            "ocr_text": "전체 이미지 OCR",
-            "mathml": "<math>x</math>",
-            "raw_transcript": "전체 이미지 OCR",
-            "ordered_segments": [{"type": "text", "content": "전체 이미지 OCR", "source_order": 0}],
-            "has_stylizable_image": False,
-            "image_bbox": None,
-            "model_used": "gpt-test",
-            "openai_request_id": "req-test",
-        }
+        return orchestrator.AutoDetectRegionsResult(
+            regions=[
+                orchestrator.DetectedRegionCandidate(
+                    bbox=(10, 12, 110, 70),
+                    order=1,
+                    confidence=0.91,
+                    detected_question_number="12",
+                    includes_choices=True,
+                    includes_figure=False,
+                ),
+                orchestrator.DetectedRegionCandidate(
+                    bbox=(8, 82, 112, 150),
+                    order=2,
+                    confidence=0.44,
+                    detected_question_number=None,
+                    includes_choices=True,
+                    includes_figure=True,
+                ),
+            ],
+            review_required=True,
+            detector_model="gpt-test",
+            detection_version="openai_five_choice_v1",
+            openai_request_id="req-detect-123",
+        )
 
-    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
-    monkeypatch.setattr(orchestrator, "generate_explanation_with_gpt", lambda *args, **kwargs: "자동 전체 해설")
+    monkeypatch.setattr(orchestrator, "detect_problem_regions_with_gpt", fake_detect_problem_regions_with_gpt)
 
-    result = orchestrator.run_pipeline(
-        user,
-        job.job_id,
-        api_key="sk-user-1234567890",
-        processing_type="user_api_key",
-        do_ocr=True,
-        do_image_stylize=False,
-        do_explanation=True,
-    )
+    result = orchestrator.auto_detect_regions(user, job.job_id, api_key="sk-user-1234567890")
     saved_job = orchestrator.read_job(user, job.job_id)
-    saved_region = saved_job.regions[0]
 
-    assert result["status"] == "completed"
-    assert len(saved_job.regions) == 1
-    assert saved_region.context.id == "auto_full_1"
-    assert saved_region.context.selection_mode == "auto_full"
-    assert saved_region.context.input_device == "system"
-    assert saved_region.context.warning_level == "high_risk"
-    assert saved_region.context.polygon == [[0, 0], [40, 0], [40, 30], [0, 30]]
-    assert saved_region.extractor.ocr_text == "전체 이미지 OCR"
-    assert saved_region.extractor.explanation == "자동 전체 해설"
-    assert saved_region.figure.crop_url in repository.assets
+    assert result["detected_count"] == 2
+    assert result["review_required"] is True
+    assert result["detector_model"] == "gpt-test"
+    assert saved_job.status == "queued"
+    assert [region.context.selection_mode for region in saved_job.regions] == ["auto_detected", "auto_detected"]
+    assert saved_job.regions[0].context.id == "q12"
+    assert saved_job.regions[0].context.auto_detect_confidence == 0.91
+    assert saved_job.regions[0].context.warning_level == "high_risk"
+    assert saved_job.regions[1].context.id == "q2"
+    assert saved_job.regions[1].context.auto_detect_confidence == 0.44
+    assert saved_job.regions[1].context.input_device == "system"
+
+
+def test_auto_detect_regions_raises_when_no_candidates_are_found(monkeypatch):
+    """유효한 후보가 없으면 저장 없이 사용자용 실패 메시지를 반환해야 한다."""
+    install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(120, 160))
+
+    monkeypatch.setattr(
+        orchestrator,
+        "detect_problem_regions_with_gpt",
+        lambda *args, **kwargs: orchestrator.AutoDetectRegionsResult(
+            regions=[],
+            review_required=True,
+            detector_model="gpt-test",
+            detection_version="openai_five_choice_v1",
+            openai_request_id="req-detect-empty",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="AI가 문항 경계를 안정적으로 찾지 못했습니다."):
+        orchestrator.auto_detect_regions(user, job.job_id, api_key="sk-user-1234567890")
+
+    assert orchestrator.read_job(user, job.job_id).regions == []
 
 
 def test_save_edited_svg_increments_version_and_updates_asset_paths(monkeypatch, tmp_path):

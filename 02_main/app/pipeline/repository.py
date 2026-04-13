@@ -72,6 +72,7 @@ _REGION_METADATA_COLUMNS = (
     "selection_mode",
     "input_device",
     "warning_level",
+    "auto_detect_confidence",
 )
 
 
@@ -163,6 +164,7 @@ class SupabasePipelineRepository:
                 selection_mode=row.get("selection_mode") or "manual",
                 input_device=row.get("input_device"),
                 warning_level=row.get("warning_level") or "normal",
+                auto_detect_confidence=row.get("auto_detect_confidence"),
             ),
             extractor=ExtractorContext(
                 ocr_text=row.get("ocr_text"),
@@ -217,6 +219,7 @@ class SupabasePipelineRepository:
                 "selection_mode": region.context.selection_mode,
                 "input_device": region.context.input_device,
                 "warning_level": region.context.warning_level,
+                "auto_detect_confidence": region.context.auto_detect_confidence,
                 "status": region.status,
                 "ocr_text": region.extractor.ocr_text,
                 "explanation": region.extractor.explanation,

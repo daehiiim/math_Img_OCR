@@ -23,6 +23,7 @@ OPTIONAL_REGION_METADATA_COLUMN_NAMES = (
     "selection_mode",
     "input_device",
     "warning_level",
+    "auto_detect_confidence",
 )
 
 _markdown_output_columns_available: bool | None = None

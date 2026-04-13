@@ -57,9 +57,10 @@ class Region(BaseModel):
     polygon: list[list[float]] = Field(min_length=4)
     type: Literal["text", "diagram", "mixed"]
     order: int = Field(default=1, ge=1)
-    selection_mode: Literal["manual", "auto_full"] = "manual"
+    selection_mode: Literal["manual", "auto_full", "auto_detected"] = "manual"
     input_device: Literal["mouse", "touch", "pen", "system"] | None = None
     warning_level: Literal["normal", "high_risk"] = "normal"
+    auto_detect_confidence: float | None = None
 
     @field_validator("polygon")
     @classmethod
@@ -83,9 +84,10 @@ class RegionResult(BaseModel):
     polygon: list[list[float]] = Field(default_factory=list)
     type: Literal["text", "diagram", "mixed"] | None = None
     order: int = 1
-    selection_mode: Literal["manual", "auto_full"] = "manual"
+    selection_mode: Literal["manual", "auto_full", "auto_detected"] = "manual"
     input_device: Literal["mouse", "touch", "pen", "system"] | None = None
     warning_level: Literal["normal", "high_risk"] = "normal"
+    auto_detect_confidence: float | None = None
     ocr_text: str | None = None
     explanation: str | None = None
     mathml: str | None = None
@@ -141,6 +143,16 @@ class RunJobResponse(BaseModel):
     completed_count: int = 0
     failed_count: int = 0
     exportable_count: int = 0
+
+
+class AutoDetectResponse(BaseModel):
+    job_id: str
+    regions: list[RegionResult] = Field(default_factory=list)
+    detected_count: int = 0
+    review_required: bool = False
+    detector_model: str
+    detection_version: str
+    charged_count: int = 0
 
 
 class EditedSvgRequest(BaseModel):
@@ -257,6 +269,10 @@ def _is_schema_mismatch_message(message: str) -> bool:
         "selection_mode",
         "input_device",
         "warning_level",
+        "auto_detect_confidence",
+        "auto_detect_charged",
+        "auto_detect_charged_at",
+        "auto_detect_charge",
     )
     return any(token in normalized for token in schema_tokens)
 
@@ -328,6 +344,7 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
                 selection_mode=region.context.selection_mode,
                 input_device=region.context.input_device,
                 warning_level=region.context.warning_level,
+                auto_detect_confidence=region.context.auto_detect_confidence,
                 ocr_text=region.extractor.ocr_text,
                 explanation=region.extractor.explanation,
                 mathml=region.extractor.mathml,
@@ -452,6 +469,41 @@ def run_pipeline(
         return {
             **result,
             "charged_count": int(charge_result.get("charged_count") or len(charge_result.get("charged_actions") or [])),
+        }
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="job not found")
+    except SupabaseApiError as error:
+        _raise_runtime_http_error(error)
+    except ValueError as error:
+        _raise_runtime_http_error(error)
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/jobs/{job_id}/regions/auto-detect", response_model=AutoDetectResponse)
+def auto_detect_regions(
+    job_id: str,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> dict:
+    """원본 페이지에서 문항 단위 영역을 자동 분할해 저장한다."""
+    try:
+        billing_service = _get_billing_service()
+        openai_key = billing_service.resolve_openai_api_key(current_user)
+        billing_service.ensure_job_auto_detect_credits_available(current_user, job_id)
+        result = pipeline.auto_detect_regions(
+            current_user,
+            job_id,
+            api_key=openai_key.api_key,
+        )
+        charge_result = billing_service.consume_job_auto_detect_credits(current_user, job_id)
+        job = pipeline.read_job(current_user, job_id)
+        return {
+            "job_id": job_id,
+            "regions": _map_job_response(current_user, job).regions,
+            "detected_count": result["detected_count"],
+            "review_required": result["review_required"],
+            "detector_model": result["detector_model"],
+            "detection_version": result["detection_version"],
+            "charged_count": int(charge_result.get("charged_count") or 0),
         }
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")

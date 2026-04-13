@@ -29,15 +29,21 @@ from app.pipeline.markdown_contract import (
     markdown_to_hwp_legacy_markup,
     ordered_segments_to_markdown,
 )
+from app.pipeline.region_detector import (
+    AutoDetectRegionsResult,
+    DetectedRegionCandidate,
+    detect_problem_regions_with_gpt,
+)
 from app.pipeline.repository import PipelineRepository, PipelineUserContext, build_repository_from_settings
 from app.pipeline.schema import JobPipelineContext, RegionContext, RegionPipelineContext
 
 ROOT = Path(__file__).resolve().parents[2]
 _repository_factory: Callable[[], PipelineRepository] | None = None
 EXPLANATION_VERIFICATION_WARNING_TEXT = "해설 검증이 필요합니다. 정답과 풀이의 일치 여부를 자동 확인하지 못했습니다."
-AUTO_FULL_REGION_ID = "auto_full_1"
 EXPORT_RUNTIME_MISSING_DETAIL = "문서 생성 엔진이 준비되지 않았습니다. 관리자에게 문의하세요."
 EXPORT_APPLY_FAILED_DETAIL = "텍스트 추출은 완료됐지만 문서 양식 적용에 실패했습니다. Markdown 결과는 저장되어 있으니 다시 내보내기 하세요."
+AUTO_DETECT_FAILURE_DETAIL = "AI가 문항 경계를 안정적으로 찾지 못했습니다. 박스를 확인하거나 직접 수정해 주세요."
+AUTO_DETECT_LOW_CONFIDENCE_THRESHOLD = 0.62
 
 
 def _coerce_ordered_segments(raw_segments: Any) -> list[dict[str, Any]]:
@@ -225,30 +231,6 @@ def _build_region_polygon(left: int, top: int, right: int, bottom: int) -> list[
     return [[left, top], [right, top], [right, bottom], [left, bottom]]
 
 
-def _build_auto_full_region(job: JobPipelineContext) -> RegionPipelineContext:
-    """영역이 비어 있을 때 쓸 전체 이미지 fallback 영역을 만든다."""
-    width = max(1, int(job.image_width or 0))
-    height = max(1, int(job.image_height or 0))
-    return RegionPipelineContext(
-        context=RegionContext(
-            id=AUTO_FULL_REGION_ID,
-            polygon=_build_region_polygon(0, 0, width, height),
-            type="mixed",
-            order=1,
-            selection_mode="auto_full",
-            input_device="system",
-            warning_level="high_risk",
-        )
-    )
-
-
-def _ensure_regions_for_run(job: JobPipelineContext) -> None:
-    """실행 직전 영역이 비어 있으면 전체 이미지 fallback 영역을 채운다."""
-    if job.regions:
-        return
-    job.regions = [_build_auto_full_region(job)]
-
-
 def _build_region_context(raw_region: dict[str, Any]) -> RegionContext:
     """입력 payload를 저장 가능한 RegionContext로 정규화한다."""
     return RegionContext(
@@ -259,12 +241,61 @@ def _build_region_context(raw_region: dict[str, Any]) -> RegionContext:
         selection_mode=raw_region.get("selection_mode") or "manual",
         input_device=raw_region.get("input_device"),
         warning_level=raw_region.get("warning_level") or "normal",
+        auto_detect_confidence=raw_region.get("auto_detect_confidence"),
     )
 
 
 def _uses_auto_full_selection(region: RegionPipelineContext) -> bool:
     """현재 영역이 시스템 자동 전체 인식 fallback 인지 판단한다."""
     return region.context.selection_mode == "auto_full"
+
+
+def _build_auto_detect_region_id(candidate: DetectedRegionCandidate, fallback_order: int) -> str:
+    """감지된 문항 번호가 있으면 우선 사용하고 없으면 순번 기반 ID를 만든다."""
+    if candidate.detected_question_number:
+        return f"q{candidate.detected_question_number}"
+    return f"q{fallback_order}"
+
+
+def _build_auto_detect_warning_level(
+    candidate: DetectedRegionCandidate,
+    *,
+    review_required: bool,
+) -> str:
+    """저신뢰 또는 검토 필요 후보는 high_risk로 저장한다."""
+    if review_required or candidate.confidence < AUTO_DETECT_LOW_CONFIDENCE_THRESHOLD:
+        return "high_risk"
+    return "normal"
+
+
+def _build_auto_detect_region(
+    candidate: DetectedRegionCandidate,
+    *,
+    fallback_order: int,
+    review_required: bool,
+) -> RegionPipelineContext:
+    """자동 분할 후보를 저장 가능한 region 컨텍스트로 변환한다."""
+    left, top, right, bottom = candidate.bbox
+    return RegionPipelineContext(
+        context=RegionContext(
+            id=_build_auto_detect_region_id(candidate, fallback_order),
+            polygon=_build_region_polygon(left, top, right, bottom),
+            type="mixed",
+            order=fallback_order,
+            selection_mode="auto_detected",
+            input_device="system",
+            warning_level=_build_auto_detect_warning_level(candidate, review_required=review_required),
+            auto_detect_confidence=candidate.confidence,
+        )
+    )
+
+
+def _build_auto_detect_regions(result: AutoDetectRegionsResult) -> list[RegionPipelineContext]:
+    """자동 분할 응답을 region 목록으로 정규화한다."""
+    return [
+        _build_auto_detect_region(candidate, fallback_order=index + 1, review_required=result.review_required)
+        for index, candidate in enumerate(result.regions)
+    ]
 
 
 def read_job(user: PipelineUserContext, job_id: str) -> JobPipelineContext:
@@ -310,10 +341,44 @@ def save_regions(user: PipelineUserContext, job_id: str, regions_dict: list[dict
         regions.append(RegionPipelineContext(context=region_context))
 
     job.regions = regions
-    job.status = "queued"
+    job.status = "queued" if regions else "regions_pending"
     job.last_error = None
     save_job(user, job)
     return {"message": "regions saved", "count": len(regions)}
+
+
+def auto_detect_regions(
+    user: PipelineUserContext,
+    job_id: str,
+    *,
+    api_key: str | None = None,
+) -> dict[str, Any]:
+    """원본 페이지에서 문항 단위 영역을 자동 분할해 저장한다."""
+    repository = _get_repository()
+    job = read_job(user, job_id)
+    image_bytes = repository.download_bytes(user, job.image_url)
+    result = detect_problem_regions_with_gpt(
+        ROOT,
+        image_bytes,
+        image_width=max(1, int(job.image_width or 0)),
+        image_height=max(1, int(job.image_height or 0)),
+        api_key=api_key,
+    )
+    regions = _build_auto_detect_regions(result)
+    if not regions:
+        raise ValueError(AUTO_DETECT_FAILURE_DETAIL)
+    job.regions = regions
+    job.status = "queued"
+    job.last_error = None
+    save_job(user, job)
+    return {
+        "regions": job.regions,
+        "detected_count": len(job.regions),
+        "review_required": result.review_required,
+        "detector_model": result.detector_model,
+        "detection_version": result.detection_version,
+        "openai_request_id": result.openai_request_id,
+    }
 
 
 def _materialize_input_image(
@@ -570,7 +635,8 @@ def run_pipeline(
     """선택된 OCR/이미지 생성/해설 작업을 수행하고 결과를 저장한다."""
     repository = _get_repository()
     job = read_job(user, job_id)
-    _ensure_regions_for_run(job)
+    if not job.regions:
+        raise ValueError("먼저 AI 자동 분할 또는 수동 영역 지정을 완료해 주세요.")
 
     job.processing_type = processing_type
     job.status = "running"

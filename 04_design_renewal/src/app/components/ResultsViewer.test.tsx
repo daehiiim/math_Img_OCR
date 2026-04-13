@@ -185,4 +185,18 @@ describe("ResultsViewer", () => {
     expect(screen.getByText("자동 전체 인식")).toBeInTheDocument();
     expect(screen.getByText(/직접 영역을 지정하면 더 정확할 수 있습니다/i)).toBeInTheDocument();
   });
+
+  it("AI 자동 분할 영역에는 모드 배지와 저신뢰 안내를 표시한다", () => {
+    const region = makeRegion({
+      selectionMode: "auto_detected",
+      inputDevice: "system",
+      warningLevel: "high_risk",
+      autoDetectConfidence: 0.44,
+    });
+
+    render(<ResultsViewer regions={[region]} />);
+
+    expect(screen.getByText("AI 자동 분할")).toBeInTheDocument();
+    expect(screen.getByText(/AI가 문항을 찾았지만 경계 신뢰도가 낮습니다/i)).toBeInTheDocument();
+  });
 });

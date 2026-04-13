@@ -16,9 +16,10 @@ export interface BackendRegion {
   status: BackendRegionStatus;
   type?: "text" | "diagram" | "mixed";
   order?: number;
-  selection_mode?: "manual" | "auto_full";
+  selection_mode?: "manual" | "auto_full" | "auto_detected";
   input_device?: "mouse" | "touch" | "pen" | "system" | null;
   warning_level?: "normal" | "high_risk";
+  auto_detect_confidence?: number | null;
   polygon?: number[][];
   ocr_text?: string | null;
   explanation?: string | null;
@@ -60,9 +61,20 @@ export interface RegionPayload {
   polygon: number[][];
   type: "text" | "diagram" | "mixed";
   order: number;
-  selection_mode?: "manual" | "auto_full";
+  selection_mode?: "manual" | "auto_full" | "auto_detected";
   input_device?: "mouse" | "touch" | "pen" | "system";
   warning_level?: "normal" | "high_risk";
+  auto_detect_confidence?: number;
+}
+
+export interface AutoDetectRegionsResult {
+  job_id: string;
+  regions: BackendRegion[];
+  detected_count: number;
+  review_required: boolean;
+  detector_model: string;
+  detection_version: string;
+  charged_count: number;
 }
 
 export interface RunPipelineOptions {
@@ -167,6 +179,12 @@ export async function runPipelineApi(
       do_image_stylize: options.doImageStylize,
       do_explanation: options.doExplanation,
     }),
+  });
+}
+
+export async function autoDetectRegionsApi(jobId: string): Promise<AutoDetectRegionsResult> {
+  return requestJson<AutoDetectRegionsResult>(`/jobs/${jobId}/regions/auto-detect`, {
+    method: "POST",
   });
 }
 

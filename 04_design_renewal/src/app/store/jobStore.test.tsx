@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  autoDetectRegionsApiMock,
   createJobApiMock,
   downloadHwpxApiMock,
   exportHwpxApiMock,
@@ -9,6 +10,7 @@ const {
   runPipelineApiMock,
   saveRegionsApiMock,
 } = vi.hoisted(() => ({
+  autoDetectRegionsApiMock: vi.fn(),
   createJobApiMock: vi.fn(),
   downloadHwpxApiMock: vi.fn(),
   exportHwpxApiMock: vi.fn(),
@@ -18,6 +20,7 @@ const {
 }));
 
 vi.mock("../api/jobApi", () => ({
+  autoDetectRegionsApi: autoDetectRegionsApiMock,
   createJobApi: createJobApiMock,
   downloadHwpxApi: downloadHwpxApiMock,
   exportHwpxApi: exportHwpxApiMock,
@@ -32,6 +35,7 @@ import { useJobStore } from "./jobStore";
 describe("useJobStore", () => {
   beforeEach(() => {
     createJobApiMock.mockReset();
+    autoDetectRegionsApiMock.mockReset();
     downloadHwpxApiMock.mockReset();
     exportHwpxApiMock.mockReset();
     getJobApiMock.mockReset();
@@ -132,6 +136,73 @@ describe("useJobStore", () => {
     await act(async () => {
       await pendingSave;
     });
+  });
+
+  it("자동 문항 찾기 후 최신 job 상태로 hydrate한다", async () => {
+    createJobApiMock.mockResolvedValue({
+      job_id: "job-detect",
+      status: "regions_pending",
+      file_name: "sample.png",
+      image_url: "/sample.png",
+      image_width: 400,
+      image_height: 300,
+      regions: [],
+    });
+    autoDetectRegionsApiMock.mockResolvedValue({
+      job_id: "job-detect",
+      regions: [],
+      detected_count: 2,
+      review_required: false,
+      detector_model: "gpt-test",
+      detection_version: "openai_five_choice_v1",
+      charged_count: 1,
+    });
+    getJobApiMock.mockResolvedValue({
+      job_id: "job-detect",
+      status: "queued",
+      file_name: "sample.png",
+      image_url: "/sample.png",
+      image_width: 400,
+      image_height: 300,
+      regions: [
+        {
+          id: "q1",
+          status: "pending",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          selection_mode: "auto_detected",
+          auto_detect_confidence: 0.91,
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useJobStore());
+    let jobId = "";
+
+    await act(async () => {
+      jobId = await result.current.createJob(
+        "sample.png",
+        "data:image/png;base64,ZmFrZQ==",
+        400,
+        300,
+        new File(["fake"], "sample.png", { type: "image/png" })
+      );
+    });
+
+    await act(async () => {
+      await result.current.autoDetectRegions(jobId);
+    });
+
+    expect(autoDetectRegionsApiMock).toHaveBeenCalledWith("job-detect");
+    expect(result.current.getJob(jobId)?.status).toBe("queued");
+    expect(result.current.getJob(jobId)?.regions[0]?.selectionMode).toBe("auto_detected");
+    expect(result.current.getJob(jobId)?.regions[0]?.autoDetectConfidence).toBe(0.91);
   });
 
   it("HWPX 다운로드가 끝나기 전에는 job 상태를 exported로 바꾸지 않는다", async () => {

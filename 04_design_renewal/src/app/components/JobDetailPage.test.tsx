@@ -12,6 +12,15 @@ const runPipelineMock = vi.fn(async () => ({
   failed_count: 0,
   exportable_count: 1,
 }));
+const autoDetectRegionsMock = vi.fn(async () => ({
+  job_id: "job-1",
+  regions: [],
+  detected_count: 2,
+  review_required: false,
+  detector_model: "gpt-test",
+  detection_version: "openai_five_choice_v1",
+  charged_count: 1,
+}));
 const exportHwpxMock = vi.fn(async () => undefined);
 let mockAuthUser = {
   name: "김수학",
@@ -44,6 +53,7 @@ vi.mock("../context/AuthContext", () => ({
 
 vi.mock("../context/JobContext", () => ({
   useJobs: () => ({
+    autoDetectRegions: autoDetectRegionsMock,
     getJob: () => mockJob,
     saveRegions: vi.fn(async () => undefined),
     runPipeline: runPipelineMock,
@@ -96,6 +106,7 @@ import { JobDetailPage } from "./JobDetailPage";
 
 describe("JobDetailPage", () => {
   beforeEach(() => {
+    autoDetectRegionsMock.mockClear();
     runPipelineMock.mockClear();
     exportHwpxMock.mockClear();
     mockAuthUser = {
@@ -122,6 +133,23 @@ describe("JobDetailPage", () => {
 
   it("체크박스 선택값을 runPipeline 호출에 전달한다", async () => {
     const user = userEvent.setup();
+    mockJob = {
+      ...mockJob,
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "pending",
+        },
+      ],
+    };
 
     render(
       <MemoryRouter initialEntries={["/jobs/job-1"]}>
@@ -390,6 +418,23 @@ describe("JobDetailPage", () => {
       openAiConnected: false,
       openAiMaskedKey: null,
     };
+    mockJob = {
+      ...mockJob,
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "pending",
+        },
+      ],
+    };
 
     render(
       <MemoryRouter initialEntries={["/jobs/job-1"]}>
@@ -402,12 +447,11 @@ describe("JobDetailPage", () => {
     expect(screen.getByText("3 크레딧")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "영역 편집" }));
-    await user.click(screen.getByRole("button", { name: "영역 편집" }));
 
     expect(screen.getByText("6 크레딧")).toBeInTheDocument();
   });
 
-  it("영역이 없어도 자동 전체 인식 경고와 실행 버튼을 노출한다", () => {
+  it("영역이 없으면 AI 자동 문항 찾기 버튼을 노출한다", () => {
     mockJob = {
       ...mockJob,
       status: "regions_pending",
@@ -422,7 +466,29 @@ describe("JobDetailPage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/영역을 지정하지 않으면 이미지 전체를 자동 인식/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^파이프라인 실행$/i })).toBeInTheDocument();
+    expect(screen.getByText(/영역을 직접 그리지 않아도 AI가 문항·보기·문항 이미지를 묶어서 찾아줍니다/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /AI가 문항 찾기 · 1토큰/i })).toBeInTheDocument();
+  });
+
+  it("영역이 없을 때는 자동 문항 찾기 호출을 우선한다", async () => {
+    const user = userEvent.setup();
+    mockJob = {
+      ...mockJob,
+      status: "regions_pending",
+      regions: [],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole("button", { name: /AI가 문항 찾기 · 1토큰/i }));
+
+    expect(autoDetectRegionsMock).toHaveBeenCalledWith("job-1");
+    expect(runPipelineMock).not.toHaveBeenCalled();
   });
 });

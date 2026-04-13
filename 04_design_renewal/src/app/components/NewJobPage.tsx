@@ -18,7 +18,7 @@ import type { JobExecutionOptions, Region } from "../store/jobStore";
 import { RegionEditor } from "./RegionEditor";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
-import { AUTO_FULL_RISK_MESSAGE, getSelectionMode } from "../lib/regionSelection";
+import { AUTO_DETECT_GUIDE_MESSAGE, getSelectionMode } from "../lib/regionSelection";
 
 const defaultExecutionOptions: JobExecutionOptions = {
   doOcr: true,
@@ -28,10 +28,11 @@ const defaultExecutionOptions: JobExecutionOptions = {
 
 const draftResumePath = "/new?resumeDraft=1";
 const pricingResumePath = `/pricing?returnTo=${encodeURIComponent(draftResumePath)}`;
+const AUTO_DETECT_REQUIRED_CREDITS = 1;
 
 export function NewJobPage() {
   const location = useLocation();
-  const { createJob, runPipeline, saveRegions } = useJobs();
+  const { autoDetectRegions, createJob, runPipeline, saveRegions } = useJobs();
   const { isAuthenticated, prepareLogin, refreshProfile, user } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,7 +50,7 @@ export function NewJobPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const selectionMode = getSelectionMode(regions);
-  const shouldUseAutoFullFallback = selectionMode === "none";
+  const hasDraftRegions = selectionMode !== "none";
   const hasSelectedAction =
     executionOptions.doOcr || executionOptions.doImageStylize || executionOptions.doExplanation;
   const requiredCredits = calculateRequiredCredits(
@@ -273,6 +274,10 @@ export function NewJobPage() {
       toast.error("실행할 작업을 하나 이상 선택하세요.");
       return;
     }
+    if (!hasDraftRegions) {
+      toast.error("먼저 AI 자동 문항 찾기 또는 수동 영역 지정을 완료하세요.");
+      return;
+    }
     if (!(await ensureExecutionAccess())) {
       return;
     }
@@ -292,15 +297,65 @@ export function NewJobPage() {
         preview.height,
         preview.file
       );
-      if (!shouldUseAutoFullFallback) {
-        await saveRegions(jobId, regions);
-      }
+      await saveRegions(jobId, regions);
       await runPipeline(jobId, executionOptions);
       await refreshProfile();
       await clearGuestDraft();
       navigate(`/workspace/job/${jobId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "작업 생성 중 오류가 발생했습니다.";
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAutoDetect = async () => {
+    if (!preview || isSubmitting) {
+      return;
+    }
+    if (!isAuthenticated) {
+      const saved = await persistGuestDraft();
+      if (!saved) {
+        return;
+      }
+      prepareLogin(draftResumePath);
+      toast("로그인이 필요합니다", {
+        description: "AI 자동 문항 찾기 전에 Google 로그인을 진행해주세요.",
+      });
+      navigate("/login");
+      return;
+    }
+    if ((user?.credits ?? 0) < AUTO_DETECT_REQUIRED_CREDITS) {
+      const saved = await persistGuestDraft();
+      if (!saved) {
+        return;
+      }
+      toast("AI 자동 문항 찾기는 페이지당 1토큰이 필요합니다.", {
+        description: "크레딧을 충전한 뒤 같은 draft로 다시 이어서 실행할 수 있습니다.",
+      });
+      navigate(pricingResumePath);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const jobId = await createJob(
+        preview.name,
+        preview.url,
+        preview.width,
+        preview.height,
+        preview.file
+      );
+      await autoDetectRegions(jobId);
+      await refreshProfile();
+      await clearGuestDraft();
+      navigate(`/workspace/job/${jobId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI 자동 문항 찾기 중 오류가 발생했습니다.";
       setErrorMessage(message);
       toast.error(message);
     } finally {
@@ -366,8 +421,8 @@ export function NewJobPage() {
             <Card className="overflow-hidden">
               <CardHeader className="gap-4 border-b border-white/55 bg-white/20">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-[15px]">영역 지정</CardTitle>
+                <div className="space-y-1">
+                  <CardTitle className="text-[15px]">영역 지정</CardTitle>
                   </div>
                   <Button
                     variant="glass"
@@ -393,6 +448,9 @@ export function NewJobPage() {
                 {errorMessage && (
                   <p className="text-[12px] text-destructive">{errorMessage}</p>
                 )}
+                {!hasDraftRegions ? (
+                  <p className="text-[12px] text-muted-foreground">{AUTO_DETECT_GUIDE_MESSAGE}</p>
+                ) : null}
               </CardHeader>
               <CardContent className="px-4 pb-6 pt-6 sm:px-6">
                 <RegionEditor
@@ -420,71 +478,83 @@ export function NewJobPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  {[
-                    {
-                      id: "draft-do-ocr",
-                      key: "doOcr" as const,
-                      label: "문제 타이핑",
-                      description: "OCR과 수식 추출을 실행합니다.",
-                    },
-                    {
-                      id: "draft-do-image-stylize",
-                      key: "doImageStylize" as const,
-                      label: "이미지 생성",
-                      description: "도형·그림을 생성합니다.",
-                    },
-                    {
-                      id: "draft-do-explanation",
-                      key: "doExplanation" as const,
-                      label: "해설 작성",
-                      description: "영역별 풀이 해설을 생성합니다.",
-                    },
-                  ].map((option) => (
-                    <div key={option.id} className="liquid-inline-note rounded-[20px] p-3">
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          id={option.id}
-                          checked={executionOptions[option.key]}
-                          onCheckedChange={(checked) => updateExecutionOption(option.key, checked === true)}
-                          aria-label={option.label}
-                        />
-                        <div className="flex-1 space-y-1">
-                          <Label htmlFor={option.id}>{option.label}</Label>
-                          <p className="text-[12px] text-muted-foreground">{option.description}</p>
+                {hasDraftRegions ? (
+                  <>
+                    <div className="space-y-3">
+                      {[
+                        {
+                          id: "draft-do-ocr",
+                          key: "doOcr" as const,
+                          label: "문제 타이핑",
+                          description: "OCR과 수식 추출을 실행합니다.",
+                        },
+                        {
+                          id: "draft-do-image-stylize",
+                          key: "doImageStylize" as const,
+                          label: "이미지 생성",
+                          description: "도형·그림을 생성합니다.",
+                        },
+                        {
+                          id: "draft-do-explanation",
+                          key: "doExplanation" as const,
+                          label: "해설 작성",
+                          description: "영역별 풀이 해설을 생성합니다.",
+                        },
+                      ].map((option) => (
+                        <div key={option.id} className="liquid-inline-note rounded-[20px] p-3">
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              id={option.id}
+                              checked={executionOptions[option.key]}
+                              onCheckedChange={(checked) => updateExecutionOption(option.key, checked === true)}
+                              aria-label={option.label}
+                            />
+                            <div className="flex-1 space-y-1">
+                              <Label htmlFor={option.id}>{option.label}</Label>
+                              <p className="text-[12px] text-muted-foreground">{option.description}</p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                <div className="liquid-inline-note rounded-[22px] p-3 text-[12px]">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">이번 실행 최대 차감 예정</span>
-                    <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
-                  </div>
-                  <p className="mt-1 text-muted-foreground">
-                    {shouldUseAutoFullFallback
-                      ? "영역 없이 실행하면 전체 이미지 1개 기준 예상 차감을 보여줍니다."
-                      : "현재 편집 중인 draft 영역 기준 예상 차감입니다."}
-                  </p>
-                </div>
+                    <div className="liquid-inline-note rounded-[22px] p-3 text-[12px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">이번 실행 최대 차감 예정</span>
+                        <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">
+                        자동인식은 페이지당 1토큰, OCR/해설/이미지 생성은 선택한 영역 기준으로 계산합니다.
+                      </p>
+                    </div>
 
-                {shouldUseAutoFullFallback ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
-                    {AUTO_FULL_RISK_MESSAGE}
-                  </div>
-                ) : null}
-
-                <Button
-                  onClick={() => void handleRunPipeline()}
-                  size="pill"
-                  className="min-h-11 w-full gap-2"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "파이프라인 실행 중..." : "파이프라인 실행"}
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
+                    <Button
+                      onClick={() => void handleRunPipeline()}
+                      size="pill"
+                      className="min-h-11 w-full gap-2"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "파이프라인 실행 중..." : "파이프라인 실행"}
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
+                      <p>{AUTO_DETECT_GUIDE_MESSAGE}</p>
+                      <p className="mt-1 text-amber-800">AI 자동 문항 찾기는 업로드한 페이지당 1토큰이 차감됩니다.</p>
+                    </div>
+                    <Button
+                      onClick={() => void handleAutoDetect()}
+                      size="pill"
+                      className="min-h-11 w-full gap-2"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "AI가 문항 찾는 중..." : "AI가 문항 찾기 · 1토큰"}
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </section>

@@ -1,5 +1,6 @@
 from app.pipeline.schema import JobPipelineContext, RegionPipelineContext, RegionContext, ExtractorContext, FigureContext
 from app.pipeline.orchestrator import (
+    auto_detect_regions,
     create_asset_url,
     create_job_from_bytes,
     download_asset_bytes,
@@ -19,6 +20,7 @@ __all__ = [
     "ExtractorContext",
     "FigureContext",
     "create_asset_url",
+    "auto_detect_regions",
     "create_job_from_bytes",
     "download_asset_bytes",
     "save_job",

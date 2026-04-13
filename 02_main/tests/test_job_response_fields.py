@@ -60,9 +60,10 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
             polygon=[[1, 2], [21, 2], [21, 12], [1, 12]],
             type="diagram",
             order=2,
-            selection_mode="manual",
+            selection_mode="auto_detected",
             input_device="pen",
             warning_level="normal",
+            auto_detect_confidence=0.87,
         ),
         extractor=ExtractorContext(
             ocr_text="문제",
@@ -117,9 +118,10 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
     assert payload["regions"][0]["type"] == "diagram"
     assert payload["regions"][0]["order"] == 2
     assert payload["regions"][0]["polygon"] == [[1, 2], [21, 2], [21, 12], [1, 12]]
-    assert payload["regions"][0]["selection_mode"] == "manual"
+    assert payload["regions"][0]["selection_mode"] == "auto_detected"
     assert payload["regions"][0]["input_device"] == "pen"
     assert payload["regions"][0]["warning_level"] == "normal"
+    assert payload["regions"][0]["auto_detect_confidence"] == 0.87
     assert payload["regions"][0]["problem_markdown"] == "문제 $x$"
     assert payload["regions"][0]["explanation_markdown"] == "설명 $x$"
     assert payload["regions"][0]["markdown_version"] == "mathocr_markdown_latex_v2"

@@ -29,6 +29,7 @@ function mapBackendRegion(region: BackendJob["regions"][number], fallback?: Regi
     selectionMode: region.selection_mode ?? fallback?.selectionMode ?? "manual",
     inputDevice: region.input_device ?? fallback?.inputDevice ?? undefined,
     warningLevel: region.warning_level ?? fallback?.warningLevel ?? "normal",
+    autoDetectConfidence: region.auto_detect_confidence ?? fallback?.autoDetectConfidence ?? undefined,
     status: region.status,
     ocrText: region.ocr_text ?? undefined,
     explanation: region.explanation ?? undefined,

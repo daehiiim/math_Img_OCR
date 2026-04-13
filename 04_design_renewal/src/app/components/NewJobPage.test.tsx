@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  autoDetectRegionsMock,
   clearGuestDraftMock,
   createJobMock,
   guestDraftState,
@@ -36,6 +37,15 @@ const {
   };
 
   return {
+    autoDetectRegionsMock: vi.fn(async () => ({
+      job_id: "job-1",
+      regions: [],
+      detected_count: 3,
+      review_required: true,
+      detector_model: "gpt-test",
+      detection_version: "openai_five_choice_v1",
+      charged_count: 1,
+    })),
     clearGuestDraftMock: vi.fn(async () => {
       guestDraftState.current = null;
     }),
@@ -86,6 +96,7 @@ vi.mock("../context/AuthContext", () => ({
 
 vi.mock("../context/JobContext", () => ({
   useJobs: () => ({
+    autoDetectRegions: autoDetectRegionsMock,
     createJob: createJobMock,
     runPipeline: runPipelineMock,
     saveRegions: saveRegionsMock,
@@ -144,6 +155,7 @@ function PricingLocationProbe() {
 describe("NewJobPage", () => {
   beforeEach(() => {
     clearGuestDraftMock.mockClear();
+    autoDetectRegionsMock.mockClear();
     createJobMock.mockClear();
     guestDraftState.current = null;
     prepareLoginMock.mockClear();
@@ -349,7 +361,7 @@ describe("NewJobPage", () => {
     expect(await screen.findByText("job detail")).toBeInTheDocument();
   });
 
-  it("영역이 없어도 자동 전체 인식 안내를 보여주고 saveRegions 없이 실행한다", async () => {
+  it("영역이 없으면 AI 자동 문항 찾기 버튼을 노출하고 자동 분할 후 상세로 이동한다", async () => {
     const user = userEvent.setup();
 
     render(
@@ -369,17 +381,14 @@ describe("NewJobPage", () => {
     });
 
     await screen.findByText("sample.png");
-    expect(screen.getByText(/영역을 지정하지 않으면 이미지 전체를 자동 인식/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/AI가 문항·보기·문항 이미지를 묶어서 찾아줍니다/i).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: /파이프라인 실행/i }));
+    await user.click(screen.getByRole("button", { name: /AI가 문항 찾기 · 1토큰/i }));
 
     await waitFor(() => expect(createJobMock).toHaveBeenCalledTimes(1));
     expect(saveRegionsMock).not.toHaveBeenCalled();
-    expect(runPipelineMock).toHaveBeenCalledWith("job-1", {
-      doOcr: true,
-      doImageStylize: true,
-      doExplanation: true,
-    });
+    expect(runPipelineMock).not.toHaveBeenCalled();
+    expect(autoDetectRegionsMock).toHaveBeenCalledWith("job-1");
     expect(await screen.findByText("job detail")).toBeInTheDocument();
   });
 

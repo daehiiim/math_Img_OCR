@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import {
+  autoDetectRegionsApi,
   createJobApi,
   downloadHwpxApi,
   exportHwpxApi,
@@ -8,6 +9,7 @@ import {
   saveRegionsApi,
   runPipelineApi,
   resolveRuntimePath,
+  type AutoDetectRegionsResult,
   type RunPipelineOptions,
   type RunPipelineResult,
 } from "../api/jobApi";
@@ -15,7 +17,7 @@ import { mapBackendJob } from "./jobMappers";
 
 export type RegionType = "text" | "diagram" | "mixed";
 export type RegionStatus = "pending" | "running" | "completed" | "failed";
-export type SelectionMode = "manual" | "auto_full" | "none";
+export type SelectionMode = "manual" | "auto_full" | "auto_detected" | "none";
 export type InputDevice = "mouse" | "touch" | "pen" | "system";
 export type WarningLevel = "normal" | "high_risk";
 
@@ -27,6 +29,7 @@ export interface Region {
   selectionMode?: Exclude<SelectionMode, "none">;
   inputDevice?: InputDevice;
   warningLevel?: WarningLevel;
+  autoDetectConfidence?: number;
   status?: RegionStatus;
   ocrText?: string;
   explanation?: string;
@@ -109,6 +112,42 @@ export function useJobStore() {
     []
   );
 
+  const autoDetectRegions = useCallback(async (jobId: string): Promise<AutoDetectRegionsResult> => {
+    setJobs((prev) =>
+      prev.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              lastError: undefined,
+            }
+          : job
+      )
+    );
+
+    try {
+      const result = await autoDetectRegionsApi(jobId);
+      const backend = await getJobApi(jobId);
+
+      setJobs((prev) =>
+        prev.map((job) => (job.id === jobId ? mapBackendJob(backend, job) : job))
+      );
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI 자동 문항 찾기에 실패했습니다.";
+      setJobs((prev) =>
+        prev.map((job) =>
+          job.id === jobId
+            ? {
+                ...job,
+                lastError: message,
+              }
+            : job
+        )
+      );
+      throw error;
+    }
+  }, []);
+
   const saveRegions = useCallback(async (jobId: string, regions: Region[]) => {
     setJobs((prev) =>
       prev.map((job) =>
@@ -123,6 +162,8 @@ export function useJobStore() {
                 selectionMode: region.selectionMode ?? "manual",
                 inputDevice: region.inputDevice,
                 warningLevel: region.warningLevel ?? "normal",
+                autoDetectConfidence:
+                  region.selectionMode === "auto_detected" ? region.autoDetectConfidence : undefined,
                 status: "pending",
                 wasCharged: false,
                 ocrCharged: false,
@@ -161,6 +202,8 @@ export function useJobStore() {
           selection_mode: region.selectionMode ?? "manual",
           input_device: region.inputDevice,
           warning_level: region.warningLevel ?? "normal",
+          auto_detect_confidence:
+            region.selectionMode === "auto_detected" ? region.autoDetectConfidence : undefined,
         }))
       );
 
@@ -169,7 +212,7 @@ export function useJobStore() {
           job.id === jobId
             ? {
                 ...job,
-                status: "queued",
+                status: regions.length > 0 ? "queued" : "regions_pending",
                 lastError: undefined,
               }
             : job
@@ -296,6 +339,7 @@ export function useJobStore() {
   return {
     jobs,
     createJob,
+    autoDetectRegions,
     saveRegions,
     runPipeline,
     hydrateJob,

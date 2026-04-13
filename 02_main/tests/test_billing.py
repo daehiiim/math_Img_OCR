@@ -110,6 +110,7 @@ class FakeBillingStore:
         self.payment_events_by_checkout_id: dict[str, dict] = {}
         self.ledger_entries: list[dict] = []
         self.charged_jobs: set[str] = set()
+        self.auto_detect_charged_jobs: set[str] = set()
         self.charged_actions: set[tuple[str, str]] = set()
         self.job_regions: dict[str, list[dict[str, object]]] = {}
         self.openai_keys: dict[str, dict] = {}
@@ -234,6 +235,48 @@ class FakeBillingStore:
             }
         )
         return {"charged": True, "credits_balance": new_profile.credits_balance}
+
+    def ensure_job_auto_detect_credits_available(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict:
+        profile = self.get_or_create_profile(user)
+        required = 0 if job_id in self.auto_detect_charged_jobs else 1
+        if profile.credits_balance < required:
+            raise ValueError("insufficient credits")
+        return {"required_credits": required, "credits_balance": profile.credits_balance}
+
+    def consume_job_auto_detect_credits(
+        self,
+        user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict:
+        profile = self.get_or_create_profile(user)
+        if job_id in self.auto_detect_charged_jobs:
+            return {"charged": False, "charged_count": 0, "credits_balance": profile.credits_balance}
+        if profile.credits_balance <= 0:
+            raise ValueError("insufficient credits")
+
+        new_profile = BillingProfile(
+            user_id=profile.user_id,
+            credits_balance=profile.credits_balance - 1,
+            used_credits=profile.used_credits + 1,
+            openai_connected=profile.openai_connected,
+            openai_key_masked=profile.openai_key_masked,
+        )
+        self.profiles[user.user_id] = new_profile
+        self.auto_detect_charged_jobs.add(job_id)
+        self.ledger_entries.append(
+            {
+                "user_id": user.user_id,
+                "job_id": job_id,
+                "delta": -1,
+                "balance_after": new_profile.credits_balance,
+                "reason": "auto_detect_charge",
+            }
+        )
+        return {"charged": True, "charged_count": 1, "credits_balance": new_profile.credits_balance}
 
     def ensure_job_action_credits_available(
         self,
@@ -647,6 +690,31 @@ def test_consume_job_credit_decrements_balance_only_once():
     assert first["credits_balance"] == 2
     assert second["charged"] is False
     assert store.profiles["user-123"].credits_balance == 2
+
+
+def test_consume_job_auto_detect_credits_charges_only_once_per_job():
+    service, store, _ = make_service()
+    store.profiles["user-123"] = BillingProfile(
+        user_id="user-123",
+        credits_balance=3,
+        used_credits=0,
+        openai_connected=True,
+        openai_key_masked="sk-us••••7890",
+    )
+
+    preview_first = service.ensure_job_auto_detect_credits_available(make_user(), "job-123")
+    charged_first = service.consume_job_auto_detect_credits(make_user(), "job-123")
+    preview_second = service.ensure_job_auto_detect_credits_available(make_user(), "job-123")
+    charged_second = service.consume_job_auto_detect_credits(make_user(), "job-123")
+
+    assert preview_first["required_credits"] == 1
+    assert charged_first["charged"] is True
+    assert charged_first["charged_count"] == 1
+    assert preview_second["required_credits"] == 0
+    assert charged_second["charged"] is False
+    assert charged_second["charged_count"] == 0
+    assert store.profiles["user-123"].credits_balance == 2
+    assert store.ledger_entries[-1]["reason"] == "auto_detect_charge"
 
 
 def test_consume_job_action_credits_charges_only_selected_actions():
@@ -1347,6 +1415,93 @@ def test_billing_checkout_accepts_es256_authenticated_user(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["checkout_id"] == "chk_test_123"
+
+
+def test_auto_detect_regions_uses_one_time_job_credit_methods(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+    recorded_calls: dict[str, dict] = {}
+
+    class StubBillingService:
+        """자동 분할 API가 job 단위 1회 과금 메서드를 호출하는지 기록한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            assert current_user.user_id == user.user_id
+            return type(
+                "ResolvedKey",
+                (),
+                {
+                    "api_key": "sk-service-1234567890",
+                    "processing_type": "service_api",
+                },
+            )()
+
+        def ensure_job_auto_detect_credits_available(self, current_user: AuthenticatedUser, job_id: str) -> dict:
+            recorded_calls["ensure"] = {"user_id": current_user.user_id, "job_id": job_id}
+            return {"required_credits": 1, "credits_balance": 5}
+
+        def consume_job_auto_detect_credits(self, current_user: AuthenticatedUser, job_id: str) -> dict:
+            recorded_calls["consume"] = {"user_id": current_user.user_id, "job_id": job_id}
+            return {"charged": True, "charged_count": 1, "credits_balance": 4}
+
+    def fake_auto_detect_regions(*args, **kwargs):
+        assert kwargs["api_key"] == "sk-service-1234567890"
+        return {
+            "detected_count": 2,
+            "review_required": True,
+            "detector_model": "gpt-test",
+            "detection_version": "openai_five_choice_v1",
+        }
+
+    def fake_read_job(current_user: AuthenticatedUser, job_id: str):
+        return main_module.pipeline.JobPipelineContext(
+            job_id=job_id,
+            file_name="sample.png",
+            image_url="user-123/job-123/input/sample.png",
+            image_width=120,
+            image_height=160,
+            processing_type="service_api",
+            status="queued",
+            created_at="2026-04-13T00:00:00+00:00",
+            updated_at="2026-04-13T00:00:00+00:00",
+            regions=[
+                main_module.pipeline.RegionPipelineContext(
+                    context=main_module.pipeline.RegionContext(
+                        id="q1",
+                        polygon=[[0, 0], [10, 0], [10, 10], [0, 10]],
+                        type="mixed",
+                        order=1,
+                        selection_mode="auto_detected",
+                        input_device="system",
+                        warning_level="normal",
+                        auto_detect_confidence=0.91,
+                    ),
+                    status="pending",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "auto_detect_regions", fake_auto_detect_regions)
+    monkeypatch.setattr(main_module.pipeline, "read_job", fake_read_job)
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "create_asset_url",
+        lambda current_user, storage_path, expires_in=3600: f"https://signed.example/{storage_path}",
+    )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/jobs/job-123/regions/auto-detect")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert recorded_calls["ensure"] == {"user_id": "user-123", "job_id": "job-123"}
+    assert recorded_calls["consume"] == {"user_id": "user-123", "job_id": "job-123"}
+    assert response.json()["detected_count"] == 2
+    assert response.json()["charged_count"] == 1
+    assert response.json()["regions"][0]["selection_mode"] == "auto_detected"
+    assert response.json()["regions"][0]["auto_detect_confidence"] == 0.91
 
 
 def test_run_pipeline_uses_action_credit_methods(monkeypatch):
