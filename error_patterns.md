@@ -21,3 +21,4 @@
 - 선택형 DB 컬럼을 점진 도입할 때는 schema compatibility fallback을 기능별 컬럼군으로 분리한다. 새 metadata 컬럼 누락이 기존 optional select/upsert 경로까지 함께 꺼지지 않도록 읽기/쓰기 회귀 테스트를 같이 둔다.
 - 신규 적립 reason을 추가할 때는 앱 상수와 `credit_ledger_reason_check`를 같은 변경 묶음으로 갱신하고, 최초 적립 회귀 테스트까지 함께 확인한다.
 - Radix primitive를 감싼 UI wrapper는 plain function으로 남기지 않는다. `Trigger`/`Close`/`Overlay`/`Content`처럼 ref가 전달될 수 있는 컴포넌트는 `React.forwardRef` 또는 원시 primitive 직접 export로 유지하고, 시트 열기·닫기 상호작용까지 콘솔 경고 없이 검증한다.
+- JWT 테스트에서 고정 시각을 주입할 때는 `iat`를 함께 고정값으로 넣지 않는다. decode 시계와 어긋나면 즉시 만료/미래 토큰으로 실패하므로, `exp` 중심으로 검증하거나 검증 시계도 함께 통제한다.

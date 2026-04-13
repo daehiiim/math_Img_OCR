@@ -10,6 +10,13 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 
 from app import pipeline
+from app.admin_mode import (
+    AdminModeAccessError,
+    AdminModeConfigError,
+    AdminModeService,
+    AdminModeSessionExpiredError,
+    build_admin_mode_service,
+)
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingProfile, build_billing_service
 from app.config import get_settings
@@ -24,6 +31,7 @@ USER_OPENAI_KEY_CONFIG_DETAIL = "사용자 OpenAI 키 설정이 완료되지 않
 IMAGE_PIPELINE_CONFIG_DETAIL = "이미지 생성 서버 설정이 완료되지 않았습니다."
 BILLING_CONFIG_DETAIL = "서버 과금 설정이 완료되지 않았습니다."
 BILLING_PERSISTENCE_DETAIL = "서버 과금 기록 저장에 실패했습니다. 잠시 후 다시 시도하세요."
+ADMIN_DASHBOARD_FAILURE_DETAIL = "관리자 대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도하세요."
 
 
 def _get_allowed_origins() -> list[str]:
@@ -174,6 +182,32 @@ class OpenAiKeyRequest(BaseModel):
     api_key: str
 
 
+class AdminSessionRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+
+
+class AdminSessionResponse(BaseModel):
+    session_token: str
+    expires_at: str
+
+
+class RecentUserRunResponse(BaseModel):
+    user_label: str
+    user_id_suffix: str
+    job_id: str
+    file_name: str
+    job_status: str
+    region_count: int
+    ran_at: str | None = None
+
+
+class AdminDashboardResponse(BaseModel):
+    generated_at: str
+    failed_jobs_today: int
+    missing_openai_request_regions_today: int
+    recent_user_runs: list[RecentUserRunResponse] = Field(default_factory=list)
+
+
 def _signed_asset_url(current_user: AuthenticatedUser, storage_path: str | None) -> str | None:
     """Storage 내부 경로를 짧은 signed URL로 바꾼다."""
     return pipeline.create_asset_url(current_user, storage_path)
@@ -185,6 +219,11 @@ def _get_billing_service(require_polar: bool = False):
         return build_billing_service(require_polar=require_polar)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+def _get_admin_mode_service() -> AdminModeService:
+    """현재 환경설정으로 관리자 모드 서비스를 생성한다."""
+    return build_admin_mode_service()
 
 
 def _is_schema_mismatch_message(message: str) -> bool:
@@ -525,6 +564,42 @@ def delete_openai_key(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return _map_billing_profile(profile)
+
+
+@app.post("/admin/session", response_model=AdminSessionResponse)
+def create_admin_session(
+    payload: AdminSessionRequest,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> AdminSessionResponse:
+    """로그인 사용자의 관리자 모드 비밀번호를 검증하고 세션을 발급한다."""
+    service = _get_admin_mode_service()
+    try:
+        return AdminSessionResponse.model_validate(service.create_session(current_user, payload.password))
+    except AdminModeConfigError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+    except AdminModeAccessError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+
+
+@app.get("/admin/dashboard", response_model=AdminDashboardResponse)
+def get_admin_dashboard(
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
+) -> AdminDashboardResponse:
+    """관리자 세션이 확인된 운영자에게 대시보드 집계를 반환한다."""
+    service = _get_admin_mode_service()
+    try:
+        service.require_session(current_user, x_admin_session)
+        return AdminDashboardResponse.model_validate(service.read_dashboard())
+    except AdminModeConfigError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+    except AdminModeSessionExpiredError as error:
+        raise HTTPException(status_code=401, detail=str(error)) from error
+    except AdminModeAccessError as error:
+        raise HTTPException(status_code=401, detail=str(error)) from error
+    except SupabaseApiError as error:
+        logger.exception("Admin dashboard runtime error: %s", error)
+        raise HTTPException(status_code=503, detail=ADMIN_DASHBOARD_FAILURE_DETAIL) from error
 
 
 @app.get("/billing/catalog")

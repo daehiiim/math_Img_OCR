@@ -28,6 +28,15 @@ vi.mock("../context/AuthContext", () => ({
   }),
 }));
 
+vi.mock("../context/AdminContext", () => ({
+  useAdmin: () => ({
+    enterAdminMode: vi.fn(async () => ({
+      sessionToken: "admin-token",
+      expiresAt: "2099-04-13T01:00:00+00:00",
+    })),
+  }),
+}));
+
 import { Layout } from "./Layout";
 
 describe("Layout", () => {

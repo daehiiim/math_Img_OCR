@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useNavigate } from "react-router";
 
 import { useAuth } from "../context/AuthContext";
+import { useAdmin } from "../context/AdminContext";
 import { OpenAiKeyForm } from "./OpenAiKeyForm";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import {
   Sheet,
   SheetContent,
@@ -20,6 +23,10 @@ interface AccountSheetProps {
 export function AccountSheet({ open, onOpenChange }: AccountSheetProps) {
   const navigate = useNavigate();
   const { user, logout, connectOpenAi, disconnectOpenAi } = useAuth();
+  const { enterAdminMode } = useAdmin();
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminErrorMessage, setAdminErrorMessage] = useState<string | null>(null);
+  const [isAdminSubmitting, setIsAdminSubmitting] = useState(false);
 
   if (!user) {
     return null;
@@ -35,6 +42,29 @@ export function AccountSheet({ open, onOpenChange }: AccountSheetProps) {
   // 연결 해제는 현재 시트 문맥을 유지한 채 수행한다.
   const handleDisconnect = async () => {
     await disconnectOpenAi();
+  };
+
+  // 관리자 비밀번호를 검증한 뒤 전용 관리자 보드로 이동한다.
+  const handleEnterAdminMode = async () => {
+    if (!adminPassword.trim()) {
+      setAdminErrorMessage("관리자 비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    setIsAdminSubmitting(true);
+    setAdminErrorMessage(null);
+
+    try {
+      await enterAdminMode(adminPassword);
+      setAdminPassword("");
+      onOpenChange(false);
+      navigate("/workspace/admin");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "관리자 모드 진입에 실패했습니다.";
+      setAdminErrorMessage(message);
+    } finally {
+      setIsAdminSubmitting(false);
+    }
   };
 
   return (
@@ -84,6 +114,49 @@ export function AccountSheet({ open, onOpenChange }: AccountSheetProps) {
                 disabled={!user.openAiConnected}
               >
                 연결 해제
+              </Button>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-[13px] font-semibold text-foreground">관리자 모드</h3>
+            <div className="liquid-frost-panel liquid-frost-panel--soft space-y-4 rounded-[24px] px-4 py-4">
+              <div>
+                <p className="text-[13px] text-foreground">
+                  계정 작업 아래에서 관리자 비밀번호를 검증한 뒤 전용 운영 보드로 이동합니다.
+                </p>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  인증 성공 시 현재 탭에만 30분 관리자 세션이 저장됩니다.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="admin-mode-password" className="text-[13px] font-medium text-foreground">
+                  관리자 비밀번호
+                </label>
+                <Input
+                  id="admin-mode-password"
+                  type="password"
+                  placeholder="관리자 비밀번호를 입력하세요"
+                  value={adminPassword}
+                  onChange={(event) => setAdminPassword(event.target.value)}
+                  aria-invalid={adminErrorMessage ? "true" : "false"}
+                />
+              </div>
+
+              {adminErrorMessage ? (
+                <div className="rounded-[18px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+                  {adminErrorMessage}
+                </div>
+              ) : null}
+
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => void handleEnterAdminMode()}
+                disabled={isAdminSubmitting}
+              >
+                관리자 보드 열기
               </Button>
             </div>
           </section>

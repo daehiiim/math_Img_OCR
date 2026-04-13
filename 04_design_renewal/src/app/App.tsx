@@ -1,11 +1,13 @@
 import { useMemo } from "react";
 import { Outlet, RouterProvider, createBrowserRouter } from "react-router";
 import { AuthProvider } from "./context/AuthContext";
+import { AdminProvider } from "./context/AdminContext";
 import { JobProvider } from "./context/JobContext";
 import { Toaster } from "./components/ui/sonner";
 import { Layout } from "./components/Layout";
 import { AuthLayout } from "./components/AuthLayout";
 import { StudioLayout } from "./components/StudioLayout";
+import { AdminDashboardPage } from "./components/AdminDashboardPage";
 import { DashboardPage } from "./components/DashboardPage";
 import { NewJobPage } from "./components/NewJobPage";
 import { JobDetailPage } from "./components/JobDetailPage";
@@ -75,6 +77,7 @@ function AppWrapper() {
               Component: Layout,
               children: [
                 { index: true, Component: DashboardPage },
+                { path: "admin", Component: AdminDashboardPage },
                 { path: "job/:jobId", Component: JobDetailPage },
                 { path: "*", Component: NotFoundPage },
               ],
@@ -92,9 +95,11 @@ function AppWrapper() {
 export default function App() {
   return (
     <AuthProvider>
-      <JobProvider>
-        <AppWrapper />
-      </JobProvider>
+      <AdminProvider>
+        <JobProvider>
+          <AppWrapper />
+        </JobProvider>
+      </AdminProvider>
       <Toaster />
     </AuthProvider>
   );

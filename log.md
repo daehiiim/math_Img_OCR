@@ -1030,3 +1030,26 @@
   - 운영 반영 전 [`2026-04-13_markdown_first_hwpx_v2.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_markdown_first_hwpx_v2.sql) 적용이 필요하다.
   - HWPX export 정상 동작에는 백엔드 컨테이너에 HwpForge runtime bundle이 포함되거나 `HWPFORGE_MCP_PATH` 가 유효해야 한다.
   - 초기 운영값은 `HWPX_EXPORT_ENGINE=auto` 유지가 전제다.
+
+## 2026-04-13 13:33 KST
+
+- 요청: `내 계정` 시트 아래 관리자 모드 비밀번호 인증과 `/workspace/admin` 전용 운영 보드를 실제 구현했다.
+- 아키텍처 결정:
+  - 기존 Supabase 로그인 JWT는 유지하고, 관리자 인증은 별도 짧은 세션 토큰(`sessionStorage`, TTL 30분)을 추가로 요구하도록 분리했다.
+  - 관리자 대시보드는 조회 중심 1차 버전으로 두고 `오늘 실패 작업 수`, `OpenAI 호출 누락 건`, `사용자별 최근 실행`만 노출했다.
+  - `최근 실행` 사용자 라벨은 `profiles.display_name` 이 부실하면 축약 user id suffix 로 fallback 하도록 처리했다.
+- 처리:
+  - [`admin_mode.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/admin_mode.py) 에 관리자 비밀번호 검증, JWT 세션 발급/검증, Supabase service role 집계 로직을 추가했다.
+  - [`main.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py), [`config.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/config.py) 에 `/admin/session`, `/admin/dashboard`, 관리자 환경 변수 로딩을 연결했다.
+  - [`AdminContext.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/context/AdminContext.tsx), [`adminApi.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/api/adminApi.ts), [`adminSessionStorage.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/adminSessionStorage.ts) 로 프런트 관리자 세션 계층을 분리했다.
+  - [`AccountSheet.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AccountSheet.tsx) 에 관리자 비밀번호 입력과 인라인 에러를 추가했고, [`AdminDashboardPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AdminDashboardPage.tsx) 로 전용 운영 보드를 만들었다.
+  - 백엔드/프런트 회귀 테스트 [`test_admin_mode.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_admin_mode.py), [`adminApi.test.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/api/adminApi.test.ts), [`AdminContext.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/context/AdminContext.test.tsx), [`AccountSheet.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AccountSheet.test.tsx), [`AdminDashboardPage.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/AdminDashboardPage.test.tsx) 를 추가했다.
+  - [`error_patterns.md`](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 에 JWT 고정 시각 테스트의 `iat` 충돌 방지 규칙을 추가했다.
+- 검증:
+  - `py -3 -m pytest 02_main/tests/test_config.py 02_main/tests/test_auth.py 02_main/tests/test_billing.py 02_main/tests/test_admin_mode.py` 기준 `69 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run` 기준 `45 files, 170 tests passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run build` 기준 프로덕션 빌드 통과.
+- 배포 영향:
+  - 이번 단계는 백엔드/프런트가 함께 변경됐다.
+  - 운영 반영 전 백엔드 런타임에 `ADMIN_MODE_PASSWORD`, `ADMIN_MODE_SESSION_SECRET`, `ADMIN_MODE_SESSION_TTL_MINUTES=30` 환경 변수를 추가해야 한다.
+  - DB 마이그레이션은 없다.

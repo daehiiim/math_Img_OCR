@@ -33,6 +33,9 @@ class AppSettings:
     database_url: str | None
     auth: AuthSettings
     billing: BillingSettings
+    admin_mode_password: str | None = None
+    admin_mode_session_secret: str | None = None
+    admin_mode_session_ttl_minutes: int = 30
     openai_base_url: str | None = None
     nano_banana_provider: str = DEFAULT_NANO_BANANA_PROVIDER
     nano_banana_model: str | None = None
@@ -121,6 +124,18 @@ def _get_hwpx_export_engine(env_values: dict[str, str]) -> str:
     raise ValueError(f"Unsupported HWPX_EXPORT_ENGINE: {engine}")
 
 
+def _get_admin_mode_session_ttl_minutes(env_values: dict[str, str]) -> int:
+    """관리자 세션 TTL 값을 양의 정수 분 단위로 정규화한다."""
+    raw_value = _get_setting(env_values, "ADMIN_MODE_SESSION_TTL_MINUTES") or "30"
+    try:
+        ttl_minutes = int(raw_value)
+    except ValueError as error:
+        raise ValueError("ADMIN_MODE_SESSION_TTL_MINUTES must be an integer") from error
+    if ttl_minutes <= 0:
+        raise ValueError("ADMIN_MODE_SESSION_TTL_MINUTES must be positive")
+    return ttl_minutes
+
+
 def get_settings(root_path: Path) -> AppSettings:
     """OCR API가 필요로 하는 인증/과금 설정 묶음을 반환한다."""
     env_values = _load_env_file(root_path)
@@ -136,6 +151,9 @@ def get_settings(root_path: Path) -> AppSettings:
         nano_banana_location=_get_setting(env_values, "NANO_BANANA_LOCATION"),
         nano_banana_prompt_version=_get_nano_banana_prompt_version(env_values),
         database_url=_get_setting(env_values, "DATABASE_URL"),
+        admin_mode_password=_get_setting(env_values, "ADMIN_MODE_PASSWORD"),
+        admin_mode_session_secret=_get_setting(env_values, "ADMIN_MODE_SESSION_SECRET"),
+        admin_mode_session_ttl_minutes=_get_admin_mode_session_ttl_minutes(env_values),
         hwpx_skill_dir=_get_setting(env_values, "HWPX_SKILL_DIR"),
         hwpx_export_engine=_get_hwpx_export_engine(env_values),
         hwpforge_mcp_path=_get_setting(env_values, "HWPFORGE_MCP_PATH"),
