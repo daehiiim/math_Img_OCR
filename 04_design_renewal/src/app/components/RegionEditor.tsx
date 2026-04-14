@@ -110,6 +110,11 @@ function getHandleClassName(handle: ResizeHandle): string {
   return positionMap[handle];
 }
 
+/** 오버레이 컨트롤 입력이 캔버스 드로잉으로 전파되지 않게 막는다. */
+function stopCanvasPointerPropagation(event: React.PointerEvent<HTMLButtonElement>): void {
+  event.stopPropagation();
+}
+
 
 export function RegionEditor({
   imageUrl,
@@ -326,6 +331,7 @@ export function RegionEditor({
                     type="button"
                     aria-label={`${region.id} 영역 삭제`}
                     className="absolute right-1 top-1 rounded bg-white/90 p-1 shadow-sm"
+                    onPointerDown={stopCanvasPointerPropagation}
                     onClick={(event) => {
                       event.stopPropagation();
                       removeRegion(region.id);

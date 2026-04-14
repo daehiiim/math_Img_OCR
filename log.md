@@ -1073,3 +1073,54 @@
 - 배포 영향:
   - 이번 단계는 백엔드/프런트와 Supabase 스키마가 함께 변경됐다.
   - 운영 반영 전 [`2026-04-13_auto_detect_regions.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_auto_detect_regions.sql) 마이그레이션을 먼저 적용해야 한다.
+
+## 2026-04-14 10:35 KST
+
+- 요청: 운영에서 `AI가 문항 찾기 - 1토큰` 버튼 클릭 시 `[500] 배포 DB 스키마가 최신이 아닙니다.` 오류가 발생하는 원인을 확인하고 재발 방지 장치를 추가했다.
+- 아키텍처 결정:
+  - 현재 500의 직접 원인은 [`POST /jobs/{job_id}/regions/auto-detect`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py) 가 [`ocr_jobs.auto_detect_charged`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_auto_detect_regions.sql) 및 관련 제약을 전제로 동작하는데, 운영 DB에 최신 스키마가 없어서 발생하는 것으로 확정했다.
+  - 사용자 메시지는 generic schema mismatch 대신 auto-detect 전용 migration 파일명을 포함해 바로 조치할 수 있게 구체화했다.
+  - 재발 방지는 운영 배포 전 REST 기반 runtime schema preflight로 먼저 막고, 문서도 최신 migration 집합 기준으로 갱신했다.
+- 처리:
+  - [`main.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py) 에 auto-detect 관련 스키마 토큰을 별도 분기해 `2026-04-13_auto_detect_regions.sql` 적용 필요 메시지를 반환하도록 보강했다.
+  - [`schema_preflight.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/schema_preflight.py), [`scripts/schema_preflight.py`](/D:/03_PROJECT/05_mathOCR/02_main/scripts/schema_preflight.py) 를 추가해 `ocr_jobs`/`ocr_job_regions` 런타임 컬럼군을 배포 전에 점검할 수 있게 했다.
+  - [`README.md`](/D:/03_PROJECT/05_mathOCR/02_main/README.md), [`cloud_run_supabase_free_runbook_ko.md`](/D:/03_PROJECT/05_mathOCR/02_main/docs/cloud_run_supabase_free_runbook_ko.md), [`error_patterns.md`](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 를 최신 운영 절차 기준으로 갱신했다.
+  - 회귀 테스트 [`test_billing.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_billing.py), 신규 [`test_schema_preflight.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_schema_preflight.py) 를 추가했다.
+- 검증:
+  - `D:\03_PROJECT\05_mathOCR\.tmp\pydeps-latest\bin\pytest.exe 02_main/tests/test_billing.py 02_main/tests/test_schema_preflight.py -k "auto_detect_regions_returns_specific_schema_mismatch_detail or schema_preflight" -q` 기준 `4 passed`.
+  - `D:\03_PROJECT\05_mathOCR\.tmp\pydeps-latest\bin\pytest.exe 02_main/tests/test_billing.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_polar_preflight.py 02_main/tests/test_schema_preflight.py -q` 기준 `72 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\02_main && py -3 scripts/schema_preflight.py` 기준 실제 환경에서 `ocr_jobs.auto_detect_charged`, `ocr_job_regions.problem_markdown` 누락이 재현됐다.
+- 배포 영향:
+  - 즉시 복구를 위해 운영 Supabase에 [`2026-03-19_region_action_credit_flags.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-03-19_region_action_credit_flags.sql), [`2026-04-13_markdown_first_hwpx_v2.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_markdown_first_hwpx_v2.sql), [`2026-04-13_auto_detect_regions.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-13_auto_detect_regions.sql) 적용 여부를 확인하고 누락분을 반영해야 한다.
+  - 배포 전 `py scripts/schema_preflight.py` 실행이 새 운영 계약에 추가됐다.
+
+## 2026-04-14 10:37 KST
+
+- 요청: 프런트에서 AI 자동 문항 찾기 버튼과 안내 문구에 노출되던 `1토큰` 표현을 제거하고, 차감은 기존 서버 흐름대로 자동 처리되게 정리했다.
+- 아키텍처 결정:
+  - 과금 로직은 이미 백엔드 auto-detect 엔드포인트와 `refreshProfile()` 동기화가 책임지고 있으므로, 이번 변경은 프런트 노출 문구만 정리하는 최소 수정으로 제한했다.
+  - 모바일(iPhone 14 기준)에서 가장 자주 보이는 CTA와 도크 안내 영역에서 비용 숫자를 숨기고, 잔액 부족 시에도 일반 크레딧 부족 메시지만 보여 주도록 맞췄다.
+- 처리:
+  - [`NewJobPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx), [`JobDetailPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.tsx) 에서 `1토큰` 문구와 자동 인식 비용 안내 문단을 제거했다.
+  - 자동 인식 CTA 라벨을 `AI가 문항 찾기`로 통일하고, 부족 안내 토스트는 숫자 없는 일반 크레딧 부족 메시지로 변경했다.
+  - 회귀 테스트 [`NewJobPage.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.test.tsx), [`JobDetailPage.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.test.tsx) 를 새 문구 기준으로 갱신했다.
+- 검증:
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/NewJobPage.test.tsx src/app/components/JobDetailPage.test.tsx` 기준 `17 tests passed`.
+  - `rg -n "1토큰" D:\03_PROJECT\05_mathOCR\04_design_renewal\src\app` 기준 프런트 앱 코드에는 사용자 노출 `1토큰` 문자열이 남아 있지 않고 테스트 assertion만 남았다.
+- 배포 영향:
+  - 없음. 이번 변경은 프런트 문구/테스트만 수정했다.
+
+## 2026-04-14 11:00 KST
+
+- 요청: 데스크톱에서 영역 삭제 버튼을 눌렀을 때 삭제 대신 새 영역 그리기가 시작되는 문제를 수정했다.
+- 아키텍처 결정:
+  - 원인은 [`RegionEditor.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/RegionEditor.tsx) 의 삭제 버튼이 `click` 단계에서만 전파를 막고, 실제 드로잉 시작점인 `pointerdown` 은 캔버스로 그대로 전달하던 구조였다.
+  - 해결은 페이지 레벨 분기나 디바이스 분기 대신, 오버레이 컨트롤에서 `pointerdown` 전파를 차단하는 최소 수정으로 제한했다. 이 방식이 모바일 동작을 건드리지 않으면서 데스크톱 마우스 드리프트까지 함께 막는다.
+- 처리:
+  - [`RegionEditor.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/RegionEditor.tsx) 에 오버레이 컨트롤용 `pointerdown` 전파 차단 함수를 추가하고 삭제 버튼에 연결했다.
+  - [`RegionEditor.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/RegionEditor.test.tsx) 에 데스크톱 삭제 클릭 회귀와 `pointerdown -> pointermove -> pointerup` 시 새 영역이 생기지 않는 회귀를 추가했다.
+  - [`error_patterns.md`](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 에 드로잉 캔버스 오버레이 컨트롤 전파 차단 규칙을 추가했다.
+- 검증:
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/RegionEditor.test.tsx` 기준 `4 tests passed`.
+- 배포 영향:
+  - 없음. 이번 변경은 프런트 상호작용과 테스트만 수정했다.

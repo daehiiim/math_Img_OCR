@@ -26,12 +26,21 @@ app = FastAPI(title="Math Region OCR MVP API", version="0.1.0")
 ROOT = Path(__file__).resolve().parents[1]
 logger = logging.getLogger(__name__)
 SCHEMA_MISMATCH_DETAIL = "배포 DB 스키마가 최신이 아닙니다."
+AUTO_DETECT_SCHEMA_MISMATCH_DETAIL = (
+    "배포 DB 스키마가 최신이 아닙니다. 2026-04-13_auto_detect_regions.sql 적용이 필요합니다."
+)
 STORAGE_FAILURE_DETAIL = "서버 저장소 연결에 실패했습니다. 잠시 후 다시 시도하세요."
 USER_OPENAI_KEY_CONFIG_DETAIL = "사용자 OpenAI 키 설정이 완료되지 않았습니다."
 IMAGE_PIPELINE_CONFIG_DETAIL = "이미지 생성 서버 설정이 완료되지 않았습니다."
 BILLING_CONFIG_DETAIL = "서버 과금 설정이 완료되지 않았습니다."
 BILLING_PERSISTENCE_DETAIL = "서버 과금 기록 저장에 실패했습니다. 잠시 후 다시 시도하세요."
 ADMIN_DASHBOARD_FAILURE_DETAIL = "관리자 대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도하세요."
+AUTO_DETECT_SCHEMA_TOKENS = (
+    "auto_detect_confidence",
+    "auto_detect_charged",
+    "auto_detect_charged_at",
+    "auto_detect_charge",
+)
 
 
 def _get_allowed_origins() -> list[str]:
@@ -277,6 +286,16 @@ def _is_schema_mismatch_message(message: str) -> bool:
     return any(token in normalized for token in schema_tokens)
 
 
+def _schema_mismatch_detail(message: str) -> str | None:
+    """스키마 드리프트 메시지에 맞는 사용자 안내 문구를 고른다."""
+    normalized = message.lower()
+    if any(token in normalized for token in AUTO_DETECT_SCHEMA_TOKENS):
+        return AUTO_DETECT_SCHEMA_MISMATCH_DETAIL
+    if _is_schema_mismatch_message(message):
+        return SCHEMA_MISMATCH_DETAIL
+    return None
+
+
 def _map_runtime_value_error(error: ValueError) -> HTTPException | None:
     """설정 누락 성격의 ValueError를 안정적인 HTTP 에러로 변환한다."""
     normalized = str(error).lower()
@@ -311,8 +330,9 @@ def _raise_runtime_http_error(error: Exception) -> None:
     if isinstance(error, SupabaseApiError):
         logger.exception("Supabase runtime error: %s", error)
         message = str(error)
-        if _is_schema_mismatch_message(message):
-            raise HTTPException(status_code=500, detail=SCHEMA_MISMATCH_DETAIL) from error
+        schema_detail = _schema_mismatch_detail(message)
+        if schema_detail is not None:
+            raise HTTPException(status_code=500, detail=schema_detail) from error
         if _is_billing_persistence_message(message):
             raise HTTPException(status_code=500, detail=BILLING_PERSISTENCE_DETAIL) from error
         raise HTTPException(status_code=503, detail=STORAGE_FAILURE_DETAIL) from error

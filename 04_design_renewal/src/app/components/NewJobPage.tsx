@@ -332,7 +332,7 @@ export function NewJobPage() {
       if (!saved) {
         return;
       }
-      toast("AI 자동 문항 찾기는 페이지당 1토큰이 필요합니다.", {
+      toast("AI 자동 문항 찾기에 필요한 크레딧이 부족합니다.", {
         description: "크레딧을 충전한 뒤 같은 draft로 다시 이어서 실행할 수 있습니다.",
       });
       navigate(pricingResumePath);
@@ -523,9 +523,6 @@ export function NewJobPage() {
                         <span className="text-muted-foreground">이번 실행 최대 차감 예정</span>
                         <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
                       </div>
-                      <p className="mt-1 text-muted-foreground">
-                        자동인식은 페이지당 1토큰, OCR/해설/이미지 생성은 선택한 영역 기준으로 계산합니다.
-                      </p>
                     </div>
 
                     <Button
@@ -542,7 +539,6 @@ export function NewJobPage() {
                   <>
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
                       <p>{AUTO_DETECT_GUIDE_MESSAGE}</p>
-                      <p className="mt-1 text-amber-800">AI 자동 문항 찾기는 업로드한 페이지당 1토큰이 차감됩니다.</p>
                     </div>
                     <Button
                       onClick={() => void handleAutoDetect()}
@@ -550,7 +546,7 @@ export function NewJobPage() {
                       className="min-h-11 w-full gap-2"
                       disabled={isSubmitting}
                     >
-                      {isSubmitting ? "AI가 문항 찾는 중..." : "AI가 문항 찾기 · 1토큰"}
+                      {isSubmitting ? "AI가 문항 찾는 중..." : "AI가 문항 찾기"}
                       <ArrowRight className="w-4 h-4" />
                     </Button>
                   </>

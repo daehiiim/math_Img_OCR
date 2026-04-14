@@ -68,10 +68,11 @@
 1. Supabase 운영값과 OAuth allowlist를 먼저 맞춘다.
 2. Polar 운영 상품 3개와 webhook endpoint를 만든다.
 3. Cloud Run 서비스에 운영 환경변수를 반영한다.
-4. Cloud Run 새 배포 후 `run.app` 주소가 바뀌었으면 `04_design_renewal/vercel.json` rewrite 대상을 갱신한다.
-5. Vercel production 환경에 `APP_URL`을 반영하고 재배포한다.
-6. `/pricing`, `/payment/starter`, `/jobs` 흐름을 same-origin 경로 기준으로 검증한다.
-7. `POST /jobs/{job_id}/export/hwpx` 와 다운로드까지 확인해 direct HwpForge writer가 웹 경로에서 500 없이 끝나는지 본다.
+4. `py scripts/schema_preflight.py` 를 실행해 `schema.ocr_jobs_runtime`, `schema.ocr_job_regions_runtime` 이 모두 `OK` 인지 확인한다.
+5. Cloud Run 새 배포 후 `run.app` 주소가 바뀌었으면 `04_design_renewal/vercel.json` rewrite 대상을 갱신한다.
+6. Vercel production 환경에 `APP_URL`을 반영하고 재배포한다.
+7. `/pricing`, `/payment/starter`, `/jobs`, `AI가 문항 찾기` 흐름을 same-origin 경로 기준으로 검증한다.
+8. `POST /jobs/{job_id}/export/hwpx` 와 다운로드까지 확인해 direct HwpForge writer가 웹 경로에서 500 없이 끝나는지 본다.
 
 ## 5. 검증 체크리스트
 

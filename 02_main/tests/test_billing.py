@@ -1504,6 +1504,47 @@ def test_auto_detect_regions_uses_one_time_job_credit_methods(monkeypatch):
     assert response.json()["regions"][0]["auto_detect_confidence"] == 0.91
 
 
+def test_auto_detect_regions_returns_specific_schema_mismatch_detail(monkeypatch):
+    user = make_user()
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+
+    class StubBillingService:
+        """자동 분할 선검증 단계의 스키마 드리프트를 재현한다."""
+
+        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
+            """서비스 API 모드의 OpenAI key를 반환한다."""
+            assert current_user.user_id == user.user_id
+            return type(
+                "ResolvedKey",
+                (),
+                {
+                    "api_key": "sk-service-1234567890",
+                    "processing_type": "service_api",
+                },
+            )()
+
+        def ensure_job_auto_detect_credits_available(
+            self,
+            current_user: AuthenticatedUser,
+            job_id: str,
+        ) -> dict:
+            """자동 분할 과금 컬럼이 없는 운영 DB를 재현한다."""
+            raise SupabaseApiError('column auto_detect_charged does not exist in relation "ocr_jobs"')
+
+    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/jobs/job-123/regions/auto-detect")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert (
+        response.json()["detail"]
+        == "배포 DB 스키마가 최신이 아닙니다. 2026-04-13_auto_detect_regions.sql 적용이 필요합니다."
+    )
+
+
 def test_run_pipeline_uses_action_credit_methods(monkeypatch):
     user = make_user()
     app.dependency_overrides[require_authenticated_user] = lambda: user

@@ -383,7 +383,9 @@ describe("NewJobPage", () => {
     await screen.findByText("sample.png");
     expect(screen.getAllByText(/AI가 문항·보기·문항 이미지를 묶어서 찾아줍니다/i).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: /AI가 문항 찾기 · 1토큰/i }));
+    expect(screen.queryByText(/1토큰/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^AI가 문항 찾기$/i }));
 
     await waitFor(() => expect(createJobMock).toHaveBeenCalledTimes(1));
     expect(saveRegionsMock).not.toHaveBeenCalled();

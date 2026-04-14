@@ -248,7 +248,7 @@ export function JobDetailPage() {
       return;
     }
     if ((user?.credits ?? 0) < AUTO_DETECT_REQUIRED_CREDITS) {
-      toast.error("AI 자동 문항 찾기에는 1토큰이 필요합니다.", {
+      toast.error("AI 자동 문항 찾기에 필요한 크레딧이 부족합니다.", {
         description: "크레딧을 충전한 뒤 다시 시도하세요.",
       });
       return;
@@ -565,9 +565,6 @@ export function JobDetailPage() {
                     <span className="text-muted-foreground">이번 실행 최대 차감 예정</span>
                     <span className="font-semibold text-foreground">{requiredCredits} 크레딧</span>
                   </div>
-                  <p className="mt-1 text-muted-foreground">
-                    자동인식은 페이지당 1토큰, OCR/해설/이미지 생성은 선택한 영역 기준으로 계산합니다.
-                  </p>
                   {verificationWarningCount > 0 ? (
                     <p className="mt-1 text-amber-700">검증 경고 {verificationWarningCount}개가 있어 결과를 다시 확인하세요.</p>
                   ) : null}
@@ -595,7 +592,7 @@ export function JobDetailPage() {
               {!hasSavedRegions && canAutoDetect ? (
                 <Button onClick={() => void handleAutoDetect()} size="pill" className="min-h-11 w-full gap-2" disabled={isRunning}>
                   <Sparkles className="w-4 h-4" />
-                  AI가 문항 찾기 · 1토큰
+                  AI가 문항 찾기
                 </Button>
               ) : null}
 

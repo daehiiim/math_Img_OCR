@@ -22,5 +22,7 @@
 - 신규 적립 reason을 추가할 때는 앱 상수와 `credit_ledger_reason_check`를 같은 변경 묶음으로 갱신하고, 최초 적립 회귀 테스트까지 함께 확인한다.
 - 자동 문항 분할은 job당 1회만 과금한다. 중복 과금 여부는 region 수가 아니라 `ocr_jobs.auto_detect_charged` 플래그로 먼저 확인하고, 구조화된 감지 결과가 실제 저장된 경우에만 차감한다.
 - `selection_mode` 나 region metadata 컬럼을 확장할 때는 read/upsert schema fallback 테스트와 프런트 매핑 테스트를 함께 갱신한다. 새 enum 값이 응답에는 보이는데 저장 fallback에서 누락되면 모바일 편집 결과가 조용히 유실된다.
+- 운영 DB에 새 과금/메타 컬럼을 전제로 하는 백엔드를 배포할 때는 기능 노출 전에 `py scripts/schema_preflight.py` 를 실행한다. 특히 자동 문항 분할 배포는 `2026-04-13_auto_detect_regions.sql` 누락 상태로 올리지 않는다.
 - Radix primitive를 감싼 UI wrapper는 plain function으로 남기지 않는다. `Trigger`/`Close`/`Overlay`/`Content`처럼 ref가 전달될 수 있는 컴포넌트는 `React.forwardRef` 또는 원시 primitive 직접 export로 유지하고, 시트 열기·닫기 상호작용까지 콘솔 경고 없이 검증한다.
 - JWT 테스트에서 고정 시각을 주입할 때는 `iat`를 함께 고정값으로 넣지 않는다. decode 시계와 어긋나면 즉시 만료/미래 토큰으로 실패하므로, `exp` 중심으로 검증하거나 검증 시계도 함께 통제한다.
+- 드로잉 캔버스 위 오버레이 액션 버튼은 `onClick`만 처리하지 않는다. 삭제·핸들 같은 컨트롤은 `pointerdown` 전파를 먼저 차단하고, 데스크톱 마우스 드리프트 회귀 테스트로 새 영역 생성이 시작되지 않는지 확인한다.

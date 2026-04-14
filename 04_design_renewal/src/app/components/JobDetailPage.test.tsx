@@ -467,7 +467,8 @@ describe("JobDetailPage", () => {
     );
 
     expect(screen.getByText(/영역을 직접 그리지 않아도 AI가 문항·보기·문항 이미지를 묶어서 찾아줍니다/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /AI가 문항 찾기 · 1토큰/i })).toBeInTheDocument();
+    expect(screen.queryByText(/1토큰/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^AI가 문항 찾기$/i })).toBeInTheDocument();
   });
 
   it("영역이 없을 때는 자동 문항 찾기 호출을 우선한다", async () => {
@@ -486,7 +487,7 @@ describe("JobDetailPage", () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByRole("button", { name: /AI가 문항 찾기 · 1토큰/i }));
+    await user.click(screen.getByRole("button", { name: /^AI가 문항 찾기$/i }));
 
     expect(autoDetectRegionsMock).toHaveBeenCalledWith("job-1");
     expect(runPipelineMock).not.toHaveBeenCalled();
