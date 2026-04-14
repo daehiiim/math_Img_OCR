@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import app.pipeline.repository as repository_module
 import app.schema_compat as schema_compat_module
 from app.pipeline import orchestrator
+from app.pipeline.region_refiner import RefinedAutoDetectResult, RefinedRegionCandidate
 from app.pipeline.repository import PipelineRepository, PipelineUserContext
 from app.pipeline.schema import (
     ExtractorContext,
@@ -322,7 +323,7 @@ def test_run_pipeline_requires_saved_regions_before_execution(monkeypatch):
 
 
 def test_auto_detect_regions_saves_detected_regions_with_metadata(monkeypatch):
-    """자동 분할이 성공하면 auto_detected 메타데이터를 저장해야 한다."""
+    """자동 분할 저장은 refiner가 계산한 confidence와 위험도를 따라야 한다."""
     install_memory_repository(monkeypatch)
     user = make_user()
     job = orchestrator.create_job_from_bytes(user, "sample.png", make_png_bytes(120, 160))
@@ -360,7 +361,48 @@ def test_auto_detect_regions_saves_detected_regions_with_metadata(monkeypatch):
             openai_request_id="req-detect-123",
         )
 
+    def fake_refine_detected_regions(
+        image_bytes: bytes,
+        *,
+        image_width: int,
+        image_height: int,
+        candidates: list[orchestrator.DetectedRegionCandidate],
+        detector_review_required: bool,
+    ):
+        assert image_width == 120
+        assert image_height == 160
+        assert len(candidates) == 2
+        assert detector_review_required is True
+        return RefinedAutoDetectResult(
+            regions=[
+                RefinedRegionCandidate(
+                    bbox=(12, 14, 108, 72),
+                    order=1,
+                    confidence=0.88,
+                    detected_question_number="12",
+                    includes_choices=True,
+                    includes_figure=False,
+                    warning_level="normal",
+                    risk_flags=(),
+                    boundary_basis=("number_anchor", "choices"),
+                ),
+                RefinedRegionCandidate(
+                    bbox=(6, 78, 114, 152),
+                    order=2,
+                    confidence=0.41,
+                    detected_question_number=None,
+                    includes_choices=True,
+                    includes_figure=True,
+                    warning_level="high_risk",
+                    risk_flags=("weak_boundary",),
+                    boundary_basis=("paragraph_block", "figure", "choices"),
+                ),
+            ],
+            review_required=True,
+        )
+
     monkeypatch.setattr(orchestrator, "detect_problem_regions_with_gpt", fake_detect_problem_regions_with_gpt)
+    monkeypatch.setattr(orchestrator, "refine_detected_regions", fake_refine_detected_regions)
 
     result = orchestrator.auto_detect_regions(user, job.job_id, api_key="sk-user-1234567890")
     saved_job = orchestrator.read_job(user, job.job_id)
@@ -371,10 +413,11 @@ def test_auto_detect_regions_saves_detected_regions_with_metadata(monkeypatch):
     assert saved_job.status == "queued"
     assert [region.context.selection_mode for region in saved_job.regions] == ["auto_detected", "auto_detected"]
     assert saved_job.regions[0].context.id == "q12"
-    assert saved_job.regions[0].context.auto_detect_confidence == 0.91
-    assert saved_job.regions[0].context.warning_level == "high_risk"
+    assert saved_job.regions[0].context.auto_detect_confidence == 0.88
+    assert saved_job.regions[0].context.warning_level == "normal"
     assert saved_job.regions[1].context.id == "q2"
-    assert saved_job.regions[1].context.auto_detect_confidence == 0.44
+    assert saved_job.regions[1].context.auto_detect_confidence == 0.41
+    assert saved_job.regions[1].context.warning_level == "high_risk"
     assert saved_job.regions[1].context.input_device == "system"
 
 
@@ -400,6 +443,120 @@ def test_auto_detect_regions_raises_when_no_candidates_are_found(monkeypatch):
         orchestrator.auto_detect_regions(user, job.job_id, api_key="sk-user-1234567890")
 
     assert orchestrator.read_job(user, job.job_id).regions == []
+
+
+def test_auto_detect_regions_uses_exif_normalized_detection_source_end_to_end(monkeypatch):
+    """자동 분할 detector/refiner/crop은 모두 같은 EXIF 정규화 좌표계를 써야 한다."""
+    repository = install_memory_repository(monkeypatch)
+    user = make_user()
+    job = orchestrator.create_job_from_bytes(user, "rotated.jpg", make_oriented_jpeg_bytes())
+    seen: dict[str, object] = {}
+
+    def fake_detect_problem_regions_with_gpt(
+        root_path: Path,
+        image_bytes: bytes,
+        *,
+        image_width: int,
+        image_height: int,
+        api_key: str | None = None,
+    ):
+        detected_image = Image.open(BytesIO(image_bytes))
+        seen["detector_size"] = detected_image.size
+        seen["detector_pixel"] = detected_image.getpixel((0, 0))
+        return orchestrator.AutoDetectRegionsResult(
+            regions=[
+                orchestrator.DetectedRegionCandidate(
+                    bbox=(0, 0, 1, 1),
+                    order=1,
+                    confidence=0.91,
+                    detected_question_number="1",
+                    includes_choices=False,
+                    includes_figure=False,
+                ),
+            ],
+            review_required=False,
+            detector_model="gpt-test",
+            detection_version="openai_reading_unit_v2",
+            openai_request_id="req-detect-exif",
+        )
+
+    def fake_refine_detected_regions(
+        image_bytes: bytes,
+        *,
+        image_width: int,
+        image_height: int,
+        candidates: list[orchestrator.DetectedRegionCandidate],
+        detector_review_required: bool,
+    ):
+        refined_image = Image.open(BytesIO(image_bytes))
+        seen["refiner_size"] = refined_image.size
+        seen["refiner_pixel"] = refined_image.getpixel((0, 0))
+        assert image_width == 2
+        assert image_height == 3
+        assert detector_review_required is False
+        assert len(candidates) == 1
+        return RefinedAutoDetectResult(
+            regions=[
+                RefinedRegionCandidate(
+                    bbox=(0, 0, 1, 1),
+                    order=1,
+                    confidence=0.93,
+                    detected_question_number="1",
+                    includes_choices=False,
+                    includes_figure=False,
+                    warning_level="normal",
+                    risk_flags=(),
+                    boundary_basis=("paragraph_block",),
+                ),
+            ],
+            review_required=False,
+        )
+
+    def fake_analyze_region_with_gpt(
+        root_path: Path,
+        crop_image_bytes: bytes,
+        region_type: str,
+        api_key: str | None = None,
+        *,
+        include_ocr: bool = True,
+        include_image_detection: bool = False,
+    ):
+        return {
+            "ocr_text": "",
+            "mathml": "",
+            "has_stylizable_image": False,
+            "image_bbox": None,
+            "model_used": "gpt-test",
+            "openai_request_id": "req-test",
+        }
+
+    monkeypatch.setattr(orchestrator, "detect_problem_regions_with_gpt", fake_detect_problem_regions_with_gpt)
+    monkeypatch.setattr(orchestrator, "refine_detected_regions", fake_refine_detected_regions)
+    monkeypatch.setattr(orchestrator, "analyze_region_with_gpt", fake_analyze_region_with_gpt)
+
+    auto_detect_result = orchestrator.auto_detect_regions(user, job.job_id, api_key="sk-user-1234567890")
+    run_result = orchestrator.run_pipeline(
+        user,
+        job.job_id,
+        api_key="sk-user-1234567890",
+        processing_type="user_api_key",
+        do_ocr=False,
+        do_image_stylize=False,
+        do_explanation=False,
+    )
+    saved_job = orchestrator.read_job(user, job.job_id)
+    crop_path = saved_job.regions[0].figure.crop_url
+
+    assert auto_detect_result["detected_count"] == 1
+    assert seen["detector_size"] == (2, 3)
+    assert seen["refiner_size"] == (2, 3)
+    assert is_yellow_pixel(seen["detector_pixel"])  # type: ignore[arg-type]
+    assert is_yellow_pixel(seen["refiner_pixel"])  # type: ignore[arg-type]
+    assert run_result["status"] == "failed"
+    assert crop_path in repository.assets
+
+    crop_image = Image.open(BytesIO(repository.assets[crop_path]))
+    assert is_yellow_pixel(crop_image.getpixel((0, 0)))
 
 
 def test_save_edited_svg_increments_version_and_updates_asset_paths(monkeypatch, tmp_path):

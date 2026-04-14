@@ -18,7 +18,13 @@ vi.mock("../lib/supabase", () => ({
   },
 }));
 
-import { autoDetectRegionsApi, getJobApi, runPipelineApi } from "./jobApi";
+import {
+  autoDetectRegionsApi,
+  deleteJobApi,
+  getJobApi,
+  getJobHistoryApi,
+  runPipelineApi,
+} from "./jobApi";
 import { mapBackendJob } from "../store/jobMappers";
 
 describe("jobApi", () => {
@@ -257,6 +263,51 @@ describe("jobApi", () => {
     expect(result.filename).toBe("생성결과.hwpx");
   });
 
+  it("loads the workspace job history from GET /jobs", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          {
+            job_id: "job-history",
+            file_name: "sample.png",
+            status: "exported",
+            created_at: "2026-04-01T00:00:00+00:00",
+            updated_at: "2026-04-01T00:12:00+00:00",
+            region_count: 3,
+            hwpx_ready: true,
+            last_error: null,
+          },
+        ]),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getJobHistoryApi();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/jobs");
+    expect(result[0]?.job_id).toBe("job-history");
+    expect(result[0]?.hwpx_ready).toBe(true);
+  });
+
+  it("calls DELETE /jobs/{id} when removing a history item", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ job_id: "job-delete", deleted: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deleteJobApi("job-delete");
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/jobs/job-delete");
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe("DELETE");
+  });
+
   it("preserves verification fields from backend jobs when mapping to store jobs", () => {
     const mapped = mapBackendJob(
       {
@@ -266,6 +317,8 @@ describe("jobApi", () => {
         image_url: "https://signed.example/source.png",
         image_width: 10,
         image_height: 10,
+        created_at: "2026-04-01T00:00:00+00:00",
+        updated_at: "2026-04-01T00:05:00+00:00",
         regions: [
           {
             id: "q1",

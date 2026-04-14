@@ -1,4 +1,7 @@
-해당 프로그램은 모바일에 최적화 서비스이다. 
-이를 염두에 두고 작업을 진행하라.
+# 1. Available OpenAI models
+gpt-5.4, gpt-5.2, gpt-5.1, gpt-5.1-codex, gpt-5, gpt-5-codex, gpt-5-chat-latest
+gpt-5.4-mini, gpt-5.4-nano
+
+# 2. Additional instructions
+해당 프로그램은 모바일 사용자를 주 타겟으로 하는 서비스이다. 이를 염두에 두고 작업을 진행하라.
 테스트 샘플은 아이폰 14(19.5:9, 2532 * 1170 픽셀)로 진행하라. 
-실수를 해도 되니 너무 조심해서 진행하지 마라. 창의성을 발휘해도 된다.

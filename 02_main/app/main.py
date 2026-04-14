@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import logging
 from pathlib import Path
 from typing import Literal
@@ -20,6 +21,7 @@ from app.admin_mode import (
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingProfile, build_billing_service
 from app.config import get_settings
+from app.job_history import JobDeleteConflictError, build_job_history_service
 from app.supabase import SupabaseApiError
 
 app = FastAPI(title="Math Region OCR MVP API", version="0.1.0")
@@ -35,6 +37,8 @@ IMAGE_PIPELINE_CONFIG_DETAIL = "이미지 생성 서버 설정이 완료되지 �
 BILLING_CONFIG_DETAIL = "서버 과금 설정이 완료되지 않았습니다."
 BILLING_PERSISTENCE_DETAIL = "서버 과금 기록 저장에 실패했습니다. 잠시 후 다시 시도하세요."
 ADMIN_DASHBOARD_FAILURE_DETAIL = "관리자 대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도하세요."
+MAINTENANCE_INVALID_TOKEN_DETAIL = "유효하지 않은 maintenance 토큰입니다."
+MAINTENANCE_CONFIG_DETAIL = "maintenance 작업 토큰이 설정되지 않았습니다."
 AUTO_DETECT_SCHEMA_TOKENS = (
     "auto_detect_confidence",
     "auto_detect_charged",
@@ -139,6 +143,8 @@ class JobResponse(BaseModel):
     image_url: str | None = None
     image_width: int | None = None
     image_height: int | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
     regions: list[RegionResult] = Field(default_factory=list)
     last_error: str | None = None
     hwpx_export_path: str | None = None
@@ -229,6 +235,29 @@ class AdminDashboardResponse(BaseModel):
     recent_user_runs: list[RecentUserRunResponse] = Field(default_factory=list)
 
 
+class JobSummaryResponse(BaseModel):
+    job_id: str
+    file_name: str
+    status: Literal["created", "regions_pending", "queued", "running", "completed", "failed", "exported"]
+    created_at: str | None = None
+    updated_at: str | None = None
+    region_count: int = 0
+    hwpx_ready: bool = False
+    last_error: str | None = None
+
+
+class DeleteJobResponse(BaseModel):
+    job_id: str
+    deleted_objects: int = 0
+
+
+class PurgeStaleJobsResponse(BaseModel):
+    deleted_jobs: int = 0
+    deleted_objects: int = 0
+    scanned_jobs: int = 0
+    cutoff_at: str
+
+
 def _signed_asset_url(current_user: AuthenticatedUser, storage_path: str | None) -> str | None:
     """Storage 내부 경로를 짧은 signed URL로 바꾼다."""
     return pipeline.create_asset_url(current_user, storage_path)
@@ -245,6 +274,11 @@ def _get_billing_service(require_polar: bool = False):
 def _get_admin_mode_service() -> AdminModeService:
     """현재 환경설정으로 관리자 모드 서비스를 생성한다."""
     return build_admin_mode_service()
+
+
+def _get_job_history_service():
+    """현재 환경설정으로 작업 history 서비스를 생성한다."""
+    return build_job_history_service()
 
 
 def _is_schema_mismatch_message(message: str) -> bool:
@@ -352,6 +386,8 @@ def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
         image_url=_signed_asset_url(current_user, job.image_url),
         image_width=job.image_width,
         image_height=job.image_height,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
         last_error=job.last_error,
         hwpx_export_path=job.hwpx_export_path,
         regions=[
@@ -412,6 +448,48 @@ def _map_billing_profile(profile: BillingProfile) -> BillingProfileResponse:
         openai_connected=profile.openai_connected,
         openai_key_masked=profile.openai_key_masked,
     )
+
+
+def _require_maintenance_token(token: str | None) -> None:
+    """내부 maintenance 엔드포인트용 shared secret 헤더를 검증한다."""
+    expected_token = get_settings(ROOT).maintenance_job_token
+    if not expected_token:
+        raise HTTPException(status_code=500, detail=MAINTENANCE_CONFIG_DETAIL)
+    if not hmac.compare_digest(str(token or ""), expected_token):
+        raise HTTPException(status_code=401, detail=MAINTENANCE_INVALID_TOKEN_DETAIL)
+
+
+@app.get("/jobs", response_model=list[JobSummaryResponse])
+def list_jobs(
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> list[JobSummaryResponse]:
+    """현재 로그인 사용자의 작업 history 요약 목록을 반환한다."""
+    try:
+        return [JobSummaryResponse.model_validate(row) for row in _get_job_history_service().list_job_summaries(current_user)]
+    except SupabaseApiError as error:
+        _raise_runtime_http_error(error)
+    except ValueError as error:
+        _raise_runtime_http_error(error)
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.delete("/jobs/{job_id}", response_model=DeleteJobResponse)
+def delete_job(
+    job_id: str,
+    current_user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> DeleteJobResponse:
+    """현재 로그인 사용자의 작업과 Storage 자산을 hard delete 한다."""
+    try:
+        return DeleteJobResponse.model_validate(_get_job_history_service().delete_job(current_user, job_id))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="job not found")
+    except JobDeleteConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except SupabaseApiError as error:
+        _raise_runtime_http_error(error)
+    except ValueError as error:
+        _raise_runtime_http_error(error)
+        raise HTTPException(status_code=400, detail=str(error))
 
 
 @app.post("/jobs", response_model=JobResponse, status_code=201)
@@ -672,6 +750,21 @@ def get_admin_dashboard(
     except SupabaseApiError as error:
         logger.exception("Admin dashboard runtime error: %s", error)
         raise HTTPException(status_code=503, detail=ADMIN_DASHBOARD_FAILURE_DETAIL) from error
+
+
+@app.post("/internal/maintenance/purge-stale-jobs", response_model=PurgeStaleJobsResponse)
+def purge_stale_jobs(
+    x_maintenance_token: str | None = Header(default=None, alias="X-Maintenance-Token"),
+) -> PurgeStaleJobsResponse:
+    """14일 지난 종료 작업과 관련 Storage 파일을 batch 단위로 정리한다."""
+    _require_maintenance_token(x_maintenance_token)
+    try:
+        return PurgeStaleJobsResponse.model_validate(_get_job_history_service().purge_stale_jobs())
+    except SupabaseApiError as error:
+        _raise_runtime_http_error(error)
+    except ValueError as error:
+        _raise_runtime_http_error(error)
+        raise HTTPException(status_code=400, detail=str(error))
 
 
 @app.get("/billing/catalog")

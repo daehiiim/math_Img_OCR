@@ -22,6 +22,7 @@ def test_get_settings_reads_env_file(tmp_path):
                 "HWPX_SKILL_DIR=D:/runtime/hwpxskill-math",
                 "APP_URL=https://mathtohwp.vercel.app/",
                 "CORS_ALLOW_ORIGINS=https://mathtohwp.vercel.app,https://preview.mathtohwp.vercel.app/",
+                "MAINTENANCE_JOB_TOKEN=file-maintenance-token",
                 "SUPABASE_URL=https://example.supabase.co",
                 "SUPABASE_ANON_KEY=file-anon-key",
                 "SUPABASE_JWT_SECRET=file-jwt-secret",
@@ -54,6 +55,7 @@ def test_get_settings_reads_env_file(tmp_path):
         "https://mathtohwp.vercel.app",
         "https://preview.mathtohwp.vercel.app",
     )
+    assert settings.maintenance_job_token == "file-maintenance-token"
     assert settings.auth.supabase_url == "https://example.supabase.co"
     assert settings.auth.supabase_anon_key == "file-anon-key"
     assert settings.auth.supabase_jwt_secret == "file-jwt-secret"
@@ -77,6 +79,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
                 "NANO_BANANA_PROMPT_VERSION=csat_v1",
                 "HWPX_SKILL_DIR=D:/file/runtime",
                 "APP_URL=https://file.mathtohwp.vercel.app/",
+                "MAINTENANCE_JOB_TOKEN=file-maintenance-token",
                 "SUPABASE_URL=https://file.supabase.co",
             ]
         ),
@@ -88,6 +91,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
     monkeypatch.setenv("NANO_BANANA_PROMPT_VERSION", "csat_v1")
     monkeypatch.setenv("HWPX_SKILL_DIR", "D:/env/runtime")
     monkeypatch.setenv("APP_URL", "https://mathtohwp.vercel.app/")
+    monkeypatch.setenv("MAINTENANCE_JOB_TOKEN", "env-maintenance-token")
     monkeypatch.setenv("SUPABASE_URL", "https://env.supabase.co")
 
     settings = get_settings(tmp_path)
@@ -97,6 +101,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
     assert settings.nano_banana_prompt_version == "csat_v1"
     assert settings.hwpx_skill_dir == "D:/env/runtime"
     assert settings.app_url == "https://mathtohwp.vercel.app"
+    assert settings.maintenance_job_token == "env-maintenance-token"
     assert settings.auth.supabase_url == "https://env.supabase.co"
 
 

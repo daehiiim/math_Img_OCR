@@ -45,6 +45,7 @@ docker compose up --build
 - `OPENAI_BASE_URL` (기본값 `https://api.openai.com/v1`)
 - `NANO_BANANA_PROMPT_VERSION` (기본값 `csat_v1`, 현재 지원값도 `csat_v1` 하나다)
 - `CORS_ALLOW_ORIGINS` (`https://a.example.com,https://b.example.com` 형식)
+- `MAINTENANCE_JOB_TOKEN` (운영 history 14일 자동 정리용 Cloud Scheduler shared secret)
 - `HWPX_SKILL_DIR` (기본값 비움. 특수한 로컬 skill 경로를 강제로 우선 사용해야 할 때만 설정)
 - `HWPX_EXPORT_ENGINE` (기본값 `auto`, 지원값 `legacy | auto | hwpforge`)
 - `HWPFORGE_MCP_PATH` (기본값 비움. HwpForge MCP 실행 파일 또는 `.js` wrapper 절대 경로)
@@ -56,9 +57,17 @@ docker compose up --build
 - `02_main/schemas/2026-03-19_region_action_credit_flags.sql`
 - `02_main/schemas/2026-04-13_markdown_first_hwpx_v2.sql`
 - `02_main/schemas/2026-04-13_auto_detect_regions.sql`
+- `02_main/schemas/2026-04-14_job_history_retention_indexes.sql`
 - 누락 상태로 배포하면 `POST /jobs/{id}/run`, `GET /jobs/{id}`, `POST /jobs/{id}/regions/auto-detect` 에서 스키마 불일치 오류가 날 수 있다.
 - 배포 전에는 `py scripts/schema_preflight.py` 로 `schema.ocr_jobs_runtime`, `schema.ocr_job_regions_runtime` 점검이 모두 `OK` 인지 확인한다.
 - 적용 뒤에는 backend 환경변수를 다시 확인하고 재배포해야 한다.
+
+## 작업 history / 정리 엔드포인트
+
+- `GET /jobs`: 로그인 사용자의 작업 history summary를 `updated_at desc`로 반환한다.
+- `DELETE /jobs/{job_id}`: 본인 작업과 연결된 Supabase Storage prefix를 hard delete 한다. `running` 작업은 삭제할 수 없다.
+- `POST /internal/maintenance/purge-stale-jobs`: `X-Maintenance-Token` 검증 후 14일 지난 종료 작업(`completed|failed|exported`)을 batch 100 단위로 정리한다.
+- 운영에서는 Cloud Scheduler를 `Asia/Seoul 04:10` 기준으로 설정하고, Cloud Run 직접 URL을 호출해 위 maintenance endpoint를 실행한다.
 
 ## HWPX export runtime
 

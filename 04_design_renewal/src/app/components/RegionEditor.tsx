@@ -54,6 +54,9 @@ const REGION_LABEL_COLOR = "#1d4ed8";
 const AUTO_DETECT_BORDER_COLOR = "#d97706";
 const AUTO_DETECT_FILL_COLOR = "rgba(245, 158, 11, 0.14)";
 const AUTO_DETECT_LABEL_COLOR = "#b45309";
+const AUTO_DETECT_HIGH_RISK_BORDER_COLOR = "#c2410c";
+const AUTO_DETECT_HIGH_RISK_FILL_COLOR = "rgba(194, 65, 12, 0.16)";
+const AUTO_DETECT_HIGH_RISK_LABEL_COLOR = "#9a3412";
 const RESIZE_HANDLES: ResizeHandle[] = ["nw", "ne", "se", "sw"];
 
 /** 새 수동 영역을 생성한다. */
@@ -113,6 +116,12 @@ function getHandleClassName(handle: ResizeHandle): string {
 /** 오버레이 컨트롤 입력이 캔버스 드로잉으로 전파되지 않게 막는다. */
 function stopCanvasPointerPropagation(event: React.PointerEvent<HTMLButtonElement>): void {
   event.stopPropagation();
+}
+
+
+/** 자동 감지 영역 중에서도 즉시 검토가 필요한 고위험 후보인지 계산한다. */
+function isHighRiskAutoDetectedRegion(region: Region): boolean {
+  return isAutoDetectedRegion(region) && region.warningLevel === "high_risk";
 }
 
 
@@ -302,9 +311,23 @@ export function RegionEditor({
         {regions.map((region) => {
           const previewRect = getPreviewRect(interaction, region.id) ?? getRectFromPolygon(region.polygon);
           const autoDetectedRegion = isAutoDetectedRegion(region);
-          const borderColor = autoDetectedRegion ? AUTO_DETECT_BORDER_COLOR : REGION_BORDER_COLOR;
-          const fillColor = autoDetectedRegion ? AUTO_DETECT_FILL_COLOR : REGION_FILL_COLOR;
-          const labelColor = autoDetectedRegion ? AUTO_DETECT_LABEL_COLOR : REGION_LABEL_COLOR;
+          const highRiskAutoDetectedRegion = isHighRiskAutoDetectedRegion(region);
+          const borderColor = highRiskAutoDetectedRegion
+            ? AUTO_DETECT_HIGH_RISK_BORDER_COLOR
+            : autoDetectedRegion
+              ? AUTO_DETECT_BORDER_COLOR
+              : REGION_BORDER_COLOR;
+          const fillColor = highRiskAutoDetectedRegion
+            ? AUTO_DETECT_HIGH_RISK_FILL_COLOR
+            : autoDetectedRegion
+              ? AUTO_DETECT_FILL_COLOR
+              : REGION_FILL_COLOR;
+          const labelColor = highRiskAutoDetectedRegion
+            ? AUTO_DETECT_HIGH_RISK_LABEL_COLOR
+            : autoDetectedRegion
+              ? AUTO_DETECT_LABEL_COLOR
+              : REGION_LABEL_COLOR;
+          const handleSize = highRiskAutoDetectedRegion ? 20 : autoDetectedRegion ? 18 : 14;
           return (
             <div
               key={region.id}
@@ -324,6 +347,14 @@ export function RegionEditor({
               >
                 {autoDetectedRegion ? `AI ${region.id}` : region.id}
               </span>
+              {highRiskAutoDetectedRegion ? (
+                <span
+                  className="absolute left-0 top-6 rounded-r-sm px-1.5 py-0.5 text-[10px] font-medium text-white"
+                  style={{ backgroundColor: labelColor }}
+                >
+                  검토 필요
+                </span>
+              ) : null}
 
               {!disabled ? (
                 <>
@@ -345,8 +376,8 @@ export function RegionEditor({
                       key={`${region.id}-${handle}`}
                       type="button"
                       aria-label={`${region.id} ${handle} 크기 조절`}
-                      className={`absolute h-3.5 w-3.5 rounded-full border border-white shadow-sm ${getHandleClassName(handle)}`}
-                      style={{ backgroundColor: labelColor }}
+                      className={`absolute rounded-full border border-white shadow-sm ${getHandleClassName(handle)}`}
+                      style={{ backgroundColor: labelColor, width: `${handleSize}px`, height: `${handleSize}px` }}
                       onPointerDown={(event) => handleResizePointerDown(event, region.id, handle)}
                     />
                   ))}
@@ -375,13 +406,24 @@ export function RegionEditor({
         <div className="space-y-2">
           <p className="text-[13px] text-muted-foreground">{regions.length}개 영역</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {regions.map((region) => (
-              <div key={region.id} className="flex items-center gap-2 rounded-lg bg-accent/30 px-3 py-2">
-                <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: REGION_BORDER_COLOR }} />
+            {regions.map((region) => {
+              const highRiskAutoDetectedRegion = isHighRiskAutoDetectedRegion(region);
+              const dotColor = highRiskAutoDetectedRegion
+                ? AUTO_DETECT_HIGH_RISK_BORDER_COLOR
+                : isAutoDetectedRegion(region)
+                  ? AUTO_DETECT_BORDER_COLOR
+                  : REGION_BORDER_COLOR;
+              return (
+                <div key={region.id} className="flex items-center gap-2 rounded-lg bg-accent/30 px-3 py-2">
+                  <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} />
                 <span className="flex-1 font-mono text-[13px]">{region.id}</span>
+                {highRiskAutoDetectedRegion ? (
+                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-800">검토 필요</span>
+                ) : null}
                 <span className="text-[11px] text-muted-foreground">#{region.order}</span>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}

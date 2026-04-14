@@ -51,9 +51,27 @@ export interface BackendJob {
   image_url?: string | null;
   image_width?: number | null;
   image_height?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   last_error?: string | null;
   hwpx_export_path?: string | null;
   regions: BackendRegion[];
+}
+
+export interface BackendJobSummary {
+  job_id: string;
+  file_name?: string | null;
+  status: BackendJobStatus;
+  created_at: string;
+  updated_at: string;
+  region_count: number;
+  hwpx_ready: boolean;
+  last_error?: string | null;
+}
+
+export interface DeleteJobResult {
+  job_id: string;
+  deleted: boolean;
 }
 
 export interface RegionPayload {
@@ -190,6 +208,16 @@ export async function autoDetectRegionsApi(jobId: string): Promise<AutoDetectReg
 
 export async function getJobApi(jobId: string): Promise<BackendJob> {
   return requestJson<BackendJob>(`/jobs/${jobId}`, { method: "GET" });
+}
+
+/** 워크스페이스 히스토리 요약 목록을 불러온다. */
+export async function getJobHistoryApi(): Promise<BackendJobSummary[]> {
+  return requestJson<BackendJobSummary[]>("/jobs", { method: "GET" });
+}
+
+/** 서버에서 작업과 연결된 파일을 완전히 삭제한다. */
+export async function deleteJobApi(jobId: string): Promise<DeleteJobResult> {
+  return requestJson<DeleteJobResult>(`/jobs/${jobId}`, { method: "DELETE" });
 }
 
 export async function exportHwpxApi(jobId: string): Promise<{ download_url: string }> {

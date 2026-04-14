@@ -466,7 +466,7 @@ describe("JobDetailPage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/영역을 직접 그리지 않아도 AI가 문항·보기·문항 이미지를 묶어서 찾아줍니다/i)).toBeInTheDocument();
+    expect(screen.getByText(/영역을 직접 그리지 않아도 AI가 문항·지문·수식·표·답안칸을 읽기 단위로 묶어서 찾아줍니다/i)).toBeInTheDocument();
     expect(screen.queryByText(/1토큰/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^AI가 문항 찾기$/i })).toBeInTheDocument();
   });
@@ -491,5 +491,40 @@ describe("JobDetailPage", () => {
 
     expect(autoDetectRegionsMock).toHaveBeenCalledWith("job-1");
     expect(runPipelineMock).not.toHaveBeenCalled();
+  });
+
+  it("고위험 자동 감지 결과가 있으면 실행 전 검토 안내를 유지한다", () => {
+    mockJob = {
+      ...mockJob,
+      status: "queued",
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "pending",
+          selectionMode: "auto_detected",
+          warningLevel: "high_risk",
+          autoDetectConfidence: 0.41,
+        },
+      ],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/실행 전 박스를 확인하고 필요하면 수정하세요/i)).toBeInTheDocument();
+    expect(screen.getByText(/경계 신뢰도가 낮거나 애매한 영역이 있습니다/i)).toBeInTheDocument();
   });
 });

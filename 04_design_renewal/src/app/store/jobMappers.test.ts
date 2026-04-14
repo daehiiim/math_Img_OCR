@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { BackendJob } from "../api/jobApi";
-import { mapBackendJob, normalizeJobStatus } from "./jobMappers";
+import type { BackendJob, BackendJobSummary } from "../api/jobApi";
+import { mapBackendJob, mapBackendJobSummary, normalizeJobStatus } from "./jobMappers";
 
 describe("normalizeJobStatus", () => {
   it("queued 상태를 유지한다", () => {
@@ -22,6 +22,8 @@ describe("mapBackendJob", () => {
       image_url: "/runtime/jobs/job_123/input/sample.png",
       image_width: 800,
       image_height: 600,
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:05:00+00:00",
       regions: [
         {
           id: "q1",
@@ -56,6 +58,8 @@ describe("mapBackendJob", () => {
     expect(job.imageWidth).toBe(800);
     expect(job.imageHeight).toBe(600);
     expect(job.status).toBe("completed");
+    expect(job.createdAt).toBe("2026-04-01T00:00:00+00:00");
+    expect(job.updatedAt).toBe("2026-04-01T00:05:00+00:00");
     expect(job.regions[0]).toMatchObject({
       id: "q1",
       type: "diagram",
@@ -82,6 +86,8 @@ describe("mapBackendJob", () => {
       image_url: null,
       image_width: null,
       image_height: null,
+      created_at: "2026-04-02T00:00:00+00:00",
+      updated_at: "2026-04-02T00:05:00+00:00",
       regions: [
         {
           id: "q1",
@@ -112,6 +118,7 @@ describe("mapBackendJob", () => {
         },
       ],
       createdAt: "2026-03-15T00:00:00.000Z",
+      updatedAt: "2026-03-15T00:10:00.000Z",
     });
 
     expect(job.fileName).toBe("local.png");
@@ -124,5 +131,31 @@ describe("mapBackendJob", () => {
       [7, 8],
     ]);
     expect(job.regions[0].order).toBe(7);
+  });
+});
+
+describe("mapBackendJobSummary", () => {
+  it("백엔드 작업 요약을 히스토리 카드 모델로 변환한다", () => {
+    const summary: BackendJobSummary = {
+      job_id: "job_123",
+      file_name: "sample.png",
+      status: "exported",
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:12:00+00:00",
+      region_count: 3,
+      hwpx_ready: true,
+      last_error: null,
+    };
+
+    expect(mapBackendJobSummary(summary)).toEqual({
+      id: "job_123",
+      fileName: "sample.png",
+      status: "exported",
+      createdAt: "2026-04-01T00:00:00+00:00",
+      updatedAt: "2026-04-01T00:12:00+00:00",
+      regionCount: 3,
+      hwpxReady: true,
+      lastError: undefined,
+    });
   });
 });

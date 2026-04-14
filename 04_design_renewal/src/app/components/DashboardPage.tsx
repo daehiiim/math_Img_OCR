@@ -1,3 +1,4 @@
+import { useCallback, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useJobs } from "../context/JobContext";
 import { useAuth } from "../context/AuthContext";
@@ -21,7 +22,6 @@ import {
   CheckCircle2,
   Cpu,
   Box,
-  Workflow,
   Coins,
   TrendingUp,
   Zap,
@@ -36,17 +36,41 @@ const pipelineSteps = [
   { step: "5", label: "HWPX 내보내기", desc: "POST /.../export/hwpx", color: "bg-rose-500" },
 ];
 
-/** 워크스페이스 대시보드의 요약, 지표, 작업 목록을 생산성 우선 구조로 렌더링한다. */
+/** history 카드에 쓸 생성일을 모바일 친화적으로 압축한다. */
+function formatCreatedDate(value: string): string {
+  return new Date(value).toLocaleDateString("ko-KR", {
+    month: "long",
+    day: "numeric",
+  });
+}
+
+/** 워크스페이스 대시보드의 요약, 지표, 서버 history 목록을 렌더링한다. */
 export function DashboardPage() {
-  const { jobs, deleteJob } = useJobs();
+  const { jobHistory, loadJobHistory, deleteJob } = useJobs();
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const completedJobs = jobs.filter(
+  useEffect(() => {
+    void loadJobHistory();
+  }, [loadJobHistory]);
+
+  const completedJobs = jobHistory.filter(
     (job) => job.status === "completed" || job.status === "exported"
   ).length;
-  const runningJobs = jobs.filter((job) => job.status === "running").length;
-  const totalRegions = jobs.reduce((acc, job) => acc + job.regions.length, 0);
+  const runningJobs = jobHistory.filter((job) => job.status === "running").length;
+  const totalRegions = jobHistory.reduce((acc, job) => acc + job.regionCount, 0);
+
+  /** 사용자가 확인한 경우에만 서버 hard delete를 호출한다. */
+  const handleDelete = useCallback(
+    async (jobId: string, fileName: string) => {
+      if (!window.confirm(`"${fileName}" 작업과 저장 파일을 완전히 삭제할까요?`)) {
+        return;
+      }
+
+      await deleteJob(jobId);
+    },
+    [deleteJob]
+  );
 
   return (
     <div className="liquid-workspace-page mx-auto max-w-7xl p-6 lg:p-8">
@@ -131,13 +155,13 @@ export function DashboardPage() {
       <section className="mb-8 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-[13px] font-semibold tracking-[0.18em] text-muted-foreground">핵심 지표</h2>
-          <span className="text-[12px] text-muted-foreground">현재 작업 리듬을 한 줄로 요약합니다.</span>
+          <span className="text-[12px] text-muted-foreground">최근 작업 history를 기준으로 집계합니다.</span>
         </div>
         <div className="liquid-feature-row grid gap-3 rounded-[32px] p-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="liquid-inline-note flex items-center justify-between rounded-[24px] px-4 py-4">
             <div>
               <p className="text-[12px] text-muted-foreground">전체 작업</p>
-              <p className="mt-1 text-[28px]">{jobs.length}</p>
+              <p className="mt-1 text-[28px]">{jobHistory.length}</p>
             </div>
             <Box className="h-5 w-5 shrink-0 text-primary/76" />
           </div>
@@ -199,10 +223,10 @@ export function DashboardPage() {
       <section className="space-y-3">
         <div className="mb-4 flex items-center justify-between">
           <h2>작업 목록</h2>
-          <p className="text-[13px] text-muted-foreground">{jobs.length}개 작업</p>
+          <p className="text-[13px] text-muted-foreground">{jobHistory.length}개 작업</p>
         </div>
 
-        {jobs.length === 0 ? (
+        {jobHistory.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <FileImage className="mb-4 h-7 w-7 text-muted-foreground/80" />
@@ -218,32 +242,25 @@ export function DashboardPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {jobs.map((job) => {
+            {jobHistory.map((job) => {
               const cfg = getStatusConfig(job.status);
               const StatusIcon = cfg.icon;
+              const deleteDisabled = job.status === "running";
 
               return (
                 <div
                   key={job.id}
                   className="liquid-feature-row rounded-[30px] p-2 transition-transform duration-200 hover:-translate-y-0.5"
                 >
-                  <div className="flex items-center gap-4 rounded-[24px] px-2 py-2">
+                  <div className="flex items-center gap-3 rounded-[24px] px-2 py-2">
                     <button
                       type="button"
                       aria-label={`${job.fileName} 작업 상세 보기`}
                       className="flex min-w-0 flex-1 items-center gap-4 rounded-[24px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/10"
                       onClick={() => navigate(`/workspace/job/${job.id}`)}
                     >
-                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[20px] bg-muted">
-                        <img
-                          src={job.imageUrl}
-                          alt={job.fileName}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-
                       <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex items-center gap-2">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
                           <p className="truncate text-[14px]">{job.fileName}</p>
                           <Badge variant={cfg.variant} className="shrink-0 rounded-full">
                             <StatusIcon
@@ -251,19 +268,21 @@ export function DashboardPage() {
                             />
                             {cfg.label}
                           </Badge>
+                          {job.hwpxReady ? (
+                            <Badge variant="secondary" className="rounded-full">
+                              HWPX 준비됨
+                            </Badge>
+                          ) : null}
                         </div>
-                        <div className="flex items-center gap-4 text-[12px] text-muted-foreground">
-                          <span className="font-mono">{job.id.slice(0, 16)}...</span>
-                          <span>{job.regions.length}개 영역</span>
-                          <span>
-                            {new Date(job.createdAt).toLocaleString("ko-KR", {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
+
+                        <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted-foreground">
+                          <span>{job.regionCount}개 영역</span>
+                          <span>{formatCreatedDate(job.createdAt)}</span>
                         </div>
+
+                        {job.lastError ? (
+                          <p className="mt-2 truncate text-[12px] text-destructive">{job.lastError}</p>
+                        ) : null}
                       </div>
                     </button>
 
@@ -282,7 +301,8 @@ export function DashboardPage() {
                         size="icon"
                         type="button"
                         aria-label={`${job.fileName} 작업 삭제`}
-                        onClick={() => deleteJob(job.id)}
+                        disabled={deleteDisabled}
+                        onClick={() => void handleDelete(job.id, job.fileName)}
                       >
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>

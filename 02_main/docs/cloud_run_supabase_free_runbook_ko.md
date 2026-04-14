@@ -17,6 +17,7 @@
 - Cloud Run 환경에서는 `APP_URL=https://mathtohwp.vercel.app`를 반드시 설정한다.
 - Cloud Run에서 `CORS_ALLOW_ORIGINS`를 비우면 백엔드는 `APP_URL` 1개만 허용한다.
 - Cloud Run 이미지 기본값은 `HWPX_EXPORT_ENGINE=auto`이며, direct HwpForge writer 실패 시 roundtrip/legacy fallback으로 내려간다.
+- 작업 history 자동 삭제는 Cloud Scheduler가 Cloud Run 내부 maintenance endpoint를 직접 호출하는 방식으로 고정한다.
 - 백엔드 커스텀 도메인은 v1 범위에서 도입하지 않는다.
 - Supabase Free pause와 Cloud Run cold start는 현재 운영 제약으로 수용한다.
 
@@ -47,8 +48,17 @@
 - `POLAR_PRODUCT_STARTER_ID`
 - `POLAR_PRODUCT_PRO_ID`
 - `HWPX_EXPORT_ENGINE=auto`
+- `MAINTENANCE_JOB_TOKEN=<Cloud Scheduler shared secret>`
 - 필요 시 `CORS_ALLOW_ORIGINS=https://mathtohwp.vercel.app`
 - 일반적인 Cloud Run 배포에서는 `HWPFORGE_MCP_PATH`를 따로 넣지 않는다. 루트 `Dockerfile`이 `/app/vendor/hwpforge-mcp` 번들을 함께 포함한다.
+
+### Cloud Scheduler
+
+- 대상 URL: `https://<cloud-run-service>.run.app/internal/maintenance/purge-stale-jobs`
+- 메서드: `POST`
+- 스케줄: 매일 `04:10`, 타임존 `Asia/Seoul`
+- 헤더: `X-Maintenance-Token: <MAINTENANCE_JOB_TOKEN>`
+- 현재 서비스는 public 이므로 OIDC 대신 shared secret header를 사용한다.
 
 ### Supabase
 
@@ -70,9 +80,11 @@
 3. Cloud Run 서비스에 운영 환경변수를 반영한다.
 4. `py scripts/schema_preflight.py` 를 실행해 `schema.ocr_jobs_runtime`, `schema.ocr_job_regions_runtime` 이 모두 `OK` 인지 확인한다.
 5. Cloud Run 새 배포 후 `run.app` 주소가 바뀌었으면 `04_design_renewal/vercel.json` rewrite 대상을 갱신한다.
-6. Vercel production 환경에 `APP_URL`을 반영하고 재배포한다.
-7. `/pricing`, `/payment/starter`, `/jobs`, `AI가 문항 찾기` 흐름을 same-origin 경로 기준으로 검증한다.
-8. `POST /jobs/{job_id}/export/hwpx` 와 다운로드까지 확인해 direct HwpForge writer가 웹 경로에서 500 없이 끝나는지 본다.
+6. `MAINTENANCE_JOB_TOKEN`을 Cloud Run에 반영한 뒤 Cloud Scheduler job을 신규 생성하거나 토큰을 동기화한다.
+7. Vercel production 환경에 `APP_URL`을 반영하고 재배포한다.
+8. `/pricing`, `/payment/starter`, `/jobs`, `AI가 문항 찾기` 흐름을 same-origin 경로 기준으로 검증한다.
+9. `POST /jobs/{job_id}/export/hwpx` 와 다운로드까지 확인해 direct HwpForge writer가 웹 경로에서 500 없이 끝나는지 본다.
+10. maintenance endpoint를 수동 호출해 `deleted_jobs`, `deleted_objects`, `cutoff_at` 응답 형식과 `401/200` 분기를 확인한다.
 
 ## 5. 검증 체크리스트
 
@@ -83,14 +95,17 @@
 - Supabase OAuth 로그인 후 프런트 세션과 백엔드 `Authorization` 헤더 전달 확인
 - Polar checkout 성공 후 `payment_events`, `credit_ledger`, `profiles.credits_balance` 반영 확인
 - OCR 실행 후 액션별 크레딧 차감과 HWPX 다운로드 확인
+- `/workspace` 에서 서버 history 목록이 보이고 `running` 작업 삭제 버튼이 비활성화되는지 확인
 - same-origin `/jobs`, `/billing` 요청이 Vercel rewrite를 통해 Cloud Run으로 전달되는지 확인
 - signed URL로 원본 이미지, crop, svg, hwpx 접근 확인
+- Cloud Scheduler 첫 실행 로그에서 maintenance endpoint가 `200`과 purge 통계를 남기는지 확인
 
 ## 6. 무료 구간 운영 메모
 
 - Cloud Run 첫 요청 지연은 cold start 기준으로 허용 범위를 미리 확인한다.
 - Supabase Free pause 발생 시 dashboard에서 재개 후 OAuth, DB, Storage를 순서대로 점검한다.
 - 이미지 원본, crop, svg, hwpx 누적량을 주 단위로 확인해 Storage 증가 속도를 본다.
+- 자동 정리 기준은 `updated_at` 14일이며 종료 상태(`completed|failed|exported`)만 삭제한다. 예외 보존은 현재 없다.
 - 요청량이 늘면 Cloud Run 요청 수와 실행 시간 지표를 먼저 확인한 뒤 worker 분리를 검토한다.
 
 ## 7. 참고 링크

@@ -21,6 +21,7 @@
 - 선택형 DB 컬럼을 점진 도입할 때는 schema compatibility fallback을 기능별 컬럼군으로 분리한다. 새 metadata 컬럼 누락이 기존 optional select/upsert 경로까지 함께 꺼지지 않도록 읽기/쓰기 회귀 테스트를 같이 둔다.
 - 신규 적립 reason을 추가할 때는 앱 상수와 `credit_ledger_reason_check`를 같은 변경 묶음으로 갱신하고, 최초 적립 회귀 테스트까지 함께 확인한다.
 - 자동 문항 분할은 job당 1회만 과금한다. 중복 과금 여부는 region 수가 아니라 `ocr_jobs.auto_detect_charged` 플래그로 먼저 확인하고, 구조화된 감지 결과가 실제 저장된 경우에만 차감한다.
+- AI 자동 문항 분할은 raw 업로드 바이트를 detector에 직접 보내지 않는다. detector 입력과 crop 좌표계는 같은 EXIF 정규화 PNG를 공유하고, coarse bbox는 저장 전에 refiner를 반드시 거쳐 `high_risk` 판정까지 확정한다.
 - `selection_mode` 나 region metadata 컬럼을 확장할 때는 read/upsert schema fallback 테스트와 프런트 매핑 테스트를 함께 갱신한다. 새 enum 값이 응답에는 보이는데 저장 fallback에서 누락되면 모바일 편집 결과가 조용히 유실된다.
 - 운영 DB에 새 과금/메타 컬럼을 전제로 하는 백엔드를 배포할 때는 기능 노출 전에 `py scripts/schema_preflight.py` 를 실행한다. 특히 자동 문항 분할 배포는 `2026-04-13_auto_detect_regions.sql` 누락 상태로 올리지 않는다.
 - Radix primitive를 감싼 UI wrapper는 plain function으로 남기지 않는다. `Trigger`/`Close`/`Overlay`/`Content`처럼 ref가 전달될 수 있는 컴포넌트는 `React.forwardRef` 또는 원시 primitive 직접 export로 유지하고, 시트 열기·닫기 상호작용까지 콘솔 경고 없이 검증한다.

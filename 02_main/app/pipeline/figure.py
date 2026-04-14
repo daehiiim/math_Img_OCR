@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 
@@ -10,6 +11,15 @@ try:
     from svg.path import parse_path as parse_svg_path
 except Exception:  # pragma: no cover
     parse_svg_path = None
+
+
+@dataclass(frozen=True)
+class NormalizedDetectionImage:
+    """자동 문항 탐지와 crop이 공유할 정규화된 이미지 소스다."""
+
+    image_bytes: bytes
+    width: int
+    height: int
 
 
 def normalize_image_orientation(image: Image.Image) -> Image.Image:
@@ -22,6 +32,19 @@ def read_image_size(image_bytes: bytes) -> tuple[int, int]:
     with Image.open(BytesIO(image_bytes)) as image:
         normalized = ImageOps.exif_transpose(image)
         return normalized.width, normalized.height
+
+
+def build_detection_image_source(image_bytes: bytes) -> NormalizedDetectionImage:
+    """자동 탐지용 이미지를 EXIF 정규화 PNG와 동일 좌표계 크기로 반환한다."""
+    with Image.open(BytesIO(image_bytes)) as image:
+        normalized = normalize_image_orientation(image)
+        buffer = BytesIO()
+        normalized.save(buffer, format="PNG")
+    return NormalizedDetectionImage(
+        image_bytes=buffer.getvalue(),
+        width=normalized.width,
+        height=normalized.height,
+    )
 
 
 def polygon_bbox(polygon: list[list[float]], width: int, height: int) -> tuple[int, int, int, int]:
@@ -55,6 +78,7 @@ def _expand_bbox_with_padding(bbox: list[int], width: int, height: int) -> tuple
 
 
 def crop_region_image(image_path: Path, polygon: list[list[float]], output_path: Path) -> bytes:
+    """원본 이미지 경로에서 polygon 영역만 잘라 PNG 바이트로 저장한다."""
     with Image.open(image_path) as img:
         img = normalize_image_orientation(img)
         left, top, right, bottom = polygon_bbox(polygon, img.width, img.height)

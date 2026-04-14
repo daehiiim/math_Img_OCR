@@ -1124,3 +1124,49 @@
   - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/RegionEditor.test.tsx` 기준 `4 tests passed`.
 - 배포 영향:
   - 없음. 이번 변경은 프런트 상호작용과 테스트만 수정했다.
+
+## 2026-04-14 13:58 KST
+
+- 요청: 번호가 없거나 이미지가 없는 수학 문제까지 포함하는 범용 문항 범위 인식 보정 경로를 구현했다.
+- 아키텍처 결정:
+  - [`region_detector.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/region_detector.py) 는 최종 bbox 생성기가 아니라 coarse reading-unit candidate 생성기로 축소하고, 저장 전 [`region_refiner.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/region_refiner.py) 가 잉크 스냅, valley 분리, overlap 정리, composite confidence 계산을 맡도록 분리했다.
+  - [`figure.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/figure.py) 에 EXIF 정규화 PNG detection source를 추가해 detector 입력과 run-time crop 좌표계를 통일했다. iPhone 촬영 이미지에서도 detector/refiner/crop이 같은 폭·높이 기준을 공유한다.
+- 비즈니스 로직:
+  - 번호는 필수 조건이 아니라 힌트로만 쓰고, 지문·수식·보기·답안칸·귀속 표/도형을 하나의 reading unit으로 묶는다.
+  - 경계가 애매하면 약간 크게 포함한 뒤 `high_risk` 로 저장해 모바일 검토를 유도하고, detector가 불안정하거나 좁은 간격에서 강제 분리가 일어나면 composite confidence를 낮춰 review_required 를 올린다.
+- 처리:
+  - [`region_detector.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/region_detector.py) 프롬프트를 번호 없는 서술형/수식형/답안칸/표까지 포괄하도록 변경하고, `boundary_basis` 내부 근거와 `detail="high"` 입력을 받도록 수정했다.
+  - 신규 [`region_refiner.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/region_refiner.py) 에 column grouping, whitespace valley 분리, content snap, overlap 해소, risk flag, composite confidence 계산을 추가했다.
+  - [`orchestrator.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/orchestrator.py) 는 auto-detect 저장 전에 refiner를 반드시 거치고, 저장 confidence/warning_level 은 refiner 결과를 그대로 반영하도록 바꿨다.
+  - [`RegionEditor.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/RegionEditor.tsx), [`regionSelection.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/lib/regionSelection.ts) 는 `high_risk` AI 박스의 색 대비, `검토 필요` 라벨, 큰 조절 핸들, 범용 안내 문구를 반영했다.
+  - 신규 테스트 [`test_region_refiner.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_region_refiner.py) 를 추가하고, [`test_pipeline_storage.py`](/D:/03_PROJECT/05_mathOCR/02_main/tests/test_pipeline_storage.py), [`RegionEditor.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/RegionEditor.test.tsx), [`JobDetailPage.test.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.test.tsx) 를 갱신했다.
+- 검증:
+  - `pytest 02_main/tests/test_region_refiner.py 02_main/tests/test_pipeline_storage.py -q` 기준 `31 passed`.
+  - `pytest 02_main/tests/test_job_response_fields.py 02_main/tests/test_billing.py -q` 기준 `57 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/components/RegionEditor.test.tsx src/app/components/JobDetailPage.test.tsx` 기준 `16 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/store/jobMappers.test.ts src/app/store/jobStore.test.tsx` 기준 `8 passed`.
+- 배포 영향:
+  - 새 환경 변수, 새 DB migration, 새 외부 인프라는 없다.
+  - 다만 운영 환경 auto-detect 실서버 QA 전에 기존 Supabase migration 누락(`2026-03-19_region_action_credit_flags.sql`, `2026-04-13_markdown_first_hwpx_v2.sql`, `2026-04-13_auto_detect_regions.sql`) 은 별도로 해소해야 한다.
+
+## 2026-04-14 14:18 KST
+
+- 요청: Supabase에 보관 중인 계정별 작업 로그 범위를 기준으로 `/workspace` 에 이전 작업 history를 붙이고, 2주 지난 종료 작업은 자동 삭제되도록 구현했다.
+- 아키텍처 결정:
+  - 백엔드는 [`GET /jobs`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py), [`DELETE /jobs/{job_id}`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py), [`POST /internal/maintenance/purge-stale-jobs`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py) 를 추가하고, Supabase Storage 삭제는 service-role client가 prefix 단위로 처리하도록 분리했다.
+  - 프런트는 detail cache(`jobs`)와 history summary(`jobHistory`)를 분리했다. `/workspace` 는 서버 history만 렌더링하고, 상세 페이지 hydrate는 기존 `getJob()` 흐름을 유지한다.
+  - 자동 정리는 Cloud Scheduler가 Cloud Run maintenance endpoint를 shared secret header(`MAINTENANCE_JOB_TOKEN`)로 호출하는 구조로 고정했다.
+- 처리:
+  - [`job_history.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/job_history.py) 를 추가하고 [`supabase.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/supabase.py) 에 storage prefix list/remove helper를 넣었다.
+  - [`main.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py) 에 job summary/delete/purge 응답 모델과 엔드포인트를 연결하고, [`config.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/config.py), [`02_main/.env.example`](/D:/03_PROJECT/05_mathOCR/02_main/.env.example) 에 `MAINTENANCE_JOB_TOKEN` 을 추가했다.
+  - Supabase 인덱스 migration [`2026-04-14_job_history_retention_indexes.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-14_job_history_retention_indexes.sql) 과 [`supabase_saas_init.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/supabase_saas_init.sql) 을 동기화했다.
+  - 프런트 [`jobApi.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/api/jobApi.ts), [`jobMappers.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobMappers.ts), [`jobStore.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobStore.ts), [`JobContext.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/context/JobContext.tsx), [`DashboardPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/DashboardPage.tsx) 를 history 전용 UX로 교체했다.
+  - 운영 문서 [`README.md`](/D:/03_PROJECT/05_mathOCR/README.md), [`02_main/README.md`](/D:/03_PROJECT/05_mathOCR/02_main/README.md), [`cloud_run_supabase_free_runbook_ko.md`](/D:/03_PROJECT/05_mathOCR/02_main/docs/cloud_run_supabase_free_runbook_ko.md) 를 Cloud Run 재배포 + Cloud Scheduler 설정 기준으로 갱신했다.
+- 검증:
+  - `py -3 -m pytest 02_main/tests/test_config.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_job_history_api.py 02_main/tests/test_supabase_storage_client.py 02_main/tests/test_schema_migration_sql.py 02_main/tests/test_admin_mode.py 02_main/tests/test_pipeline_storage.py -q` 기준 `58 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run test:run -- src/app/api/jobApi.test.ts src/app/store/jobMappers.test.ts src/app/store/jobStore.test.tsx src/app/components/DashboardPage.test.tsx src/app/components/JobDetailPage.test.tsx src/app/components/NewJobPage.test.tsx` 기준 `44 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm run build` 성공. chunk size warning은 기존 번들 크기 경고로 유지됐다.
+- 배포 영향:
+  - 이번 변경은 프런트 정적 배포만으로 끝나지 않는다.
+  - 운영 반영 전 Supabase에 [`2026-04-14_job_history_retention_indexes.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-14_job_history_retention_indexes.sql) 을 적용해야 한다.
+  - Cloud Run 운영 환경에 `MAINTENANCE_JOB_TOKEN` 을 추가하고 재배포해야 하며, Google Cloud Scheduler에 `04:10 Asia/Seoul` POST job을 새로 설정해야 한다.

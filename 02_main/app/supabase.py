@@ -156,3 +156,27 @@ class SupabaseClient:
         if not signed_path:
             raise SupabaseApiError("signed URL is missing from response")
         return f"{self._config.url.rstrip('/')}/storage/v1{signed_path}"
+
+    def list_objects(self, prefix: str, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        """Storage prefix 아래 object와 폴더 목록을 반환한다."""
+        payload = self._request(
+            "POST",
+            f"/storage/v1/object/list/{self._config.storage_bucket}",
+            json_body={
+                "prefix": prefix.strip("/"),
+                "limit": limit,
+                "offset": offset,
+                "sortBy": {"column": "name", "order": "asc"},
+            },
+        )
+        return payload if isinstance(payload, list) else []
+
+    def remove_objects(self, storage_paths: list[str]) -> None:
+        """Storage object 여러 개를 한 번에 삭제한다."""
+        if not storage_paths:
+            return
+        self._request(
+            "DELETE",
+            f"/storage/v1/object/{self._config.storage_bucket}",
+            json_body={"prefixes": storage_paths},
+        )

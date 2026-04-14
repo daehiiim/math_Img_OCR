@@ -14,7 +14,7 @@ from app.pipeline.extractor import (
 )
 
 DETECTOR_MODEL = "gpt-5.2"
-DETECTION_VERSION = "openai_five_choice_v1"
+DETECTION_VERSION = "openai_reading_unit_v2"
 MIN_REGION_AREA_RATIO = 0.01
 LOW_CONFIDENCE_THRESHOLD = 0.62
 GIANT_REGION_AREA_RATIO = 0.82
@@ -31,6 +31,7 @@ class DetectedRegionCandidate:
     detected_question_number: str | None
     includes_choices: bool
     includes_figure: bool
+    boundary_basis: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -51,16 +52,20 @@ def _build_image_url(image_bytes: bytes) -> str:
 
 
 def _build_detector_prompt() -> str:
-    """5지선다 기출문제 전용 자동 분할 프롬프트를 반환한다."""
+    """번호 유무와 무관한 읽기 단위 문항 탐지 프롬프트를 반환한다."""
     return (
-        "고등/중등 수학 기출문제 페이지에서 문항 단위를 찾으세요. "
-        "각 영역은 문제 번호, 문제 본문, 5지선다 보기, 해당 문항에 귀속된 그림을 모두 포함해야 합니다. "
-        "제목, 학교명, 페이지 번호, 정답표, 해설, 여백, 장식 요소는 제외하세요. "
+        "수학 시험지/문제지 페이지에서 사람이 한 번에 읽고 푸는 문항 단위를 찾으세요. "
+        "문항 번호는 있을 수도 없을 수도 있습니다. 수식만 있는 문제, 도형이 없는 문제, 서술형, 답안칸, 표가 포함된 문제도 허용됩니다. "
+        "각 영역은 하나의 문항에 속한 지문, 조건, 수식, 보기, 답안칸, 귀속 표/도형을 모두 포함해야 합니다. "
+        "문항 경계가 애매하면 잘라내지 말고 약간 크게 묶은 뒤 review_required를 true로 두세요. "
+        "제목, 학교명, 페이지 번호, 정답표, 해설, 광고, 가격표, 장식 요소는 제외하세요. "
         "반드시 JSON object만 반환하세요. 형식은 "
         '{"regions":[{"bbox":[0,0,100,100],"order":1,"confidence":0.91,'
-        '"detected_question_number":"1","includes_choices":true,"includes_figure":false}],'
+        '"detected_question_number":"1","includes_choices":true,"includes_figure":false,'
+        '"boundary_basis":["number_anchor","paragraph_block","choices"]}],'
         '"review_required":false}. '
-        "bbox는 [left, top, right, bottom] 순서의 정수입니다."
+        "bbox는 [left, top, right, bottom] 순서의 정수입니다. "
+        "boundary_basis에는 number_anchor, paragraph_block, formula_block, choices, answer_blank, figure, table 중 해당 근거만 담으세요."
     )
 
 
@@ -81,7 +86,7 @@ def _request_detector(
                 "role": "user",
                 "content": [
                     {"type": "text", "text": _build_detector_prompt()},
-                    {"type": "image_url", "image_url": {"url": _build_image_url(image_bytes), "detail": "low"}},
+                    {"type": "image_url", "image_url": {"url": _build_image_url(image_bytes), "detail": "high"}},
                 ],
             },
         ],
@@ -166,6 +171,27 @@ def _parse_confidence(value: Any) -> float:
     return max(0.0, min(normalized, 1.0))
 
 
+def _parse_boundary_basis(raw_value: Any) -> tuple[str, ...]:
+    """모델이 준 경계 근거 배열을 허용 목록 기준으로 정리한다."""
+    allowed_values = {
+        "number_anchor",
+        "paragraph_block",
+        "formula_block",
+        "choices",
+        "answer_blank",
+        "figure",
+        "table",
+    }
+    if not isinstance(raw_value, list):
+        return ()
+    values: list[str] = []
+    for item in raw_value:
+        normalized = str(item or "").strip().lower()
+        if normalized in allowed_values and normalized not in values:
+            values.append(normalized)
+    return tuple(values)
+
+
 def _build_candidate(raw_region: Any, image_width: int, image_height: int, fallback_order: int) -> DetectedRegionCandidate | None:
     """원시 JSON 후보를 검증 가능한 후보 객체로 변환한다."""
     if not isinstance(raw_region, dict):
@@ -183,6 +209,7 @@ def _build_candidate(raw_region: Any, image_width: int, image_height: int, fallb
         detected_question_number=str(raw_region.get("detected_question_number") or "").strip() or None,
         includes_choices=bool(raw_region.get("includes_choices")),
         includes_figure=bool(raw_region.get("includes_figure")),
+        boundary_basis=_parse_boundary_basis(raw_region.get("boundary_basis")),
     )
 
 

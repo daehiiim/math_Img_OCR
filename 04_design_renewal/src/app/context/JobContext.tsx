@@ -1,16 +1,24 @@
 import React, { createContext, useContext } from "react";
-import { useJobStore, type Job, type JobExecutionOptions, type Region } from "../store/jobStore";
+import {
+  useJobStore,
+  type Job,
+  type JobExecutionOptions,
+  type JobHistoryItem,
+  type Region,
+} from "../store/jobStore";
 import type { AutoDetectRegionsResult, RunPipelineResult } from "../api/jobApi";
 
 interface JobContextType {
   jobs: Job[];
+  jobHistory: JobHistoryItem[];
   createJob: (fileName: string, imageUrl: string, width: number, height: number, imageFile: File) => Promise<string>;
+  loadJobHistory: () => Promise<void>;
   autoDetectRegions: (jobId: string) => Promise<AutoDetectRegionsResult>;
   saveRegions: (jobId: string, regions: Region[]) => Promise<void>;
   runPipeline: (jobId: string, options: JobExecutionOptions) => Promise<RunPipelineResult>;
   hydrateJob: (jobId: string) => Promise<Job>;
   exportHwpx: (jobId: string) => Promise<void>;
-  deleteJob: (jobId: string) => void;
+  deleteJob: (jobId: string) => Promise<void>;
   getJob: (jobId: string) => Job | null;
 }
 

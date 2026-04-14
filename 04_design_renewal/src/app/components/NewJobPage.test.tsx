@@ -381,7 +381,7 @@ describe("NewJobPage", () => {
     });
 
     await screen.findByText("sample.png");
-    expect(screen.getAllByText(/AI가 문항·보기·문항 이미지를 묶어서 찾아줍니다/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/AI가 문항·지문·수식·표·답안칸을 읽기 단위로 묶어서 찾아줍니다/i).length).toBeGreaterThan(0);
 
     expect(screen.queryByText(/1토큰/i)).not.toBeInTheDocument();
 

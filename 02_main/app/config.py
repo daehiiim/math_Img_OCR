@@ -36,6 +36,7 @@ class AppSettings:
     admin_mode_password: str | None = None
     admin_mode_session_secret: str | None = None
     admin_mode_session_ttl_minutes: int = 30
+    maintenance_job_token: str | None = None
     openai_base_url: str | None = None
     nano_banana_provider: str = DEFAULT_NANO_BANANA_PROVIDER
     nano_banana_model: str | None = None
@@ -154,6 +155,7 @@ def get_settings(root_path: Path) -> AppSettings:
         admin_mode_password=_get_setting(env_values, "ADMIN_MODE_PASSWORD"),
         admin_mode_session_secret=_get_setting(env_values, "ADMIN_MODE_SESSION_SECRET"),
         admin_mode_session_ttl_minutes=_get_admin_mode_session_ttl_minutes(env_values),
+        maintenance_job_token=_get_setting(env_values, "MAINTENANCE_JOB_TOKEN"),
         hwpx_skill_dir=_get_setting(env_values, "HWPX_SKILL_DIR"),
         hwpx_export_engine=_get_hwpx_export_engine(env_values),
         hwpforge_mcp_path=_get_setting(env_values, "HWPFORGE_MCP_PATH"),

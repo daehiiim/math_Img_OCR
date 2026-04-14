@@ -4,17 +4,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   autoDetectRegionsApiMock,
   createJobApiMock,
+  deleteJobApiMock,
   downloadHwpxApiMock,
   exportHwpxApiMock,
   getJobApiMock,
+  getJobHistoryApiMock,
   runPipelineApiMock,
   saveRegionsApiMock,
 } = vi.hoisted(() => ({
   autoDetectRegionsApiMock: vi.fn(),
   createJobApiMock: vi.fn(),
+  deleteJobApiMock: vi.fn(),
   downloadHwpxApiMock: vi.fn(),
   exportHwpxApiMock: vi.fn(),
   getJobApiMock: vi.fn(),
+  getJobHistoryApiMock: vi.fn(),
   runPipelineApiMock: vi.fn(),
   saveRegionsApiMock: vi.fn(),
 }));
@@ -22,9 +26,11 @@ const {
 vi.mock("../api/jobApi", () => ({
   autoDetectRegionsApi: autoDetectRegionsApiMock,
   createJobApi: createJobApiMock,
+  deleteJobApi: deleteJobApiMock,
   downloadHwpxApi: downloadHwpxApiMock,
   exportHwpxApi: exportHwpxApiMock,
   getJobApi: getJobApiMock,
+  getJobHistoryApi: getJobHistoryApiMock,
   runPipelineApi: runPipelineApiMock,
   saveRegionsApi: saveRegionsApiMock,
   resolveRuntimePath: (value: string | undefined) => value,
@@ -36,9 +42,11 @@ describe("useJobStore", () => {
   beforeEach(() => {
     createJobApiMock.mockReset();
     autoDetectRegionsApiMock.mockReset();
+    deleteJobApiMock.mockReset();
     downloadHwpxApiMock.mockReset();
     exportHwpxApiMock.mockReset();
     getJobApiMock.mockReset();
+    getJobHistoryApiMock.mockReset();
     runPipelineApiMock.mockReset();
     saveRegionsApiMock.mockReset();
     vi.stubGlobal("URL", {
@@ -49,6 +57,40 @@ describe("useJobStore", () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   });
 
+  it("워크스페이스 history를 서버 요약으로 채운다", async () => {
+    getJobHistoryApiMock.mockResolvedValue([
+      {
+        job_id: "job-history",
+        file_name: "history.png",
+        status: "exported",
+        created_at: "2026-04-01T00:00:00+00:00",
+        updated_at: "2026-04-01T00:12:00+00:00",
+        region_count: 2,
+        hwpx_ready: true,
+        last_error: null,
+      },
+    ]);
+
+    const { result } = renderHook(() => useJobStore());
+
+    await act(async () => {
+      await result.current.loadJobHistory();
+    });
+
+    expect(result.current.jobHistory).toEqual([
+      {
+        id: "job-history",
+        fileName: "history.png",
+        status: "exported",
+        createdAt: "2026-04-01T00:00:00+00:00",
+        updatedAt: "2026-04-01T00:12:00+00:00",
+        regionCount: 2,
+        hwpxReady: true,
+        lastError: undefined,
+      },
+    ]);
+  });
+
   it("영역 재저장 시 기존 과금 플래그를 즉시 초기화한다", async () => {
     createJobApiMock.mockResolvedValue({
       job_id: "job-1",
@@ -57,6 +99,8 @@ describe("useJobStore", () => {
       image_url: "/sample.png",
       image_width: 400,
       image_height: 300,
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:00:00+00:00",
       regions: [
         {
           id: "q1",
@@ -103,6 +147,13 @@ describe("useJobStore", () => {
     });
 
     expect(result.current.getJob(jobId)?.regions[0]?.imageCharged).toBe(true);
+    expect(result.current.jobHistory[0]).toMatchObject({
+      id: "job-1",
+      regionCount: 1,
+      hwpxReady: false,
+      createdAt: "2026-04-01T00:00:00+00:00",
+      updatedAt: "2026-04-01T00:00:00+00:00",
+    });
 
     let pendingSave: Promise<void> | null = null;
     act(() => {
@@ -146,6 +197,8 @@ describe("useJobStore", () => {
       image_url: "/sample.png",
       image_width: 400,
       image_height: 300,
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:00:00+00:00",
       regions: [],
     });
     autoDetectRegionsApiMock.mockResolvedValue({
@@ -164,6 +217,8 @@ describe("useJobStore", () => {
       image_url: "/sample.png",
       image_width: 400,
       image_height: 300,
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:10:00+00:00",
       regions: [
         {
           id: "q1",
@@ -203,6 +258,12 @@ describe("useJobStore", () => {
     expect(result.current.getJob(jobId)?.status).toBe("queued");
     expect(result.current.getJob(jobId)?.regions[0]?.selectionMode).toBe("auto_detected");
     expect(result.current.getJob(jobId)?.regions[0]?.autoDetectConfidence).toBe(0.91);
+    expect(result.current.jobHistory[0]).toMatchObject({
+      id: "job-detect",
+      status: "queued",
+      regionCount: 1,
+      updatedAt: "2026-04-01T00:10:00+00:00",
+    });
   });
 
   it("HWPX 다운로드가 끝나기 전에는 job 상태를 exported로 바꾸지 않는다", async () => {
@@ -213,6 +274,8 @@ describe("useJobStore", () => {
       image_url: "/sample.png",
       image_width: 400,
       image_height: 300,
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:00:00+00:00",
       regions: [],
     });
     exportHwpxApiMock.mockResolvedValue({ download_url: "/jobs/job-export-pending/export/hwpx/download" });
@@ -256,6 +319,11 @@ describe("useJobStore", () => {
     expect(result.current.getJob(jobId)?.status).toBe("exported");
     expect(result.current.getJob(jobId)?.hwpxPath).toBe("/jobs/job-export-pending/export/hwpx/download");
     expect(result.current.getJob(jobId)?.lastError).toBeUndefined();
+    expect(result.current.jobHistory[0]).toMatchObject({
+      id: "job-export-pending",
+      status: "exported",
+      hwpxReady: true,
+    });
   });
 
   it("HWPX 다운로드가 실패하면 이전 상태를 유지하고 에러를 기록한다", async () => {
@@ -266,6 +334,8 @@ describe("useJobStore", () => {
       image_url: "/sample.png",
       image_width: 400,
       image_height: 300,
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:00:00+00:00",
       regions: [],
     });
     exportHwpxApiMock.mockResolvedValue({ download_url: "/jobs/job-export-failed/export/hwpx/download" });
@@ -297,5 +367,47 @@ describe("useJobStore", () => {
     expect(result.current.getJob(jobId)?.status).toBe("completed");
     expect(result.current.getJob(jobId)?.hwpxPath).toBeUndefined();
     expect(result.current.getJob(jobId)?.lastError).toBe("다운로드 실패");
+    expect(result.current.jobHistory[0]).toMatchObject({
+      id: "job-export-failed",
+      status: "completed",
+      hwpxReady: false,
+      lastError: "다운로드 실패",
+    });
+  });
+
+  it("삭제 성공 시 history와 detail cache에서 함께 제거한다", async () => {
+    createJobApiMock.mockResolvedValue({
+      job_id: "job-delete",
+      status: "completed",
+      file_name: "sample.png",
+      image_url: "/sample.png",
+      image_width: 400,
+      image_height: 300,
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:00:00+00:00",
+      regions: [],
+    });
+    deleteJobApiMock.mockResolvedValue({ job_id: "job-delete", deleted: true });
+
+    const { result } = renderHook(() => useJobStore());
+    let jobId = "";
+
+    await act(async () => {
+      jobId = await result.current.createJob(
+        "sample.png",
+        "data:image/png;base64,ZmFrZQ==",
+        400,
+        300,
+        new File(["fake"], "sample.png", { type: "image/png" })
+      );
+    });
+
+    await act(async () => {
+      await result.current.deleteJob(jobId);
+    });
+
+    expect(deleteJobApiMock).toHaveBeenCalledWith("job-delete");
+    expect(result.current.getJob(jobId)).toBeNull();
+    expect(result.current.jobHistory).toEqual([]);
   });
 });

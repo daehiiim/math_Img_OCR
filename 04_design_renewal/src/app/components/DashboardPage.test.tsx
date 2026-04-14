@@ -3,6 +3,18 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const deleteJobMock = vi.fn();
+const loadJobHistoryMock = vi.fn();
+let mockJobHistory = [
+  {
+    id: "job-1",
+    fileName: "sample.png",
+    status: "exported",
+    createdAt: "2026-04-01T00:00:00+09:00",
+    updatedAt: "2026-04-01T00:10:00+09:00",
+    regionCount: 2,
+    hwpxReady: true,
+  },
+];
 
 let mockUser = {
   credits: 7,
@@ -18,7 +30,8 @@ vi.mock("../context/AuthContext", () => ({
 
 vi.mock("../context/JobContext", () => ({
   useJobs: () => ({
-    jobs: [],
+    jobHistory: mockJobHistory,
+    loadJobHistory: loadJobHistoryMock,
     deleteJob: deleteJobMock,
   }),
 }));
@@ -28,11 +41,23 @@ import { DashboardPage } from "./DashboardPage";
 describe("DashboardPage", () => {
   beforeEach(() => {
     deleteJobMock.mockClear();
+    loadJobHistoryMock.mockClear();
     mockUser = {
       credits: 7,
       usedCredits: 11,
       openAiConnected: true,
     };
+    mockJobHistory = [
+      {
+        id: "job-1",
+        fileName: "sample.png",
+        status: "exported",
+        createdAt: "2026-04-01T00:00:00+09:00",
+        updatedAt: "2026-04-01T00:10:00+09:00",
+        regionCount: 2,
+        hwpxReady: true,
+      },
+    ];
   });
 
   it("OpenAI 연결 계정에도 실제 남은 이미지와 충전 CTA를 표시한다", () => {
@@ -65,5 +90,41 @@ describe("DashboardPage", () => {
 
     expect(screen.getByText("작업 대시보드").closest(".liquid-workspace-page")).toHaveClass("liquid-workspace-page");
     expect(screen.getByRole("button", { name: "새 작업" })).toBeInTheDocument();
+  });
+
+  it("렌더링 시 서버 history를 불러오고 카드에 핵심 메타데이터를 보여준다", () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+
+    expect(loadJobHistoryMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("sample.png")).toBeInTheDocument();
+    expect(screen.getByText("2개 영역")).toBeInTheDocument();
+    expect(screen.getByText("HWPX 준비됨")).toBeInTheDocument();
+    expect(screen.getByText(/4월 1일/)).toBeInTheDocument();
+  });
+
+  it("실행 중 작업의 삭제 버튼은 비활성화한다", () => {
+    mockJobHistory = [
+      {
+        id: "job-running",
+        fileName: "running.png",
+        status: "running",
+        createdAt: "2026-04-01T00:00:00+09:00",
+        updatedAt: "2026-04-01T00:10:00+09:00",
+        regionCount: 1,
+        hwpxReady: false,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("button", { name: "running.png 작업 삭제" })).toBeDisabled();
   });
 });

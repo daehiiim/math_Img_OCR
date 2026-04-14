@@ -62,6 +62,7 @@ docker compose up --build
 - 백엔드 CORS는 `CORS_ALLOW_ORIGINS`가 없으면 `APP_URL` 1개만 허용합니다. 운영 경로에서는 localhost OAuth/CORS 기본 허용을 사용하지 않습니다.
 - Cloud Run 배포는 루트 `Dockerfile` 기준으로 수행하고, 컨테이너는 `${PORT:-8000}` 규칙을 따라야 합니다.
 - Cloud Run 운영 환경에는 `POLAR_SERVER=production`, live `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_*` 3개를 반드시 같이 설정합니다.
+- 작업 history 자동 정리를 쓰려면 Cloud Run 운영 환경에 `MAINTENANCE_JOB_TOKEN`을 반드시 설정하고, Cloud Scheduler가 `POST /internal/maintenance/purge-stale-jobs` 를 같은 토큰 헤더로 호출해야 합니다.
 - Polar production 상품 3개는 모두 `one-time`, `KRW` 고정 가격이어야 하며 metadata 키 `plan_id`, `credits`를 유지해야 합니다.
 - 비밀값 회전 순서는 `새 비밀값 등록 -> Cloud Run 재배포 -> 운영 검증 -> 구 비밀값 폐기` 순서를 유지합니다.
 - 세부 운영 순서와 검증 체크리스트는 `02_main/docs/cloud_run_supabase_free_runbook_ko.md`를 기준으로 관리합니다.

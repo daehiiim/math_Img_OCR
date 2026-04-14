@@ -7,10 +7,10 @@ export const AUTO_FULL_LOW_CONFIDENCE_MESSAGE =
   "자동 전체 인식 결과의 신뢰도가 낮을 수 있습니다. 직접 영역을 지정하면 더 정확할 수 있습니다.";
 
 export const AUTO_DETECT_GUIDE_MESSAGE =
-  "영역을 직접 그리지 않아도 AI가 문항·보기·문항 이미지를 묶어서 찾아줍니다. 실행 전 박스를 확인하고 필요하면 수정하세요.";
+  "영역을 직접 그리지 않아도 AI가 문항·지문·수식·표·답안칸을 읽기 단위로 묶어서 찾아줍니다. 실행 전 박스를 확인하고 필요하면 수정하세요.";
 
 export const AUTO_DETECT_LOW_CONFIDENCE_MESSAGE =
-  "AI가 문항을 찾았지만 경계 신뢰도가 낮습니다. 실행 전에 박스를 확인해 주세요.";
+  "AI가 문항을 찾았지만 경계 신뢰도가 낮거나 애매한 영역이 있습니다. 실행 전에 박스를 확인해 주세요.";
 
 /** 현재 편집 상태가 수동/자동 분할/자동 전체 중 어느 쪽인지 계산한다. */
 export function getSelectionMode(regions: Region[]): SelectionMode {

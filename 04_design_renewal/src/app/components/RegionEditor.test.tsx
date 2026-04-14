@@ -152,4 +152,39 @@ describe("RegionEditor", () => {
 
     expect(screen.queryByRole("button", { name: /q2 영역 삭제/i })).not.toBeInTheDocument();
   });
+
+  it("고위험 자동 감지 영역은 검토 필요 라벨과 큰 조절 핸들을 보여준다", () => {
+    render(
+      <RegionEditor
+        imageUrl="https://signed.example/source.png"
+        imageWidth={400}
+        imageHeight={300}
+        regions={[
+          {
+            id: "q1",
+            polygon: [
+              [40, 40],
+              [180, 40],
+              [180, 180],
+              [40, 180],
+            ],
+            type: "mixed",
+            order: 1,
+            selectionMode: "auto_detected",
+            inputDevice: "system",
+            warningLevel: "high_risk",
+            autoDetectConfidence: 0.41,
+          },
+        ]}
+        onSaveRegions={vi.fn(async () => undefined)}
+      />
+    );
+
+    expect(screen.getAllByText(/검토 필요/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/AI q1/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /q1 nw 크기 조절/i })).toHaveStyle({
+      width: "20px",
+      height: "20px",
+    });
+  });
 });

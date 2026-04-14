@@ -114,6 +114,8 @@ def test_get_job_returns_signed_asset_urls_and_region_context(monkeypatch):
     assert payload["file_name"] == "region-sample.png"
     assert payload["image_width"] == 32
     assert payload["image_height"] == 24
+    assert payload["created_at"] == job.created_at
+    assert payload["updated_at"] == job.updated_at
     assert payload["image_url"].startswith("https://signed.example/")
     assert payload["regions"][0]["type"] == "diagram"
     assert payload["regions"][0]["order"] == 2
