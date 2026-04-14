@@ -6,16 +6,16 @@ import {
   type JobHistoryItem,
   type Region,
 } from "../store/jobStore";
-import type { AutoDetectRegionsResult, RunPipelineResult } from "../api/jobApi";
+import type { JobTaskAcceptedResult } from "../api/jobApi";
 
 interface JobContextType {
   jobs: Job[];
   jobHistory: JobHistoryItem[];
   createJob: (fileName: string, imageUrl: string, width: number, height: number, imageFile: File) => Promise<string>;
   loadJobHistory: () => Promise<void>;
-  autoDetectRegions: (jobId: string) => Promise<AutoDetectRegionsResult>;
+  autoDetectRegions: (jobId: string) => Promise<JobTaskAcceptedResult>;
   saveRegions: (jobId: string, regions: Region[]) => Promise<void>;
-  runPipeline: (jobId: string, options: JobExecutionOptions) => Promise<RunPipelineResult>;
+  runPipeline: (jobId: string, options: JobExecutionOptions) => Promise<JobTaskAcceptedResult>;
   hydrateJob: (jobId: string) => Promise<Job>;
   exportHwpx: (jobId: string) => Promise<void>;
   deleteJob: (jobId: string) => Promise<void>;

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -25,7 +26,15 @@ from app.pipeline.schema import (
 )
 from app.supabase import SupabaseClient, SupabaseConfig
 
-PipelineUserContext = AuthenticatedUser
+
+@dataclass(frozen=True)
+class ServiceRolePipelineUser:
+    """service-role worker가 사용할 내부 사용자 컨텍스트다."""
+
+    user_id: str
+
+
+PipelineUserContext = AuthenticatedUser | ServiceRolePipelineUser
 _REGION_BASE_SELECT_COLUMNS = (
     "region_key",
     "polygon",
@@ -147,10 +156,26 @@ class SupabasePipelineRepository:
             anon_key=settings.auth.supabase_anon_key,
             storage_bucket=settings.auth.supabase_storage_bucket or "ocr-assets",
         )
+        self._service_role_key = settings.auth.supabase_service_role_key
 
     def _client(self, user: PipelineUserContext) -> SupabaseClient:
-        """사용자 JWT가 포함된 Supabase 클라이언트를 만든다."""
+        """사용자 또는 worker 권한에 맞는 Supabase 클라이언트를 만든다."""
+        if isinstance(user, ServiceRolePipelineUser):
+            if not self._service_role_key:
+                raise ValueError("SUPABASE_SERVICE_ROLE_KEY is required for pipeline worker")
+            return SupabaseClient(
+                self._config,
+                access_token=self._service_role_key,
+                api_key=self._service_role_key,
+            )
         return SupabaseClient(self._config, user.access_token)
+
+    def _build_job_filters(self, user: PipelineUserContext, job_id: str) -> dict[str, str]:
+        """worker 경로에서는 user_id까지 포함한 job 필터를 만든다."""
+        filters = {"id": f"eq.{job_id}"}
+        if isinstance(user, ServiceRolePipelineUser):
+            filters["user_id"] = f"eq.{user.user_id}"
+        return filters
 
     def _map_region_row(self, row: dict) -> RegionPipelineContext:
         """영역 row를 파이프라인 컨텍스트로 변환한다."""
@@ -377,7 +402,7 @@ class SupabasePipelineRepository:
             "ocr_jobs",
             params={
                 "select": "id,file_name,source_image_path,image_width,image_height,processing_type,status,last_error,hwpx_export_path,created_at,updated_at",
-                "id": f"eq.{job_id}",
+                **self._build_job_filters(user, job_id),
             },
         )
         if not job_rows:
@@ -408,7 +433,7 @@ class SupabasePipelineRepository:
         client = self._client(user)
         client.update(
             "ocr_jobs",
-            filters={"id": f"eq.{job.job_id}"},
+            filters=self._build_job_filters(user, job.job_id),
             payload={
                 "file_name": job.file_name,
                 "source_image_path": job.image_url,
@@ -472,3 +497,8 @@ class SupabasePipelineRepository:
 def build_repository_from_settings(root_path: Path) -> PipelineRepository:
     """환경설정에 맞는 기본 저장소 구현체를 반환한다."""
     return SupabasePipelineRepository(root_path)
+
+
+def build_service_role_pipeline_user(user_id: str) -> ServiceRolePipelineUser:
+    """worker가 사용할 service-role 사용자 컨텍스트를 만든다."""
+    return ServiceRolePipelineUser(user_id=user_id)

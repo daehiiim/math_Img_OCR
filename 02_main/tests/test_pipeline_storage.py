@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import app.pipeline.repository as repository_module
 import app.schema_compat as schema_compat_module
+from app.auth import AuthenticatedUser
 from app.pipeline import orchestrator
 from app.pipeline.region_refiner import RefinedAutoDetectResult, RefinedRegionCandidate
 from app.pipeline.repository import PipelineRepository, PipelineUserContext
@@ -132,7 +133,7 @@ def install_memory_repository(monkeypatch) -> MemoryPipelineRepository:
 
 
 def make_user() -> PipelineUserContext:
-    return PipelineUserContext(user_id="user-123", access_token="token-123")
+    return AuthenticatedUser(user_id="user-123", access_token="token-123")
 
 
 def test_create_job_persists_source_asset_via_repository(monkeypatch):

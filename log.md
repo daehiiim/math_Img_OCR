@@ -1170,3 +1170,28 @@
   - 이번 변경은 프런트 정적 배포만으로 끝나지 않는다.
   - 운영 반영 전 Supabase에 [`2026-04-14_job_history_retention_indexes.sql`](/D:/03_PROJECT/05_mathOCR/02_main/schemas/2026-04-14_job_history_retention_indexes.sql) 을 적용해야 한다.
   - Cloud Run 운영 환경에 `MAINTENANCE_JOB_TOKEN` 을 추가하고 재배포해야 하며, Google Cloud Scheduler에 `04:10 Asia/Seoul` POST job을 새로 설정해야 한다.
+
+## 2026-04-14 18:04 KST
+
+- 요청: Vercel `ROUTER_EXTERNAL_TARGET_ERROR` 재발을 막기 위해 `POST /jobs/{job_id}/run`, `POST /jobs/{job_id}/regions/auto-detect` 를 Cloud Tasks 기반 비동기 큐 + 프런트 polling 구조로 전환했다.
+- 아키텍처 결정:
+  - 공개 API는 장시간 OCR/자동 분할을 동기 응답으로 처리하지 않고, job 상태를 `running` 으로 저장한 뒤 Cloud Tasks enqueue `202` 응답만 반환한다.
+  - 실제 실행은 신규 internal worker [`POST /internal/jobs/run-task`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py) 가 맡고, Cloud Tasks OIDC 서비스 계정 검증은 [`job_tasks.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/job_tasks.py) 로 분리했다.
+  - worker 저장 경로는 사용자 JWT 대신 service-role 전용 pipeline/billing 메서드를 사용해 job, region, profile, credit ledger를 안전하게 읽고 쓴다.
+- 비즈니스 로직:
+  - `run` enqueue 시 선택 액션과 크레딧만 사전 검증하고, 실제 후차감은 worker 완료 뒤 `executed_actions` 기준으로 1회만 수행한다.
+  - `auto-detect` enqueue 시 job을 `running` 으로 두고, worker 성공 시 `queued` 로 되돌려 사용자가 영역을 검토한 뒤 다시 실행할 수 있게 유지한다.
+  - worker 예외는 Cloud Tasks 재시도 폭주를 막기 위해 `job.status=failed`, `last_error=<사용자 메시지>` 로 저장한 뒤 `200` 으로 종료한다.
+- 처리:
+  - 백엔드 [`config.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/config.py), [`job_tasks.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/job_tasks.py), [`main.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/main.py), [`billing.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/billing.py), [`pipeline/repository.py`](/D:/03_PROJECT/05_mathOCR/02_main/app/pipeline/repository.py) 를 갱신했다.
+  - 프런트 [`jobApi.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/api/jobApi.ts), [`jobStore.ts`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/store/jobStore.ts), [`JobDetailPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/JobDetailPage.tsx), [`NewJobPage.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/components/NewJobPage.tsx), [`JobContext.tsx`](/D:/03_PROJECT/05_mathOCR/04_design_renewal/src/app/context/JobContext.tsx) 를 enqueue + polling 계약으로 변경했다.
+  - 운영 문서와 설정 예시 [`README.md`](/D:/03_PROJECT/05_mathOCR/README.md), [`02_main/README.md`](/D:/03_PROJECT/05_mathOCR/02_main/README.md), [`02_main/.env.example`](/D:/03_PROJECT/05_mathOCR/02_main/.env.example), [`cloud_run_supabase_free_runbook_ko.md`](/D:/03_PROJECT/05_mathOCR/02_main/docs/cloud_run_supabase_free_runbook_ko.md), [`error_patterns.md`](/D:/03_PROJECT/05_mathOCR/error_patterns.md) 를 Cloud Tasks/IAM 기준으로 갱신했다.
+- 검증:
+  - `py -3 -m pytest 02_main/tests/test_config.py 02_main/tests/test_job_task_queue_api.py -q` 기준 `12 passed`.
+  - `py -3 -m pytest 02_main/tests/test_billing.py 02_main/tests/test_job_response_fields.py 02_main/tests/test_pipeline_storage.py -q` 기준 `82 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run test:run -- src/app/api/jobApi.test.ts src/app/store/jobStore.test.tsx src/app/components/JobDetailPage.test.tsx src/app/components/NewJobPage.test.tsx` 기준 `37 passed`.
+  - `cd D:\03_PROJECT\05_mathOCR\04_design_renewal && npm.cmd run build` 성공. chunk size warning은 기존 이슈로 유지됐다.
+- 배포 영향:
+  - 이번 변경은 백엔드/프런트 수정만으로 끝나지 않는다.
+  - Cloud Run 운영 환경에 `GCP_PROJECT_ID`, `GCP_REGION`, `PIPELINE_TASK_QUEUE`, `PIPELINE_TASK_CALLER_SERVICE_ACCOUNT`, `CLOUD_RUN_SERVICE_URL` 을 추가해야 한다.
+  - Cloud Tasks queue 생성, Cloud Run 런타임 서비스 계정 enqueue IAM, worker caller 서비스 계정 invoke IAM, Cloud Run 재배포, Vercel same-origin QA가 필수다.

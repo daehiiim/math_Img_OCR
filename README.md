@@ -58,10 +58,13 @@ docker compose up --build
 - Vercel 프런트 프로젝트의 Root Directory 는 `04_design_renewal` 로 고정합니다.
 - Vercel production 환경에는 `APP_URL=https://mathtohwp.vercel.app` 를 반드시 설정하고, Google/Supabase 로그인 복귀 URL과 결제 복귀 URL은 이 값을 기준으로 생성합니다.
 - Vercel 운영 프런트는 `/jobs`, `/billing` same-origin 경로를 호출하고 `04_design_renewal/vercel.json` 이 Cloud Run 으로 프록시합니다.
+- `POST /jobs/{job_id}/run`, `POST /jobs/{job_id}/regions/auto-detect` 는 장시간 작업을 동기 처리하지 않고 `202 Accepted` enqueue 응답만 반환합니다. 최종 완료/실패는 `GET /jobs/{job_id}` polling 상태로 확인합니다.
 - Vercel production 환경에서는 `VITE_API_BASE_URL` 을 기본값으로 두지 않습니다. 로컬 개발에서만 `http://localhost:8000` 를 사용합니다.
 - 백엔드 CORS는 `CORS_ALLOW_ORIGINS`가 없으면 `APP_URL` 1개만 허용합니다. 운영 경로에서는 localhost OAuth/CORS 기본 허용을 사용하지 않습니다.
 - Cloud Run 배포는 루트 `Dockerfile` 기준으로 수행하고, 컨테이너는 `${PORT:-8000}` 규칙을 따라야 합니다.
 - Cloud Run 운영 환경에는 `POLAR_SERVER=production`, live `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_*` 3개를 반드시 같이 설정합니다.
+- 비동기 worker를 쓰려면 Cloud Run 운영 환경에 `GCP_PROJECT_ID`, `GCP_REGION`, `PIPELINE_TASK_QUEUE`, `PIPELINE_TASK_CALLER_SERVICE_ACCOUNT`, `CLOUD_RUN_SERVICE_URL` 을 반드시 같이 설정해야 합니다.
+- Cloud Run 서비스 계정에는 Cloud Tasks enqueue 권한이 있어야 하고, `PIPELINE_TASK_CALLER_SERVICE_ACCOUNT` 에는 `POST /internal/jobs/run-task` OIDC 호출 권한이 있어야 합니다.
 - 작업 history 자동 정리를 쓰려면 Cloud Run 운영 환경에 `MAINTENANCE_JOB_TOKEN`을 반드시 설정하고, Cloud Scheduler가 `POST /internal/maintenance/purge-stale-jobs` 를 같은 토큰 헤더로 호출해야 합니다.
 - Polar production 상품 3개는 모두 `one-time`, `KRW` 고정 가격이어야 하며 metadata 키 `plan_id`, `credits`를 유지해야 합니다.
 - 비밀값 회전 순서는 `새 비밀값 등록 -> Cloud Run 재배포 -> 운영 검증 -> 구 비밀값 폐기` 순서를 유지합니다.

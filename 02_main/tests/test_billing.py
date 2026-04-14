@@ -3,6 +3,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic_core import PydanticUndefined
@@ -538,6 +539,42 @@ def make_service():
         openai_key_encryption_secret="encryption-secret",
     )
     return service, store, gateway
+
+
+def make_enqueue_job(
+    *,
+    job_id: str = "job-123",
+    status: str = "queued",
+    last_error: str | None = "기존 오류",
+) -> main_module.pipeline.JobPipelineContext:
+    """비동기 큐 API 테스트에 쓸 최소 job 컨텍스트를 만든다."""
+    return main_module.pipeline.JobPipelineContext(
+        job_id=job_id,
+        file_name="sample.png",
+        image_url=f"user-123/{job_id}/input/sample.png",
+        image_width=120,
+        image_height=160,
+        processing_type="service_api",
+        status=status,
+        created_at="2026-04-13T00:00:00+00:00",
+        updated_at="2026-04-13T00:00:00+00:00",
+        last_error=last_error,
+        regions=[
+            main_module.pipeline.RegionPipelineContext(
+                context=main_module.pipeline.RegionContext(
+                    id="q1",
+                    polygon=[[0, 0], [10, 0], [10, 10], [0, 10]],
+                    type="mixed",
+                    order=1,
+                    selection_mode="auto_detected",
+                    input_device="system",
+                    warning_level="normal",
+                    auto_detect_confidence=0.91,
+                ),
+                status="pending",
+            )
+        ],
+    )
 
 
 def test_create_checkout_uses_product_metadata():
@@ -1421,9 +1458,10 @@ def test_auto_detect_regions_uses_one_time_job_credit_methods(monkeypatch):
     user = make_user()
     app.dependency_overrides[require_authenticated_user] = lambda: user
     recorded_calls: dict[str, dict] = {}
+    save_calls: list[tuple[str, str | None]] = []
 
     class StubBillingService:
-        """자동 분할 API가 job 단위 1회 과금 메서드를 호출하는지 기록한다."""
+        """자동 분할 enqueue가 선검증만 호출하는지 기록한다."""
 
         def resolve_openai_api_key(self, current_user: AuthenticatedUser):
             assert current_user.user_id == user.user_id
@@ -1439,55 +1477,17 @@ def test_auto_detect_regions_uses_one_time_job_credit_methods(monkeypatch):
         def ensure_job_auto_detect_credits_available(self, current_user: AuthenticatedUser, job_id: str) -> dict:
             recorded_calls["ensure"] = {"user_id": current_user.user_id, "job_id": job_id}
             return {"required_credits": 1, "credits_balance": 5}
-
-        def consume_job_auto_detect_credits(self, current_user: AuthenticatedUser, job_id: str) -> dict:
-            recorded_calls["consume"] = {"user_id": current_user.user_id, "job_id": job_id}
-            return {"charged": True, "charged_count": 1, "credits_balance": 4}
-
-    def fake_auto_detect_regions(*args, **kwargs):
-        assert kwargs["api_key"] == "sk-service-1234567890"
-        return {
-            "detected_count": 2,
-            "review_required": True,
-            "detector_model": "gpt-test",
-            "detection_version": "openai_five_choice_v1",
-        }
-
-    def fake_read_job(current_user: AuthenticatedUser, job_id: str):
-        return main_module.pipeline.JobPipelineContext(
-            job_id=job_id,
-            file_name="sample.png",
-            image_url="user-123/job-123/input/sample.png",
-            image_width=120,
-            image_height=160,
-            processing_type="service_api",
-            status="queued",
-            created_at="2026-04-13T00:00:00+00:00",
-            updated_at="2026-04-13T00:00:00+00:00",
-            regions=[
-                main_module.pipeline.RegionPipelineContext(
-                    context=main_module.pipeline.RegionContext(
-                        id="q1",
-                        polygon=[[0, 0], [10, 0], [10, 10], [0, 10]],
-                        type="mixed",
-                        order=1,
-                        selection_mode="auto_detected",
-                        input_device="system",
-                        warning_level="normal",
-                        auto_detect_confidence=0.91,
-                    ),
-                    status="pending",
-                )
-            ],
-        )
+    class StubJobTaskService:
+        def enqueue_task(self, payload):
+            return main_module.JobTaskAcceptedResponse(job_id=payload.job_id, operation=payload.operation)
 
     monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
-    monkeypatch.setattr(main_module.pipeline, "auto_detect_regions", fake_auto_detect_regions)
-    monkeypatch.setattr(main_module.pipeline, "read_job", fake_read_job)
+    monkeypatch.setattr(main_module, "_get_job_task_service", lambda: StubJobTaskService())
+    monkeypatch.setattr(main_module.pipeline, "read_job", lambda current_user, job_id: make_enqueue_job(job_id=job_id))
     monkeypatch.setattr(
         main_module.pipeline,
-        "create_asset_url",
-        lambda current_user, storage_path, expires_in=3600: f"https://signed.example/{storage_path}",
+        "save_job",
+        lambda current_user, next_job: save_calls.append((next_job.status, next_job.last_error)),
     )
 
     client = TestClient(app, raise_server_exceptions=False)
@@ -1495,13 +1495,15 @@ def test_auto_detect_regions_uses_one_time_job_credit_methods(monkeypatch):
 
     app.dependency_overrides.clear()
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert recorded_calls["ensure"] == {"user_id": "user-123", "job_id": "job-123"}
-    assert recorded_calls["consume"] == {"user_id": "user-123", "job_id": "job-123"}
-    assert response.json()["detected_count"] == 2
-    assert response.json()["charged_count"] == 1
-    assert response.json()["regions"][0]["selection_mode"] == "auto_detected"
-    assert response.json()["regions"][0]["auto_detect_confidence"] == 0.91
+    assert response.json() == {
+        "job_id": "job-123",
+        "status": "running",
+        "accepted": True,
+        "operation": "auto_detect",
+    }
+    assert save_calls == [("running", None)]
 
 
 def test_auto_detect_regions_returns_specific_schema_mismatch_detail(monkeypatch):
@@ -1532,6 +1534,7 @@ def test_auto_detect_regions_returns_specific_schema_mismatch_detail(monkeypatch
             raise SupabaseApiError('column auto_detect_charged does not exist in relation "ocr_jobs"')
 
     monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "read_job", lambda current_user, job_id: make_enqueue_job(job_id=job_id))
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post("/jobs/job-123/regions/auto-detect")
@@ -1549,9 +1552,10 @@ def test_run_pipeline_uses_action_credit_methods(monkeypatch):
     user = make_user()
     app.dependency_overrides[require_authenticated_user] = lambda: user
     recorded_calls: dict[str, dict] = {}
+    save_calls: list[tuple[str, str | None]] = []
 
     class StubBillingService:
-        """run API가 액션 기반 과금 메서드를 호출하는지 기록한다."""
+        """run enqueue가 액션 기반 선검증만 호출하는지 기록한다."""
 
         def resolve_openai_api_key(self, current_user: AuthenticatedUser):
             """서비스 API 모드의 OpenAI key 해석 결과를 돌려준다."""
@@ -1581,40 +1585,18 @@ def test_run_pipeline_uses_action_credit_methods(monkeypatch):
                 "processing_type": processing_type,
             }
             return {"required_credits": len(actions), "credits_balance": 5}
-
-        def consume_job_action_credits(
-            self,
-            current_user: AuthenticatedUser,
-            job_id: str,
-            actions: list[str],
-            *,
-            processing_type: str,
-        ) -> dict:
-            """실행 후 액션 기반 후차감 호출을 기록한다."""
-            recorded_calls["consume"] = {
-                "user_id": current_user.user_id,
-                "job_id": job_id,
-                "actions": actions,
-                "processing_type": processing_type,
-            }
-            return {"charged_actions": actions, "credits_balance": 3}
-
-    def fake_run_pipeline(*args, **kwargs):
-        """파이프라인 실행 결과를 최소 응답 형식으로 대체한다."""
-        assert kwargs["do_ocr"] is True
-        assert kwargs["do_image_stylize"] is True
-        assert kwargs["do_explanation"] is False
-        return {
-            "job_id": args[1],
-            "status": "completed",
-            "executed_actions": ["ocr", "image_stylize"],
-            "completed_count": 1,
-            "failed_count": 0,
-            "exportable_count": 1,
-        }
+    class StubJobTaskService:
+        def enqueue_task(self, payload):
+            return main_module.JobTaskAcceptedResponse(job_id=payload.job_id, operation=payload.operation)
 
     monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
-    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+    monkeypatch.setattr(main_module, "_get_job_task_service", lambda: StubJobTaskService())
+    monkeypatch.setattr(main_module.pipeline, "read_job", lambda current_user, job_id: make_enqueue_job(job_id=job_id))
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "save_job",
+        lambda current_user, next_job: save_calls.append((next_job.status, next_job.last_error)),
+    )
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post(
@@ -1628,20 +1610,20 @@ def test_run_pipeline_uses_action_credit_methods(monkeypatch):
 
     app.dependency_overrides.clear()
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert recorded_calls["ensure"] == {
         "user_id": "user-123",
         "job_id": "job-123",
         "actions": ["ocr", "image_stylize"],
         "processing_type": "service_api",
     }
-    assert recorded_calls["consume"] == {
-        "user_id": "user-123",
+    assert response.json() == {
         "job_id": "job-123",
-        "actions": ["ocr", "image_stylize"],
-        "processing_type": "service_api",
+        "status": "running",
+        "accepted": True,
+        "operation": "run",
     }
-    assert response.json()["charged_count"] == 2
+    assert save_calls == [("running", None)]
 
 
 def test_run_pipeline_returns_schema_mismatch_detail_for_supabase_error(monkeypatch):
@@ -1675,6 +1657,7 @@ def test_run_pipeline_returns_schema_mismatch_detail_for_supabase_error(monkeypa
             raise SupabaseApiError('column ocr_charged does not exist in relation "ocr_job_regions"')
 
     monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "read_job", lambda current_user, job_id: make_enqueue_job(job_id=job_id))
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post(
@@ -1696,56 +1679,11 @@ def test_run_pipeline_returns_storage_failure_detail_for_supabase_error(monkeypa
     user = make_user()
     app.dependency_overrides[require_authenticated_user] = lambda: user
 
-    class StubBillingService:
-        """후차감 단계의 Supabase 연결 실패를 재현한다."""
-
-        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
-            """서비스 API 모드의 OpenAI key를 반환한다."""
-            assert current_user.user_id == user.user_id
-            return type(
-                "ResolvedKey",
-                (),
-                {
-                    "api_key": "sk-service-1234567890",
-                    "processing_type": "service_api",
-                },
-            )()
-
-        def ensure_job_action_credits_available(
-            self,
-            current_user: AuthenticatedUser,
-            job_id: str,
-            actions: list[str],
-            *,
-            processing_type: str,
-        ) -> dict:
-            """선차감 검증은 정상 응답으로 둔다."""
-            return {"required_credits": 2, "credits_balance": 5}
-
-        def consume_job_action_credits(
-            self,
-            current_user: AuthenticatedUser,
-            job_id: str,
-            actions: list[str],
-            *,
-            processing_type: str,
-        ) -> dict:
-            """후차감 시 저장소 장애를 재현한다."""
-            raise SupabaseApiError("temporary storage timeout")
-
-    def fake_run_pipeline(*args, **kwargs):
-        """파이프라인 실행 자체는 성공으로 둔다."""
-        return {
-            "job_id": args[1],
-            "status": "completed",
-            "executed_actions": ["ocr", "image_stylize"],
-            "completed_count": 1,
-            "failed_count": 0,
-            "exportable_count": 1,
-        }
-
-    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
-    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "read_job",
+        lambda current_user, job_id: (_ for _ in ()).throw(SupabaseApiError("temporary storage timeout")),
+    )
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post(
@@ -1764,147 +1702,117 @@ def test_run_pipeline_returns_storage_failure_detail_for_supabase_error(monkeypa
 
 
 def test_run_pipeline_returns_billing_persistence_detail_for_rls_error(monkeypatch):
-    user = make_user()
-    app.dependency_overrides[require_authenticated_user] = lambda: user
+    save_calls: list[tuple[str, str | None]] = []
 
     class StubBillingService:
-        """후차감 단계의 billing RLS 오류를 재현한다."""
+        """worker 후차감 단계의 billing RLS 오류를 재현한다."""
 
-        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
-            """서비스 API 모드의 OpenAI key를 반환한다."""
-            assert current_user.user_id == user.user_id
-            return type(
-                "ResolvedKey",
-                (),
-                {
-                    "api_key": "sk-service-1234567890",
-                    "processing_type": "service_api",
-                },
-            )()
+        def resolve_openai_api_key_by_user_id(self, user_id: str):
+            return SimpleNamespace(api_key="sk-service-1234567890", processing_type="service_api")
 
-        def ensure_job_action_credits_available(
-            self,
-            current_user: AuthenticatedUser,
-            job_id: str,
-            actions: list[str],
-            *,
-            processing_type: str,
-        ) -> dict:
-            """선차감 검증은 정상 응답으로 둔다."""
-            return {"required_credits": 2, "credits_balance": 5}
-
-        def consume_job_action_credits(
-            self,
-            current_user: AuthenticatedUser,
-            job_id: str,
-            actions: list[str],
-            *,
-            processing_type: str,
-        ) -> dict:
-            """후차감 시 billing persistence 오류를 재현한다."""
+        def consume_job_action_credits_by_user_id(self, user_id: str, job_id: str, actions: list[str], *, processing_type: str) -> dict:
             raise SupabaseApiError(
                 '{"code":"42501","details":null,"hint":null,"message":"new row violates row-level security policy for table \\"credit_ledger\\""}'
             )
 
-    def fake_run_pipeline(*args, **kwargs):
-        """파이프라인 실행 자체는 성공으로 둔다."""
-        return {
-            "job_id": args[1],
+    class StubJobTaskService:
+        def verify_internal_request(self, authorization):
+            return {"email": "queue-caller@example.com"}
+
+    monkeypatch.setattr(main_module, "_get_job_task_service", lambda: StubJobTaskService())
+    monkeypatch.setattr(main_module, "build_billing_service", lambda *args, **kwargs: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "build_service_role_pipeline_user", lambda user_id: SimpleNamespace(user_id=user_id))
+    monkeypatch.setattr(main_module.pipeline, "read_job", lambda current_user, job_id: make_enqueue_job(job_id=job_id, status="running", last_error=None))
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "save_job",
+        lambda current_user, next_job: save_calls.append((next_job.status, next_job.last_error)),
+    )
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "run_pipeline",
+        lambda current_user, job_id, **kwargs: {
+            "job_id": job_id,
             "status": "completed",
             "executed_actions": ["ocr", "image_stylize"],
             "completed_count": 1,
             "failed_count": 0,
             "exportable_count": 1,
-        }
-
-    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
-    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+        },
+    )
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post(
-        "/jobs/job-123/run",
+        "/internal/jobs/run-task",
+        headers={"Authorization": "Bearer internal-token"},
         json={
+            "job_id": "job-123",
+            "user_id": "user-123",
+            "operation": "run",
             "do_ocr": True,
             "do_image_stylize": True,
             "do_explanation": False,
         },
     )
-
-    app.dependency_overrides.clear()
-
-    assert response.status_code == 500
+    assert response.status_code == 200
     assert response.json()["detail"] == "서버 과금 기록 저장에 실패했습니다. 잠시 후 다시 시도하세요."
+    assert save_calls == [("failed", "서버 과금 기록 저장에 실패했습니다. 잠시 후 다시 시도하세요.")]
 
 
 def test_run_pipeline_returns_billing_config_detail_for_missing_service_role(monkeypatch):
-    user = make_user()
-    app.dependency_overrides[require_authenticated_user] = lambda: user
+    save_calls: list[tuple[str, str | None]] = []
 
     class StubBillingService:
-        """후차감 단계의 service role 설정 누락을 재현한다."""
+        """worker 후차감 service-role 누락을 재현한다."""
 
-        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
-            """서비스 API 모드의 OpenAI key를 반환한다."""
-            assert current_user.user_id == user.user_id
-            return type(
-                "ResolvedKey",
-                (),
-                {
-                    "api_key": "sk-service-1234567890",
-                    "processing_type": "service_api",
-                },
-            )()
+        def resolve_openai_api_key_by_user_id(self, user_id: str):
+            return SimpleNamespace(api_key="sk-service-1234567890", processing_type="service_api")
 
-        def ensure_job_action_credits_available(
-            self,
-            current_user: AuthenticatedUser,
-            job_id: str,
-            actions: list[str],
-            *,
-            processing_type: str,
-        ) -> dict:
-            """선차감 검증은 정상 응답으로 둔다."""
-            return {"required_credits": 2, "credits_balance": 5}
-
-        def consume_job_action_credits(
-            self,
-            current_user: AuthenticatedUser,
-            job_id: str,
-            actions: list[str],
-            *,
-            processing_type: str,
-        ) -> dict:
-            """service role 누락 설정 오류를 재현한다."""
+        def consume_job_action_credits_by_user_id(self, user_id: str, job_id: str, actions: list[str], *, processing_type: str) -> dict:
             raise ValueError("SUPABASE_SERVICE_ROLE_KEY is required for billing writes")
 
-    def fake_run_pipeline(*args, **kwargs):
-        """파이프라인 실행 자체는 성공으로 둔다."""
-        return {
-            "job_id": args[1],
+    class StubJobTaskService:
+        def verify_internal_request(self, authorization):
+            return {"email": "queue-caller@example.com"}
+
+    monkeypatch.setattr(main_module, "_get_job_task_service", lambda: StubJobTaskService())
+    monkeypatch.setattr(main_module, "build_billing_service", lambda *args, **kwargs: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "build_service_role_pipeline_user", lambda user_id: SimpleNamespace(user_id=user_id))
+    monkeypatch.setattr(main_module.pipeline, "read_job", lambda current_user, job_id: make_enqueue_job(job_id=job_id, status="running", last_error=None))
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "save_job",
+        lambda current_user, next_job: save_calls.append((next_job.status, next_job.last_error)),
+    )
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "run_pipeline",
+        lambda current_user, job_id, **kwargs: {
+            "job_id": job_id,
             "status": "completed",
             "executed_actions": ["ocr", "image_stylize"],
             "completed_count": 1,
             "failed_count": 0,
             "exportable_count": 1,
-        }
-
-    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
-    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+        },
+    )
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post(
-        "/jobs/job-123/run",
+        "/internal/jobs/run-task",
+        headers={"Authorization": "Bearer internal-token"},
         json={
+            "job_id": "job-123",
+            "user_id": "user-123",
+            "operation": "run",
             "do_ocr": True,
             "do_image_stylize": True,
             "do_explanation": False,
         },
     )
-
-    app.dependency_overrides.clear()
-
-    assert response.status_code == 500
+    assert response.status_code == 200
     assert response.json()["detail"] == "서버 과금 설정이 완료되지 않았습니다."
+    assert save_calls == [("failed", "서버 과금 설정이 완료되지 않았습니다.")]
 
 
 def test_run_pipeline_returns_user_openai_key_detail_for_missing_secret(monkeypatch):
@@ -1919,6 +1827,7 @@ def test_run_pipeline_returns_user_openai_key_detail_for_missing_secret(monkeypa
             raise ValueError("OPENAI_KEY_ENCRYPTION_SECRET is not configured")
 
     monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "read_job", lambda current_user, job_id: make_enqueue_job(job_id=job_id))
 
     client = TestClient(app)
     response = client.post(
@@ -1948,55 +1857,49 @@ def test_run_pipeline_returns_image_config_detail_for_image_provider_misconfigur
     monkeypatch,
     error_message: str,
 ):
-    user = make_user()
-    app.dependency_overrides[require_authenticated_user] = lambda: user
+    save_calls: list[tuple[str, str | None]] = []
 
     class StubBillingService:
-        """이미지 생성 단계 진입 전 검증을 정상 처리한다."""
+        """worker 실행 단계 진입 전 OpenAI key만 정상 반환한다."""
 
-        def resolve_openai_api_key(self, current_user: AuthenticatedUser):
-            """서비스 API 모드의 OpenAI key를 반환한다."""
-            return type(
-                "ResolvedKey",
-                (),
-                {
-                    "api_key": "sk-service-1234567890",
-                    "processing_type": "service_api",
-                },
-            )()
+        def resolve_openai_api_key_by_user_id(self, user_id: str):
+            return SimpleNamespace(api_key="sk-service-1234567890", processing_type="service_api")
 
-        def ensure_job_action_credits_available(
-            self,
-            current_user: AuthenticatedUser,
-            job_id: str,
-            actions: list[str],
-            *,
-            processing_type: str,
-        ) -> dict:
-            """선차감 검증은 정상 응답으로 둔다."""
-            return {"required_credits": 1, "credits_balance": 5}
+    class StubJobTaskService:
+        def verify_internal_request(self, authorization):
+            return {"email": "queue-caller@example.com"}
 
-    def fake_run_pipeline(*args, **kwargs):
-        """Nano Banana 설정 누락 예외를 직접 재현한다."""
-        raise ValueError(error_message)
-
-    monkeypatch.setattr(main_module, "_get_billing_service", lambda require_polar=False: StubBillingService())
-    monkeypatch.setattr(main_module.pipeline, "run_pipeline", fake_run_pipeline)
+    monkeypatch.setattr(main_module, "_get_job_task_service", lambda: StubJobTaskService())
+    monkeypatch.setattr(main_module, "build_billing_service", lambda *args, **kwargs: StubBillingService())
+    monkeypatch.setattr(main_module.pipeline, "build_service_role_pipeline_user", lambda user_id: SimpleNamespace(user_id=user_id))
+    monkeypatch.setattr(main_module.pipeline, "read_job", lambda current_user, job_id: make_enqueue_job(job_id=job_id, status="running", last_error=None))
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "save_job",
+        lambda current_user, next_job: save_calls.append((next_job.status, next_job.last_error)),
+    )
+    monkeypatch.setattr(
+        main_module.pipeline,
+        "run_pipeline",
+        lambda current_user, job_id, **kwargs: (_ for _ in ()).throw(ValueError(error_message)),
+    )
 
     client = TestClient(app)
     response = client.post(
-        "/jobs/job-123/run",
+        "/internal/jobs/run-task",
+        headers={"Authorization": "Bearer internal-token"},
         json={
+            "job_id": "job-123",
+            "user_id": "user-123",
+            "operation": "run",
             "do_ocr": False,
             "do_image_stylize": True,
             "do_explanation": False,
         },
     )
-
-    app.dependency_overrides.clear()
-
-    assert response.status_code == 500
+    assert response.status_code == 200
     assert response.json()["detail"] == "이미지 생성 서버 설정이 완료되지 않았습니다."
+    assert save_calls == [("failed", "이미지 생성 서버 설정이 완료되지 않았습니다.")]
 
 
 def test_polar_gateway_verify_event_accepts_polar_secret_prefix():

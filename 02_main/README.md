@@ -39,6 +39,11 @@ docker compose up --build
 - `POLAR_PRODUCT_SINGLE_ID`
 - `POLAR_PRODUCT_STARTER_ID`
 - `POLAR_PRODUCT_PRO_ID`
+- `GCP_PROJECT_ID`
+- `GCP_REGION`
+- `PIPELINE_TASK_QUEUE`
+- `PIPELINE_TASK_CALLER_SERVICE_ACCOUNT`
+- `CLOUD_RUN_SERVICE_URL`
 
 ## 선택 환경변수
 
@@ -61,6 +66,15 @@ docker compose up --build
 - 누락 상태로 배포하면 `POST /jobs/{id}/run`, `GET /jobs/{id}`, `POST /jobs/{id}/regions/auto-detect` 에서 스키마 불일치 오류가 날 수 있다.
 - 배포 전에는 `py scripts/schema_preflight.py` 로 `schema.ocr_jobs_runtime`, `schema.ocr_job_regions_runtime` 점검이 모두 `OK` 인지 확인한다.
 - 적용 뒤에는 backend 환경변수를 다시 확인하고 재배포해야 한다.
+
+## 비동기 작업 큐 계약
+
+- `POST /jobs/{job_id}/run` 과 `POST /jobs/{job_id}/regions/auto-detect` 는 더 이상 장시간 동기 응답을 기다리지 않는다.
+- 공개 API는 인증, 기본 검증, 크레딧 사전 점검 후 job 상태를 `running` 으로 저장하고 `202 Accepted` enqueue 응답만 반환한다.
+- 실제 OCR/자동 분할은 Cloud Tasks가 `POST /internal/jobs/run-task` 를 OIDC 서비스 계정으로 호출해 실행한다.
+- worker는 service-role 저장 경로를 사용해 job/region/profile을 읽고 쓰며, 도메인 실패는 `job.status=failed`, `last_error=<사용자 메시지>` 로 저장한 뒤 `200` 으로 종료해 무한 재시도를 막는다.
+- 프런트 최종 상태는 `GET /jobs/{job_id}` polling 으로만 확인한다. 별도 realtime 채널은 없다.
+- 운영 반영 전에는 Cloud Tasks queue 생성, Cloud Run enqueue IAM, worker 호출 IAM, 환경변수 반영, 재배포, 실서버 QA를 한 묶음으로 처리해야 한다.
 
 ## 작업 history / 정리 엔드포인트
 

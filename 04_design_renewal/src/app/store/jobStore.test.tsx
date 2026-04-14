@@ -203,38 +203,9 @@ describe("useJobStore", () => {
     });
     autoDetectRegionsApiMock.mockResolvedValue({
       job_id: "job-detect",
-      regions: [],
-      detected_count: 2,
-      review_required: false,
-      detector_model: "gpt-test",
-      detection_version: "openai_five_choice_v1",
-      charged_count: 1,
-    });
-    getJobApiMock.mockResolvedValue({
-      job_id: "job-detect",
-      status: "queued",
-      file_name: "sample.png",
-      image_url: "/sample.png",
-      image_width: 400,
-      image_height: 300,
-      created_at: "2026-04-01T00:00:00+00:00",
-      updated_at: "2026-04-01T00:10:00+00:00",
-      regions: [
-        {
-          id: "q1",
-          status: "pending",
-          polygon: [
-            [0, 0],
-            [10, 0],
-            [10, 10],
-            [0, 10],
-          ],
-          type: "mixed",
-          order: 1,
-          selection_mode: "auto_detected",
-          auto_detect_confidence: 0.91,
-        },
-      ],
+      status: "running",
+      accepted: true,
+      operation: "auto_detect",
     });
 
     const { result } = renderHook(() => useJobStore());
@@ -255,14 +226,77 @@ describe("useJobStore", () => {
     });
 
     expect(autoDetectRegionsApiMock).toHaveBeenCalledWith("job-detect");
-    expect(result.current.getJob(jobId)?.status).toBe("queued");
-    expect(result.current.getJob(jobId)?.regions[0]?.selectionMode).toBe("auto_detected");
-    expect(result.current.getJob(jobId)?.regions[0]?.autoDetectConfidence).toBe(0.91);
+    expect(getJobApiMock).not.toHaveBeenCalled();
+    expect(result.current.getJob(jobId)?.status).toBe("running");
+    expect(result.current.getJob(jobId)?.regions).toEqual([]);
     expect(result.current.jobHistory[0]).toMatchObject({
       id: "job-detect",
+      status: "running",
+      regionCount: 0,
+    });
+  });
+
+  it("파이프라인 enqueue 실패 시 이전 상태를 복원하고 에러를 남긴다", async () => {
+    createJobApiMock.mockResolvedValue({
+      job_id: "job-run",
       status: "queued",
-      regionCount: 1,
-      updatedAt: "2026-04-01T00:10:00+00:00",
+      file_name: "sample.png",
+      image_url: "/sample.png",
+      image_width: 400,
+      image_height: 300,
+      created_at: "2026-04-01T00:00:00+00:00",
+      updated_at: "2026-04-01T00:00:00+00:00",
+      regions: [
+        {
+          id: "q1",
+          status: "pending",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+        },
+      ],
+    });
+    runPipelineApiMock.mockRejectedValue(new Error("큐 등록 실패"));
+
+    const { result } = renderHook(() => useJobStore());
+    let jobId = "";
+
+    await act(async () => {
+      jobId = await result.current.createJob(
+        "sample.png",
+        "data:image/png;base64,ZmFrZQ==",
+        400,
+        300,
+        new File(["fake"], "sample.png", { type: "image/png" })
+      );
+    });
+
+    let failure: Error | null = null;
+    await act(async () => {
+      try {
+        await result.current.runPipeline(jobId, {
+          doOcr: true,
+          doImageStylize: true,
+          doExplanation: true,
+        });
+      } catch (error) {
+        failure = error as Error;
+      }
+    });
+
+    expect(failure?.message).toBe("큐 등록 실패");
+    expect(result.current.getJob(jobId)?.status).toBe("queued");
+    expect(result.current.getJob(jobId)?.lastError).toBe("큐 등록 실패");
+    expect(result.current.getJob(jobId)?.regions[0]?.status).toBe("pending");
+    expect(result.current.jobHistory[0]).toMatchObject({
+      id: "job-run",
+      status: "queued",
+      lastError: "큐 등록 실패",
     });
   });
 

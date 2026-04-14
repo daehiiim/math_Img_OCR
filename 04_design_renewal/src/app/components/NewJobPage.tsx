@@ -33,7 +33,7 @@ const AUTO_DETECT_REQUIRED_CREDITS = 1;
 export function NewJobPage() {
   const location = useLocation();
   const { autoDetectRegions, createJob, runPipeline, saveRegions } = useJobs();
-  const { isAuthenticated, prepareLogin, refreshProfile, user } = useAuth();
+  const { isAuthenticated, prepareLogin, user } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -298,10 +298,14 @@ export function NewJobPage() {
         preview.file
       );
       await saveRegions(jobId, regions);
-      await runPipeline(jobId, executionOptions);
-      await refreshProfile();
+      const result = await runPipeline(jobId, executionOptions);
       await clearGuestDraft();
-      navigate(`/workspace/job/${jobId}`);
+      toast.success("파이프라인 실행이 시작되었습니다.", {
+        description: "상세 화면에서 상태가 자동으로 갱신됩니다.",
+      });
+      navigate(`/workspace/job/${jobId}`, {
+        state: { queuedOperation: result.operation },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "작업 생성 중 오류가 발생했습니다.";
       setErrorMessage(message);
@@ -350,10 +354,14 @@ export function NewJobPage() {
         preview.height,
         preview.file
       );
-      await autoDetectRegions(jobId);
-      await refreshProfile();
+      const result = await autoDetectRegions(jobId);
       await clearGuestDraft();
-      navigate(`/workspace/job/${jobId}`);
+      toast.success("AI 자동 문항 찾기가 시작되었습니다.", {
+        description: "상세 화면에서 박스 결과가 자동으로 갱신됩니다.",
+      });
+      navigate(`/workspace/job/${jobId}`, {
+        state: { queuedOperation: result.operation },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI 자동 문항 찾기 중 오류가 발생했습니다.";
       setErrorMessage(message);

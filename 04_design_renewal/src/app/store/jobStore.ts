@@ -11,9 +11,8 @@ import {
   saveRegionsApi,
   runPipelineApi,
   resolveRuntimePath,
-  type AutoDetectRegionsResult,
+  type JobTaskAcceptedResult,
   type RunPipelineOptions,
-  type RunPipelineResult,
 } from "../api/jobApi";
 import { mapBackendJob, mapBackendJobSummary } from "./jobMappers";
 
@@ -262,24 +261,41 @@ export function useJobStore() {
   );
 
   const autoDetectRegions = useCallback(
-    async (jobId: string): Promise<AutoDetectRegionsResult> => {
+    async (jobId: string): Promise<JobTaskAcceptedResult> => {
+      const previousJob = jobsRef.current.find((job) => job.id === jobId) ?? null;
       writeJobs((items) => patchJobRecord(items, jobId, (job) => ({ ...job, lastError: undefined })));
       writeHistory((items) => patchHistoryRecord(items, jobId, (job) => ({ ...job, lastError: undefined })));
 
       try {
-        const result = await autoDetectRegionsApi(jobId);
-        const backend = await getJobApi(jobId);
-        const local = jobsRef.current.find((job) => job.id === jobId) ?? null;
-        commitJobSnapshot(mapBackendJob(backend, local));
-        return result;
+        writeJobs((items) =>
+          patchJobRecord(items, jobId, (job) =>
+            markUpdatedNow({ ...job, status: "running", lastError: undefined })
+          )
+        );
+        writeHistory((items) =>
+          patchHistoryRecord(items, jobId, (job) => markUpdatedNow({ ...job, status: "running", lastError: undefined }))
+        );
+        return await autoDetectRegionsApi(jobId);
       } catch (error) {
         const message = error instanceof Error ? error.message : "AI 자동 문항 찾기에 실패했습니다.";
-        writeJobs((items) => patchJobRecord(items, jobId, (job) => ({ ...job, lastError: message })));
-        writeHistory((items) => patchHistoryRecord(items, jobId, (job) => ({ ...job, lastError: message })));
+        writeJobs((items) =>
+          patchJobRecord(items, jobId, (job) => ({
+            ...job,
+            status: previousJob?.status ?? job.status,
+            lastError: message,
+          }))
+        );
+        writeHistory((items) =>
+          patchHistoryRecord(items, jobId, (job) => ({
+            ...job,
+            status: previousJob?.status ?? job.status,
+            lastError: message,
+          }))
+        );
         throw error;
       }
     },
-    [commitJobSnapshot, writeHistory, writeJobs]
+    [writeHistory, writeJobs]
   );
 
   const saveRegions = useCallback(
@@ -326,7 +342,8 @@ export function useJobStore() {
   );
 
   const runPipeline = useCallback(
-    async (jobId: string, options: JobExecutionOptions): Promise<RunPipelineResult> => {
+    async (jobId: string, options: JobExecutionOptions): Promise<JobTaskAcceptedResult> => {
+      const previousJob = jobsRef.current.find((job) => job.id === jobId) ?? null;
       writeJobs((items) =>
         patchJobRecord(items, jobId, (job) =>
           markUpdatedNow({
@@ -340,19 +357,28 @@ export function useJobStore() {
       writeHistory((items) => patchHistoryRecord(items, jobId, (job) => markUpdatedNow({ ...job, status: "running", lastError: undefined })));
 
       try {
-        const result = await runPipelineApi(jobId, options);
-        const backend = await getJobApi(jobId);
-        const local = jobsRef.current.find((job) => job.id === jobId) ?? null;
-        commitJobSnapshot(mapBackendJob(backend, local));
-        return result;
+        return await runPipelineApi(jobId, options);
       } catch (error) {
         const message = error instanceof Error ? error.message : "파이프라인 실행 중 오류가 발생했습니다.";
-        writeJobs((items) => patchJobRecord(items, jobId, (job) => ({ ...job, status: "failed", lastError: message })));
-        writeHistory((items) => patchHistoryRecord(items, jobId, (job) => ({ ...job, status: "failed", lastError: message })));
+        writeJobs((items) =>
+          patchJobRecord(items, jobId, (job) => ({
+            ...job,
+            status: previousJob?.status ?? job.status,
+            regions: previousJob?.regions ?? job.regions,
+            lastError: message,
+          }))
+        );
+        writeHistory((items) =>
+          patchHistoryRecord(items, jobId, (job) => ({
+            ...job,
+            status: previousJob?.status ?? job.status,
+            lastError: message,
+          }))
+        );
         throw error;
       }
     },
-    [commitJobSnapshot, writeHistory, writeJobs]
+    [writeHistory, writeJobs]
   );
 
   const hydrateJob = useCallback(

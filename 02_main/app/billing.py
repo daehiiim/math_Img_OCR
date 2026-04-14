@@ -121,6 +121,8 @@ class BillingStoreProtocol(Protocol):
 
     def get_or_create_profile(self, user: AuthenticatedUser) -> BillingProfile: ...
 
+    def get_or_create_profile_by_user_id(self, user_id: str) -> BillingProfile: ...
+
     def upsert_openai_key(
         self,
         user: AuthenticatedUser,
@@ -133,6 +135,8 @@ class BillingStoreProtocol(Protocol):
     def deactivate_openai_key(self, user: AuthenticatedUser) -> BillingProfile: ...
 
     def get_active_openai_key(self, user: AuthenticatedUser) -> StoredOpenAiKey | None: ...
+
+    def get_active_openai_key_by_user_id(self, user_id: str) -> StoredOpenAiKey | None: ...
 
     def has_payment_event(self, provider: str, provider_event_id: str) -> bool: ...
 
@@ -167,9 +171,21 @@ class BillingStoreProtocol(Protocol):
         job_id: str,
     ) -> dict: ...
 
+    def ensure_job_auto_detect_credits_available_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+    ) -> dict: ...
+
     def consume_job_auto_detect_credits(
         self,
         user: AuthenticatedUser,
+        job_id: str,
+    ) -> dict: ...
+
+    def consume_job_auto_detect_credits_by_user_id(
+        self,
+        user_id: str,
         job_id: str,
     ) -> dict: ...
 
@@ -198,9 +214,27 @@ class BillingStoreProtocol(Protocol):
         processing_type: str,
     ) -> dict: ...
 
+    def ensure_job_action_credits_available_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+        actions: list[str],
+        *,
+        processing_type: str,
+    ) -> dict: ...
+
     def consume_job_action_credits(
         self,
         user: AuthenticatedUser,
+        job_id: str,
+        actions: list[str],
+        *,
+        processing_type: str,
+    ) -> dict: ...
+
+    def consume_job_action_credits_by_user_id(
+        self,
+        user_id: str,
         job_id: str,
         actions: list[str],
         *,
@@ -664,6 +698,10 @@ class SupabaseBillingStore:
         """사용자 profile을 읽고 없으면 기본 row를 만든다."""
         return self._ensure_profile(self._user_client(user), user.user_id)
 
+    def get_or_create_profile_by_user_id(self, user_id: str) -> BillingProfile:
+        """worker가 user_id만으로 profile을 읽고 없으면 기본 row를 만든다."""
+        return self._ensure_profile(self._admin_client(), user_id)
+
     def upsert_openai_key(
         self,
         user: AuthenticatedUser,
@@ -715,6 +753,19 @@ class SupabaseBillingStore:
             params={
                 "select": "encrypted_api_key,key_last4,is_active",
                 "user_id": f"eq.{user.user_id}",
+                "is_active": "eq.true",
+                "limit": "1",
+            },
+        )
+        return self._map_openai_key(rows[0]) if rows else None
+
+    def get_active_openai_key_by_user_id(self, user_id: str) -> StoredOpenAiKey | None:
+        """worker가 service-role로 활성 OpenAI key를 읽는다."""
+        rows = self._admin_client().select(
+            "user_openai_keys",
+            params={
+                "select": "encrypted_api_key,key_last4,is_active",
+                "user_id": f"eq.{user_id}",
                 "is_active": "eq.true",
                 "limit": "1",
             },
@@ -896,6 +947,28 @@ class SupabaseBillingStore:
         )
         return {"charged": True, "credits_balance": new_balance}
 
+    def _read_owned_job_row_by_user_id(
+        self,
+        client: SupabaseClient,
+        user_id: str,
+        job_id: str,
+        *,
+        select: str,
+    ) -> dict[str, Any]:
+        """worker 경로에서 user_id까지 확인한 job row를 읽는다."""
+        rows = client.select(
+            "ocr_jobs",
+            params={
+                "select": select,
+                "id": f"eq.{job_id}",
+                "user_id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+        if not rows:
+            raise FileNotFoundError(f"job not found: {job_id}")
+        return rows[0]
+
     def _read_job_auto_detect_charge_state(self, client: SupabaseClient, job_id: str) -> dict[str, Any]:
         """자동 분할 1회 과금 여부를 확인하기 위한 job 상태를 읽는다."""
         rows = client.select(
@@ -909,6 +982,20 @@ class SupabaseBillingStore:
             raise FileNotFoundError(f"job not found: {job_id}")
         return rows[0]
 
+    def _read_job_auto_detect_charge_state_by_user_id(
+        self,
+        client: SupabaseClient,
+        user_id: str,
+        job_id: str,
+    ) -> dict[str, Any]:
+        """worker 경로에서 자동 분할 1회 과금 여부를 읽는다."""
+        return self._read_owned_job_row_by_user_id(
+            client,
+            user_id,
+            job_id,
+            select="id,auto_detect_charged,auto_detect_charged_at",
+        )
+
     def ensure_job_auto_detect_credits_available(
         self,
         user: AuthenticatedUser,
@@ -918,6 +1005,53 @@ class SupabaseBillingStore:
         client = self._user_client(user)
         job_row = self._read_job_auto_detect_charge_state(client, job_id)
         profile = self.get_or_create_profile(user)
+        required_credits = 0 if bool(job_row.get("auto_detect_charged")) else 1
+        if profile.credits_balance < required_credits:
+            raise ValueError("insufficient credits")
+        return {
+            "required_credits": required_credits,
+            "credits_balance": profile.credits_balance,
+        }
+
+    def ensure_job_action_credits_available_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+        actions: list[str],
+        *,
+        processing_type: str,
+    ) -> dict:
+        """worker가 선택 작업 실행 전 필요한 크레딧을 점검한다."""
+        client = self._admin_client()
+        self._read_job_charge_state_by_user_id(client, user_id, job_id)
+        region_rows = self._read_job_action_charge_rows(client, job_id)
+        profile = self.get_or_create_profile_by_user_id(user_id)
+        pending_region_actions = self._build_pending_region_actions(
+            region_rows,
+            actions,
+            require_output=False,
+        )
+        required_credits = sum(
+            1
+            for _, action in pending_region_actions
+            if not (processing_type == "user_api_key" and action in FREE_USER_KEY_ACTIONS)
+        )
+        if profile.credits_balance < required_credits:
+            raise ValueError("insufficient credits")
+        return {
+            "required_credits": required_credits,
+            "credits_balance": profile.credits_balance,
+        }
+
+    def ensure_job_auto_detect_credits_available_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+    ) -> dict:
+        """worker가 자동 분할 실행 전에 1회 차감 여지를 점검한다."""
+        client = self._admin_client()
+        job_row = self._read_job_auto_detect_charge_state_by_user_id(client, user_id, job_id)
+        profile = self.get_or_create_profile_by_user_id(user_id)
         required_credits = 0 if bool(job_row.get("auto_detect_charged")) else 1
         if profile.credits_balance < required_credits:
             raise ValueError("insufficient credits")
@@ -964,6 +1098,50 @@ class SupabaseBillingStore:
         admin_client.update(
             "ocr_jobs",
             filters={"id": f"eq.{job_id}"},
+            payload={
+                "auto_detect_charged": True,
+                "auto_detect_charged_at": charged_at,
+            },
+        )
+        return {"charged": True, "charged_count": 1, "credits_balance": new_balance}
+
+    def consume_job_auto_detect_credits_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+    ) -> dict:
+        """worker가 자동 분할 최초 성공 시 job당 1크레딧을 차감한다."""
+        admin_client = self._admin_client()
+        job_row = self._read_job_auto_detect_charge_state_by_user_id(admin_client, user_id, job_id)
+        profile = self.get_or_create_profile_by_user_id(user_id)
+        if bool(job_row.get("auto_detect_charged")):
+            return {"charged": False, "charged_count": 0, "credits_balance": profile.credits_balance}
+        if profile.credits_balance <= 0:
+            raise ValueError("insufficient credits")
+
+        new_balance = profile.credits_balance - 1
+        charged_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+        admin_client.update(
+            "profiles",
+            filters={"user_id": f"eq.{user_id}"},
+            payload={
+                "credits_balance": new_balance,
+                "used_credits": profile.used_credits + 1,
+            },
+        )
+        admin_client.insert(
+            "credit_ledger",
+            {
+                "user_id": user_id,
+                "job_id": job_id,
+                "delta": -1,
+                "balance_after": new_balance,
+                "reason": AUTO_DETECT_CHARGE_REASON,
+            },
+        )
+        admin_client.update(
+            "ocr_jobs",
+            filters={"id": f"eq.{job_id}", "user_id": f"eq.{user_id}"},
             payload={
                 "auto_detect_charged": True,
                 "auto_detect_charged_at": charged_at,
@@ -1108,6 +1286,20 @@ class SupabaseBillingStore:
         if not rows:
             raise FileNotFoundError(f"job not found: {job_id}")
         return rows[0]
+
+    def _read_job_charge_state_by_user_id(
+        self,
+        client: SupabaseClient,
+        user_id: str,
+        job_id: str,
+    ) -> dict[str, Any]:
+        """worker 경로에서 user_id까지 확인한 job 과금 상태를 읽는다."""
+        return self._read_owned_job_row_by_user_id(
+            client,
+            user_id,
+            job_id,
+            select="id,status,processing_type",
+        )
 
     def _read_job_action_charge_rows(
         self,
@@ -1304,6 +1496,102 @@ class SupabaseBillingStore:
             "credits_balance": new_balance,
         }
 
+    def consume_job_action_credits_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+        actions: list[str],
+        *,
+        processing_type: str,
+    ) -> dict:
+        """worker가 성공한 region 액션별 항목만큼 크레딧을 차감한다."""
+        admin_client = self._admin_client()
+        job_row = self._read_job_charge_state_by_user_id(admin_client, user_id, job_id)
+        if job_row.get("status") not in ("completed", "failed", "exported"):
+            raise ValueError("job is not eligible for charging")
+
+        profile = self.get_or_create_profile_by_user_id(user_id)
+        region_rows = self._read_job_action_charge_rows(admin_client, job_id)
+        completed_region_actions = self._build_pending_region_actions(
+            region_rows,
+            actions,
+            require_output=True,
+        )
+        if not completed_region_actions:
+            return {
+                "charged_actions": [],
+                "charged_count": 0,
+                "credits_balance": profile.credits_balance,
+            }
+
+        paid_region_actions = [
+            (region_key, action)
+            for region_key, action in completed_region_actions
+            if not (processing_type == "user_api_key" and action in FREE_USER_KEY_ACTIONS)
+        ]
+        if profile.credits_balance < len(paid_region_actions):
+            raise ValueError("insufficient credits")
+
+        new_balance = profile.credits_balance
+        new_used_credits = profile.used_credits
+        charged_actions: list[str] = []
+        charged_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+        handled_actions = sorted({action for _, action in completed_region_actions})
+
+        for _, action in paid_region_actions:
+            new_balance -= 1
+            new_used_credits += 1
+            charged_actions.append(action)
+            admin_client.insert(
+                "credit_ledger",
+                {
+                    "user_id": user_id,
+                    "job_id": job_id,
+                    "delta": -1,
+                    "balance_after": new_balance,
+                    "reason": JOB_ACTION_REASON_MAP[action],
+                },
+            )
+
+        if paid_region_actions:
+            admin_client.update(
+                "profiles",
+                filters={"user_id": f"eq.{user_id}"},
+                payload={
+                    "credits_balance": new_balance,
+                    "used_credits": new_used_credits,
+                },
+            )
+
+        for region_key, action in completed_region_actions:
+            admin_client.update(
+                "ocr_job_regions",
+                filters={
+                    "job_id": f"eq.{job_id}",
+                    "region_key": f"eq.{region_key}",
+                },
+                payload={
+                    JOB_ACTION_FLAG_MAP[action]: True,
+                    "was_charged": True,
+                    "charged_at": charged_at,
+                },
+            )
+
+        admin_client.update(
+            "ocr_jobs",
+            filters={"id": f"eq.{job_id}", "user_id": f"eq.{user_id}"},
+            payload={
+                **{JOB_ACTION_FLAG_MAP[action]: True for action in handled_actions},
+                "was_charged": True,
+                "charged_at": charged_at,
+            },
+        )
+        return {
+            "charged_actions": charged_actions,
+            "charged_count": len(paid_region_actions),
+            "credits_balance": new_balance,
+        }
+
 
 class BillingService:
     """Checkout, catalog, webhook 적재를 담당한다."""
@@ -1416,6 +1704,24 @@ class BillingService:
             )
         raise ValueError("OpenAI API key is not configured")
 
+    def resolve_openai_api_key_by_user_id(self, user_id: str) -> ResolvedOpenAiApiKey:
+        """worker가 user_id만으로 실행용 OpenAI key와 처리 유형을 결정한다."""
+        stored_key = self._store.get_active_openai_key_by_user_id(user_id)
+        if stored_key is not None:
+            return ResolvedOpenAiApiKey(
+                api_key=_decrypt_openai_api_key(
+                    self._openai_key_encryption_secret,
+                    stored_key.encrypted_api_key,
+                ),
+                processing_type="user_api_key",
+            )
+        if self._service_openai_api_key:
+            return ResolvedOpenAiApiKey(
+                api_key=self._service_openai_api_key,
+                processing_type="service_api",
+            )
+        raise ValueError("OpenAI API key is not configured")
+
     def get_checkout(self, checkout_id: str) -> dict:
         """Polar checkout 상태와 내부 적립 여부를 같이 반환한다."""
         checkout = self._require_polar_gateway().get_checkout(checkout_id)
@@ -1493,6 +1799,14 @@ class BillingService:
         """자동 분할 1회 차감이 필요한지와 잔액을 확인한다."""
         return self._store.ensure_job_auto_detect_credits_available(user, job_id)
 
+    def ensure_job_auto_detect_credits_available_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+    ) -> dict:
+        """worker가 user_id 기준으로 자동 분할 잔액을 확인한다."""
+        return self._store.ensure_job_auto_detect_credits_available_by_user_id(user_id, job_id)
+
     def consume_job_auto_detect_credits(
         self,
         user: AuthenticatedUser,
@@ -1500,6 +1814,14 @@ class BillingService:
     ) -> dict:
         """자동 분할이 성공 저장됐을 때만 1회 차감을 수행한다."""
         return self._store.consume_job_auto_detect_credits(user, job_id)
+
+    def consume_job_auto_detect_credits_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+    ) -> dict:
+        """worker가 자동 분할 성공 시 job당 1회 차감을 수행한다."""
+        return self._store.consume_job_auto_detect_credits_by_user_id(user_id, job_id)
 
     def ensure_job_region_credits_available(
         self,
@@ -1545,6 +1867,22 @@ class BillingService:
             processing_type=processing_type,
         )
 
+    def ensure_job_action_credits_available_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+        actions: list[str],
+        *,
+        processing_type: str,
+    ) -> dict:
+        """worker가 user_id 기준으로 선택 작업 잔액을 확인한다."""
+        return self._store.ensure_job_action_credits_available_by_user_id(
+            user_id,
+            job_id,
+            actions,
+            processing_type=processing_type,
+        )
+
     def consume_job_action_credits(
         self,
         user: AuthenticatedUser,
@@ -1556,6 +1894,22 @@ class BillingService:
         """실행 성공 후 실제 수행된 항목만큼 크레딧을 차감한다."""
         return self._store.consume_job_action_credits(
             user,
+            job_id,
+            actions,
+            processing_type=processing_type,
+        )
+
+    def consume_job_action_credits_by_user_id(
+        self,
+        user_id: str,
+        job_id: str,
+        actions: list[str],
+        *,
+        processing_type: str,
+    ) -> dict:
+        """worker가 user_id 기준으로 실행 성공 항목만큼 차감한다."""
+        return self._store.consume_job_action_credits_by_user_id(
+            user_id,
             job_id,
             actions,
             processing_type=processing_type,

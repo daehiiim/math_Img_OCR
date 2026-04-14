@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,22 +6,20 @@ import type { Job } from "../store/jobStore";
 
 const runPipelineMock = vi.fn(async () => ({
   job_id: "job-1",
-  status: "completed" as const,
-  charged_count: 1,
-  completed_count: 1,
-  failed_count: 0,
-  exportable_count: 1,
+  status: "running" as const,
+  accepted: true,
+  operation: "run" as const,
 }));
 const autoDetectRegionsMock = vi.fn(async () => ({
   job_id: "job-1",
-  regions: [],
-  detected_count: 2,
-  review_required: false,
-  detector_model: "gpt-test",
-  detection_version: "openai_five_choice_v1",
-  charged_count: 1,
+  status: "running" as const,
+  accepted: true,
+  operation: "auto_detect" as const,
 }));
 const exportHwpxMock = vi.fn(async () => undefined);
+const hydrateJobMock = vi.fn(async () => null);
+const refreshProfileMock = vi.fn(async () => undefined);
+const saveRegionsMock = vi.fn(async () => undefined);
 let mockAuthUser = {
   name: "김수학",
   email: "math@example.com",
@@ -40,6 +38,7 @@ let mockJob: Job = {
   imageHeight: 600,
   status: "queued",
   createdAt: "2026-03-19T00:00:00.000Z",
+  updatedAt: "2026-03-19T00:00:00.000Z",
   regions: [],
 };
 
@@ -47,7 +46,7 @@ vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({
     user: mockAuthUser,
     consumeCredit: vi.fn(),
-    refreshProfile: vi.fn(async () => undefined),
+    refreshProfile: refreshProfileMock,
   }),
 }));
 
@@ -55,9 +54,9 @@ vi.mock("../context/JobContext", () => ({
   useJobs: () => ({
     autoDetectRegions: autoDetectRegionsMock,
     getJob: () => mockJob,
-    saveRegions: vi.fn(async () => undefined),
+    saveRegions: saveRegionsMock,
     runPipeline: runPipelineMock,
-    hydrateJob: vi.fn(async () => null),
+    hydrateJob: hydrateJobMock,
     exportHwpx: exportHwpxMock,
   }),
 }));
@@ -109,6 +108,12 @@ describe("JobDetailPage", () => {
     autoDetectRegionsMock.mockClear();
     runPipelineMock.mockClear();
     exportHwpxMock.mockClear();
+    hydrateJobMock.mockReset();
+    hydrateJobMock.mockResolvedValue(null);
+    refreshProfileMock.mockReset();
+    refreshProfileMock.mockResolvedValue(undefined);
+    saveRegionsMock.mockReset();
+    saveRegionsMock.mockResolvedValue(undefined);
     mockAuthUser = {
       name: "김수학",
       email: "math@example.com",
@@ -127,6 +132,7 @@ describe("JobDetailPage", () => {
       imageHeight: 600,
       status: "queued",
       createdAt: "2026-03-19T00:00:00.000Z",
+      updatedAt: "2026-03-19T00:00:00.000Z",
       regions: [],
     };
   });
@@ -526,5 +532,68 @@ describe("JobDetailPage", () => {
 
     expect(screen.getByText(/실행 전 박스를 확인하고 필요하면 수정하세요/i)).toBeInTheDocument();
     expect(screen.getByText(/경계 신뢰도가 낮거나 애매한 영역이 있습니다/i)).toBeInTheDocument();
+  });
+
+  it("running 상태에서는 polling으로 완료를 감시하고 프로필을 갱신한다", async () => {
+    mockJob = {
+      ...mockJob,
+      status: "running",
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "running",
+        },
+      ],
+    };
+    hydrateJobMock.mockResolvedValueOnce({
+      ...mockJob,
+      status: "completed",
+      updatedAt: "2026-03-19T00:05:00.000Z",
+      regions: [
+        {
+          id: "q1",
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+          ],
+          type: "mixed",
+          order: 1,
+          status: "completed",
+          ocrText: "문제 본문",
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/jobs/job-1",
+            state: { queuedOperation: "run" },
+          } as never,
+        ]}
+      >
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(hydrateJobMock).toHaveBeenCalledWith("job-1");
+    });
+    await waitFor(() => {
+      expect(refreshProfileMock).toHaveBeenCalledTimes(1);
+    });
   });
 });

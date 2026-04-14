@@ -33,6 +33,11 @@ class AppSettings:
     database_url: str | None
     auth: AuthSettings
     billing: BillingSettings
+    gcp_project_id: str | None = None
+    gcp_region: str | None = None
+    pipeline_task_queue: str | None = None
+    pipeline_task_caller_service_account: str | None = None
+    cloud_run_service_url: str | None = None
     admin_mode_password: str | None = None
     admin_mode_session_secret: str | None = None
     admin_mode_session_ttl_minutes: int = 30
@@ -145,6 +150,11 @@ def get_settings(root_path: Path) -> AppSettings:
         openai_api_key=_get_setting(env_values, "OPENAI_API_KEY"),
         openai_base_url=_normalize_url(_get_setting(env_values, "OPENAI_BASE_URL")),
         openai_key_encryption_secret=_get_setting(env_values, "OPENAI_KEY_ENCRYPTION_SECRET"),
+        gcp_project_id=_get_setting(env_values, "GCP_PROJECT_ID"),
+        gcp_region=_get_setting(env_values, "GCP_REGION"),
+        pipeline_task_queue=_get_setting(env_values, "PIPELINE_TASK_QUEUE"),
+        pipeline_task_caller_service_account=_get_setting(env_values, "PIPELINE_TASK_CALLER_SERVICE_ACCOUNT"),
+        cloud_run_service_url=_normalize_url(_get_setting(env_values, "CLOUD_RUN_SERVICE_URL")),
         nano_banana_provider=_get_nano_banana_provider(env_values),
         nano_banana_model=_get_setting(env_values, "NANO_BANANA_MODEL"),
         gemini_api_key=_get_setting(env_values, "GEMINI_API_KEY"),

@@ -1,4 +1,5 @@
 from app.pipeline.schema import JobPipelineContext, RegionPipelineContext, RegionContext, ExtractorContext, FigureContext
+from app.pipeline.repository import ServiceRolePipelineUser, build_service_role_pipeline_user
 from app.pipeline.orchestrator import (
     auto_detect_regions,
     create_asset_url,
@@ -19,6 +20,8 @@ __all__ = [
     "RegionContext",
     "ExtractorContext",
     "FigureContext",
+    "ServiceRolePipelineUser",
+    "build_service_role_pipeline_user",
     "create_asset_url",
     "auto_detect_regions",
     "create_job_from_bytes",

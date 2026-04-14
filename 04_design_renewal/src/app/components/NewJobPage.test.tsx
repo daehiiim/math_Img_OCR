@@ -39,12 +39,9 @@ const {
   return {
     autoDetectRegionsMock: vi.fn(async () => ({
       job_id: "job-1",
-      regions: [],
-      detected_count: 3,
-      review_required: true,
-      detector_model: "gpt-test",
-      detection_version: "openai_five_choice_v1",
-      charged_count: 1,
+      status: "running" as const,
+      accepted: true,
+      operation: "auto_detect" as const,
     })),
     clearGuestDraftMock: vi.fn(async () => {
       guestDraftState.current = null;
@@ -56,11 +53,9 @@ const {
     refreshProfileMock: vi.fn(async () => undefined),
     runPipelineMock: vi.fn(async () => ({
       job_id: "job-1",
-      status: "completed" as const,
-      charged_count: 1,
-      completed_count: 1,
-      failed_count: 0,
-      exportable_count: 1,
+      status: "running" as const,
+      accepted: true,
+      operation: "run" as const,
     })),
     saveGuestDraftMock: vi.fn(async (draft) => {
       guestDraftState.current = {

@@ -13,6 +13,11 @@ def test_get_settings_reads_env_file(tmp_path):
             [
                 "OPENAI_API_KEY=file-openai-key",
                 "OPENAI_KEY_ENCRYPTION_SECRET=file-encryption-secret",
+                "GCP_PROJECT_ID=file-gcp-project",
+                "GCP_REGION=asia-northeast3",
+                "PIPELINE_TASK_QUEUE=mathocr-pipeline",
+                "PIPELINE_TASK_CALLER_SERVICE_ACCOUNT=queue-caller@example.iam.gserviceaccount.com",
+                "CLOUD_RUN_SERVICE_URL=https://mathocr-run.app/",
                 "NANO_BANANA_PROVIDER=gemini_api",
                 "NANO_BANANA_MODEL=gemini-3-pro-image-preview",
                 "GEMINI_API_KEY=file-gemini-api-key",
@@ -43,6 +48,11 @@ def test_get_settings_reads_env_file(tmp_path):
 
     assert settings.openai_api_key == "file-openai-key"
     assert settings.openai_key_encryption_secret == "file-encryption-secret"
+    assert settings.gcp_project_id == "file-gcp-project"
+    assert settings.gcp_region == "asia-northeast3"
+    assert settings.pipeline_task_queue == "mathocr-pipeline"
+    assert settings.pipeline_task_caller_service_account == "queue-caller@example.iam.gserviceaccount.com"
+    assert settings.cloud_run_service_url == "https://mathocr-run.app"
     assert settings.nano_banana_provider == "gemini_api"
     assert settings.nano_banana_model == "gemini-3-pro-image-preview"
     assert settings.gemini_api_key == "file-gemini-api-key"
@@ -76,6 +86,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
             [
                 "OPENAI_API_KEY=file-openai-key",
                 "OPENAI_KEY_ENCRYPTION_SECRET=file-encryption-secret",
+                "GCP_PROJECT_ID=file-project",
                 "NANO_BANANA_PROMPT_VERSION=csat_v1",
                 "HWPX_SKILL_DIR=D:/file/runtime",
                 "APP_URL=https://file.mathtohwp.vercel.app/",
@@ -88,6 +99,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
 
     monkeypatch.setenv("OPENAI_API_KEY", "env-openai-key")
     monkeypatch.setenv("OPENAI_KEY_ENCRYPTION_SECRET", "env-encryption-secret")
+    monkeypatch.setenv("GCP_PROJECT_ID", "env-project")
     monkeypatch.setenv("NANO_BANANA_PROMPT_VERSION", "csat_v1")
     monkeypatch.setenv("HWPX_SKILL_DIR", "D:/env/runtime")
     monkeypatch.setenv("APP_URL", "https://mathtohwp.vercel.app/")
@@ -98,6 +110,7 @@ def test_get_settings_prefers_environment_variables(tmp_path, monkeypatch):
 
     assert settings.openai_api_key == "env-openai-key"
     assert settings.openai_key_encryption_secret == "env-encryption-secret"
+    assert settings.gcp_project_id == "env-project"
     assert settings.nano_banana_prompt_version == "csat_v1"
     assert settings.hwpx_skill_dir == "D:/env/runtime"
     assert settings.app_url == "https://mathtohwp.vercel.app"

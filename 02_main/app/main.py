@@ -22,6 +22,15 @@ from app.auth import AuthenticatedUser, require_authenticated_user
 from app.billing import BillingProfile, build_billing_service
 from app.config import get_settings
 from app.job_history import JobDeleteConflictError, build_job_history_service
+from app.job_tasks import (
+    JobTaskAcceptedResponse,
+    JobTaskAuthError,
+    JobTaskConfigError,
+    JobTaskDispatchError,
+    JobTaskPayload,
+    JobTaskWorkerResponse,
+    build_job_task_service,
+)
 from app.supabase import SupabaseApiError
 
 app = FastAPI(title="Math Region OCR MVP API", version="0.1.0")
@@ -39,6 +48,12 @@ BILLING_PERSISTENCE_DETAIL = "서버 과금 기록 저장에 실패했습니다.
 ADMIN_DASHBOARD_FAILURE_DETAIL = "관리자 대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도하세요."
 MAINTENANCE_INVALID_TOKEN_DETAIL = "유효하지 않은 maintenance 토큰입니다."
 MAINTENANCE_CONFIG_DETAIL = "maintenance 작업 토큰이 설정되지 않았습니다."
+TASK_QUEUE_CONFIG_DETAIL = "비동기 작업 큐 설정이 완료되지 않았습니다."
+TASK_QUEUE_DISPATCH_DETAIL = "작업 큐 등록에 실패했습니다. 잠시 후 다시 시도하세요."
+INTERNAL_TASK_AUTH_DETAIL = "유효하지 않은 내부 작업 토큰입니다."
+JOB_ALREADY_RUNNING_DETAIL = "이미 처리 중인 작업입니다. 잠시 후 상태를 새로고침하세요."
+RUN_TASK_FAILURE_DETAIL = "파이프라인 실행 중 오류가 발생했습니다. 잠시 후 다시 시도하세요."
+AUTO_DETECT_TASK_FAILURE_DETAIL = "AI 자동 문항 찾기 중 오류가 발생했습니다. 잠시 후 다시 시도하세요."
 AUTO_DETECT_SCHEMA_TOKENS = (
     "auto_detect_confidence",
     "auto_detect_charged",
@@ -281,6 +296,11 @@ def _get_job_history_service():
     return build_job_history_service()
 
 
+def _get_job_task_service():
+    """현재 환경설정으로 작업 큐 서비스를 생성한다."""
+    return build_job_task_service(ROOT)
+
+
 def _is_schema_mismatch_message(message: str) -> bool:
     """Supabase 에러 문자열이 스키마 드리프트인지 판별한다."""
     normalized = message.lower()
@@ -335,6 +355,8 @@ def _map_runtime_value_error(error: ValueError) -> HTTPException | None:
     normalized = str(error).lower()
     if "supabase_service_role_key" in normalized and "billing" in normalized:
         return HTTPException(status_code=500, detail=BILLING_CONFIG_DETAIL)
+    if "supabase_service_role_key" in normalized and "pipeline worker" in normalized:
+        return HTTPException(status_code=500, detail=TASK_QUEUE_CONFIG_DETAIL)
     if "openai_key_encryption_secret" in normalized:
         return HTTPException(status_code=500, detail=USER_OPENAI_KEY_CONFIG_DETAIL)
     if (
@@ -375,6 +397,160 @@ def _raise_runtime_http_error(error: Exception) -> None:
         mapped_error = _map_runtime_value_error(error)
         if mapped_error is not None:
             raise mapped_error from error
+
+
+def _resolve_background_error_detail(error: Exception, *, fallback: str) -> str:
+    """worker 예외를 사용자에게 남길 안정적인 메시지로 정규화한다."""
+    if isinstance(error, SupabaseApiError):
+        message = str(error)
+        schema_detail = _schema_mismatch_detail(message)
+        if schema_detail is not None:
+            return schema_detail
+        if _is_billing_persistence_message(message):
+            return BILLING_PERSISTENCE_DETAIL
+        return STORAGE_FAILURE_DETAIL
+
+    if isinstance(error, ValueError):
+        mapped_error = _map_runtime_value_error(error)
+        if mapped_error is not None:
+            return str(mapped_error.detail)
+        return str(error)
+
+    return fallback
+
+
+def _rollback_enqueued_job(current_user: AuthenticatedUser, job, previous_status: str, previous_last_error: str | None) -> None:
+    """enqueue 실패 시 job 상태를 직전 값으로 되돌린다."""
+    job.status = previous_status
+    job.last_error = previous_last_error
+    try:
+        pipeline.save_job(current_user, job)
+    except Exception as rollback_error:
+        logger.exception("job enqueue rollback failed job_id=%s error=%s", job.job_id, rollback_error)
+
+
+def _mark_worker_job_failed(user_id: str, job_id: str, detail: str) -> None:
+    """worker 실패를 job 상태와 사용자 노출 에러에 반영한다."""
+    service_user = pipeline.build_service_role_pipeline_user(user_id)
+    try:
+        job = pipeline.read_job(service_user, job_id)
+    except Exception as read_error:
+        logger.exception("worker failed to read job for failure mark job_id=%s error=%s", job_id, read_error)
+        return
+
+    job.status = "failed"
+    job.last_error = detail
+    try:
+        pipeline.save_job(service_user, job)
+    except Exception as save_error:
+        logger.exception("worker failed to save failure state job_id=%s error=%s", job_id, save_error)
+
+
+def _build_run_task_payload(current_user: AuthenticatedUser, job_id: str, run_request: RunJobRequest) -> JobTaskPayload:
+    """run enqueue용 Cloud Tasks payload를 만든다."""
+    return JobTaskPayload(
+        job_id=job_id,
+        user_id=current_user.user_id,
+        operation="run",
+        do_ocr=run_request.do_ocr,
+        do_image_stylize=run_request.do_image_stylize,
+        do_explanation=run_request.do_explanation,
+    )
+
+
+def _build_auto_detect_task_payload(current_user: AuthenticatedUser, job_id: str) -> JobTaskPayload:
+    """auto-detect enqueue용 Cloud Tasks payload를 만든다."""
+    return JobTaskPayload(
+        job_id=job_id,
+        user_id=current_user.user_id,
+        operation="auto_detect",
+    )
+
+
+def _run_background_job_task(payload: JobTaskPayload) -> JobTaskWorkerResponse:
+    """enqueue된 비동기 작업을 실제 파이프라인 호출로 실행한다."""
+    service_user = pipeline.build_service_role_pipeline_user(payload.user_id)
+    try:
+        job = pipeline.read_job(service_user, payload.job_id)
+    except FileNotFoundError:
+        return JobTaskWorkerResponse(
+            job_id=payload.job_id,
+            operation=payload.operation,
+            status="ignored",
+            detail="job not found",
+        )
+
+    if job.status != "running":
+        return JobTaskWorkerResponse(
+            job_id=payload.job_id,
+            operation=payload.operation,
+            status="ignored",
+            detail=f"job status is {job.status}",
+        )
+
+    try:
+        billing_service = build_billing_service()
+        if payload.operation == "run":
+            run_request = RunJobRequest(
+                do_ocr=payload.do_ocr,
+                do_image_stylize=payload.do_image_stylize,
+                do_explanation=payload.do_explanation,
+            )
+            selected_actions = _collect_selected_actions(run_request)
+            if not selected_actions:
+                raise ValueError("at least one action must be selected")
+
+            openai_key = billing_service.resolve_openai_api_key_by_user_id(payload.user_id)
+            result = pipeline.run_pipeline(
+                service_user,
+                payload.job_id,
+                api_key=openai_key.api_key,
+                processing_type=openai_key.processing_type,
+                do_ocr=payload.do_ocr,
+                do_image_stylize=payload.do_image_stylize,
+                do_explanation=payload.do_explanation,
+                nano_banana_model=get_settings(ROOT).nano_banana_model,
+                nano_banana_prompt_version=get_settings(ROOT).nano_banana_prompt_version,
+            )
+            if result.get("status") in ("completed", "failed", "exported"):
+                billing_service.consume_job_action_credits_by_user_id(
+                    payload.user_id,
+                    payload.job_id,
+                    list(result.get("executed_actions") or []),
+                    processing_type=openai_key.processing_type,
+                )
+            return JobTaskWorkerResponse(
+                job_id=payload.job_id,
+                operation=payload.operation,
+                status="completed" if result.get("status") in ("completed", "exported") else "failed",
+                detail=result.get("status"),
+            )
+
+        openai_key = billing_service.resolve_openai_api_key_by_user_id(payload.user_id)
+        pipeline.auto_detect_regions(
+            service_user,
+            payload.job_id,
+            api_key=openai_key.api_key,
+        )
+        billing_service.consume_job_auto_detect_credits_by_user_id(payload.user_id, payload.job_id)
+        return JobTaskWorkerResponse(
+            job_id=payload.job_id,
+            operation=payload.operation,
+            status="completed",
+        )
+    except Exception as error:
+        detail = _resolve_background_error_detail(
+            error,
+            fallback=RUN_TASK_FAILURE_DETAIL if payload.operation == "run" else AUTO_DETECT_TASK_FAILURE_DETAIL,
+        )
+        logger.exception("background task failed job_id=%s operation=%s error=%s", payload.job_id, payload.operation, error)
+        _mark_worker_job_failed(payload.user_id, payload.job_id, detail)
+        return JobTaskWorkerResponse(
+            job_id=payload.job_id,
+            operation=payload.operation,
+            status="failed",
+            detail=detail,
+        )
 
 
 def _map_job_response(current_user: AuthenticatedUser, job) -> JobResponse:
@@ -520,18 +696,22 @@ def save_regions(
         raise HTTPException(status_code=400, detail=str(error))
 
 
-@app.post("/jobs/{job_id}/run", response_model=RunJobResponse)
+@app.post("/jobs/{job_id}/run", response_model=JobTaskAcceptedResponse, status_code=202)
 def run_pipeline(
     job_id: str,
     payload: RunJobRequest | None = Body(default=None),
     current_user: AuthenticatedUser = Depends(require_authenticated_user),
-) -> dict:
-    """OCR 파이프라인을 실행한다."""
+) -> JobTaskAcceptedResponse:
+    """OCR 파이프라인 실행 작업을 큐에 등록한다."""
     try:
         run_request = payload or RunJobRequest()
         selected_actions = _collect_selected_actions(run_request)
         if not selected_actions:
             raise ValueError("at least one action must be selected")
+
+        job = pipeline.read_job(current_user, job_id)
+        if job.status == "running":
+            raise HTTPException(status_code=409, detail=JOB_ALREADY_RUNNING_DETAIL)
 
         billing_service = _get_billing_service()
         openai_key = billing_service.resolve_openai_api_key(current_user)
@@ -541,33 +721,22 @@ def run_pipeline(
             selected_actions,
             processing_type=openai_key.processing_type,
         )
-        result = pipeline.run_pipeline(
-            current_user,
-            job_id,
-            api_key=openai_key.api_key,
-            processing_type=openai_key.processing_type,
-            do_ocr=run_request.do_ocr,
-            do_image_stylize=run_request.do_image_stylize,
-            do_explanation=run_request.do_explanation,
-            nano_banana_model=get_settings(ROOT).nano_banana_model,
-            nano_banana_prompt_version=get_settings(ROOT).nano_banana_prompt_version,
-        )
-        charge_result = {"charged_count": 0}
-        if result.get("status") in ("completed", "failed", "exported"):
-            try:
-                charge_result = billing_service.consume_job_action_credits(
-                    current_user,
-                    job_id,
-                    list(result.get("executed_actions") or []),
-                    processing_type=openai_key.processing_type,
-                )
-            except (SupabaseApiError, ValueError) as error:
-                logger.error("job run charge_persist failed job_id=%s error=%s", job_id, error)
-                raise
-        return {
-            **result,
-            "charged_count": int(charge_result.get("charged_count") or len(charge_result.get("charged_actions") or [])),
-        }
+        previous_status = job.status
+        previous_last_error = job.last_error
+        job.status = "running"
+        job.last_error = None
+        pipeline.save_job(current_user, job)
+
+        try:
+            return _get_job_task_service().enqueue_task(_build_run_task_payload(current_user, job_id, run_request))
+        except JobTaskConfigError as error:
+            logger.exception("job queue config error job_id=%s error=%s", job_id, error)
+            _rollback_enqueued_job(current_user, job, previous_status, previous_last_error)
+            raise HTTPException(status_code=500, detail=TASK_QUEUE_CONFIG_DETAIL) from error
+        except JobTaskDispatchError as error:
+            logger.exception("job enqueue failed job_id=%s error=%s", job_id, error)
+            _rollback_enqueued_job(current_user, job, previous_status, previous_last_error)
+            raise HTTPException(status_code=503, detail=TASK_QUEUE_DISPATCH_DETAIL) from error
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
     except SupabaseApiError as error:
@@ -577,32 +746,36 @@ def run_pipeline(
         raise HTTPException(status_code=400, detail=str(error))
 
 
-@app.post("/jobs/{job_id}/regions/auto-detect", response_model=AutoDetectResponse)
+@app.post("/jobs/{job_id}/regions/auto-detect", response_model=JobTaskAcceptedResponse, status_code=202)
 def auto_detect_regions(
     job_id: str,
     current_user: AuthenticatedUser = Depends(require_authenticated_user),
-) -> dict:
-    """원본 페이지에서 문항 단위 영역을 자동 분할해 저장한다."""
+) -> JobTaskAcceptedResponse:
+    """원본 페이지 자동 분할 작업을 큐에 등록한다."""
     try:
-        billing_service = _get_billing_service()
-        openai_key = billing_service.resolve_openai_api_key(current_user)
-        billing_service.ensure_job_auto_detect_credits_available(current_user, job_id)
-        result = pipeline.auto_detect_regions(
-            current_user,
-            job_id,
-            api_key=openai_key.api_key,
-        )
-        charge_result = billing_service.consume_job_auto_detect_credits(current_user, job_id)
         job = pipeline.read_job(current_user, job_id)
-        return {
-            "job_id": job_id,
-            "regions": _map_job_response(current_user, job).regions,
-            "detected_count": result["detected_count"],
-            "review_required": result["review_required"],
-            "detector_model": result["detector_model"],
-            "detection_version": result["detection_version"],
-            "charged_count": int(charge_result.get("charged_count") or 0),
-        }
+        if job.status == "running":
+            raise HTTPException(status_code=409, detail=JOB_ALREADY_RUNNING_DETAIL)
+
+        billing_service = _get_billing_service()
+        billing_service.resolve_openai_api_key(current_user)
+        billing_service.ensure_job_auto_detect_credits_available(current_user, job_id)
+        previous_status = job.status
+        previous_last_error = job.last_error
+        job.status = "running"
+        job.last_error = None
+        pipeline.save_job(current_user, job)
+
+        try:
+            return _get_job_task_service().enqueue_task(_build_auto_detect_task_payload(current_user, job_id))
+        except JobTaskConfigError as error:
+            logger.exception("auto-detect queue config error job_id=%s error=%s", job_id, error)
+            _rollback_enqueued_job(current_user, job, previous_status, previous_last_error)
+            raise HTTPException(status_code=500, detail=TASK_QUEUE_CONFIG_DETAIL) from error
+        except JobTaskDispatchError as error:
+            logger.exception("auto-detect enqueue failed job_id=%s error=%s", job_id, error)
+            _rollback_enqueued_job(current_user, job, previous_status, previous_last_error)
+            raise HTTPException(status_code=503, detail=TASK_QUEUE_DISPATCH_DETAIL) from error
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="job not found")
     except SupabaseApiError as error:
@@ -610,6 +783,22 @@ def auto_detect_regions(
     except ValueError as error:
         _raise_runtime_http_error(error)
         raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/internal/jobs/run-task", response_model=JobTaskWorkerResponse)
+def run_job_task(
+    payload: JobTaskPayload,
+    authorization: str | None = Header(default=None),
+) -> JobTaskWorkerResponse:
+    """Cloud Tasks가 호출하는 internal worker 엔드포인트다."""
+    try:
+        _get_job_task_service().verify_internal_request(authorization)
+    except JobTaskConfigError as error:
+        raise HTTPException(status_code=500, detail=TASK_QUEUE_CONFIG_DETAIL) from error
+    except JobTaskAuthError as error:
+        raise HTTPException(status_code=401, detail=INTERNAL_TASK_AUTH_DETAIL) from error
+
+    return _run_background_job_task(payload)
 
 
 @app.get("/jobs/{job_id}", response_model=JobResponse)

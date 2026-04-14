@@ -85,30 +85,19 @@ export interface RegionPayload {
   auto_detect_confidence?: number;
 }
 
-export interface AutoDetectRegionsResult {
+export type JobTaskOperation = "run" | "auto_detect";
+
+export interface JobTaskAcceptedResult {
   job_id: string;
-  regions: BackendRegion[];
-  detected_count: number;
-  review_required: boolean;
-  detector_model: string;
-  detection_version: string;
-  charged_count: number;
+  status: "running";
+  accepted: boolean;
+  operation: JobTaskOperation;
 }
 
 export interface RunPipelineOptions {
   doOcr: boolean;
   doImageStylize: boolean;
   doExplanation: boolean;
-}
-
-export interface RunPipelineResult {
-  job_id: string;
-  status: "completed" | "failed";
-  executed_actions?: Array<"ocr" | "image_stylize" | "explanation">;
-  charged_count: number;
-  completed_count: number;
-  failed_count: number;
-  exportable_count: number;
 }
 
 async function buildRequestHeaders(initHeaders?: HeadersInit): Promise<Headers> {
@@ -188,8 +177,8 @@ export async function saveRegionsApi(jobId: string, regions: RegionPayload[]): P
 export async function runPipelineApi(
   jobId: string,
   options: RunPipelineOptions
-): Promise<RunPipelineResult> {
-  return requestJson<RunPipelineResult>(`/jobs/${jobId}/run`, {
+): Promise<JobTaskAcceptedResult> {
+  return requestJson<JobTaskAcceptedResult>(`/jobs/${jobId}/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -200,8 +189,8 @@ export async function runPipelineApi(
   });
 }
 
-export async function autoDetectRegionsApi(jobId: string): Promise<AutoDetectRegionsResult> {
-  return requestJson<AutoDetectRegionsResult>(`/jobs/${jobId}/regions/auto-detect`, {
+export async function autoDetectRegionsApi(jobId: string): Promise<JobTaskAcceptedResult> {
+  return requestJson<JobTaskAcceptedResult>(`/jobs/${jobId}/regions/auto-detect`, {
     method: "POST",
   });
 }

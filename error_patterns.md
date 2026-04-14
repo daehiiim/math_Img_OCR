@@ -27,3 +27,4 @@
 - Radix primitive를 감싼 UI wrapper는 plain function으로 남기지 않는다. `Trigger`/`Close`/`Overlay`/`Content`처럼 ref가 전달될 수 있는 컴포넌트는 `React.forwardRef` 또는 원시 primitive 직접 export로 유지하고, 시트 열기·닫기 상호작용까지 콘솔 경고 없이 검증한다.
 - JWT 테스트에서 고정 시각을 주입할 때는 `iat`를 함께 고정값으로 넣지 않는다. decode 시계와 어긋나면 즉시 만료/미래 토큰으로 실패하므로, `exp` 중심으로 검증하거나 검증 시계도 함께 통제한다.
 - 드로잉 캔버스 위 오버레이 액션 버튼은 `onClick`만 처리하지 않는다. 삭제·핸들 같은 컨트롤은 `pointerdown` 전파를 먼저 차단하고, 데스크톱 마우스 드리프트 회귀 테스트로 새 영역 생성이 시작되지 않는지 확인한다.
+- Vercel external rewrite 뒤의 장시간 AI 작업은 동기 HTTP 응답으로 두지 않는다. `120초` 근처까지 갈 수 있는 OCR·자동 분할·이미지 생성은 enqueue 후 `202` 를 반환하고, 최종 상태는 별도 worker + `GET /jobs/{id}` polling 으로 수렴시킨다.

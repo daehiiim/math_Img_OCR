@@ -182,12 +182,9 @@ describe("jobApi", () => {
       new Response(
         JSON.stringify({
           job_id: "job-5",
-          status: "completed",
-          executed_actions: ["ocr", "image_stylize"],
-          charged_count: 2,
-          completed_count: 2,
-          failed_count: 0,
-          exportable_count: 2,
+          status: "running",
+          accepted: true,
+          operation: "run",
         }),
         {
           status: 200,
@@ -214,8 +211,9 @@ describe("jobApi", () => {
         do_explanation: false,
       })
     );
-    expect(result.charged_count).toBe(2);
-    expect(result.completed_count).toBe(2);
+    expect(result.status).toBe("running");
+    expect(result.accepted).toBe(true);
+    expect(result.operation).toBe("run");
   });
 
   it("calls the auto-detect endpoint and returns detector metadata", async () => {
@@ -223,12 +221,9 @@ describe("jobApi", () => {
       new Response(
         JSON.stringify({
           job_id: "job-detect",
-          regions: [],
-          detected_count: 3,
-          review_required: true,
-          detector_model: "gpt-test",
-          detection_version: "openai_five_choice_v1",
-          charged_count: 1,
+          status: "running",
+          accepted: true,
+          operation: "auto_detect",
         }),
         {
           status: 200,
@@ -242,9 +237,9 @@ describe("jobApi", () => {
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/jobs/job-detect/regions/auto-detect");
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe("POST");
-    expect(result.detected_count).toBe(3);
-    expect(result.review_required).toBe(true);
-    expect(result.charged_count).toBe(1);
+    expect(result.status).toBe("running");
+    expect(result.accepted).toBe(true);
+    expect(result.operation).toBe("auto_detect");
   });
 
   it("uses 생성결과.hwpx when the download response does not include a filename", async () => {

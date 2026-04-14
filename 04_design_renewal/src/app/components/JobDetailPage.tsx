@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -32,6 +32,7 @@ import {
   isLowConfidenceAutoFullRegion,
 } from "../lib/regionSelection";
 import type { JobExecutionOptions, JobStatus, Region } from "../store/jobStore";
+import type { JobTaskOperation } from "../api/jobApi";
 import { copyToClipboard } from "../utils/clipboard";
 import { ResultsViewer } from "./ResultsViewer";
 import { RegionEditor } from "./RegionEditor";
@@ -56,6 +57,11 @@ const defaultExecutionOptions: JobExecutionOptions = {
   doExplanation: true,
 };
 const AUTO_DETECT_REQUIRED_CREDITS = 1;
+const JOB_POLLING_INTERVAL_MS = 3000;
+
+interface JobDetailNavigationState {
+  queuedOperation?: JobTaskOperation;
+}
 
 function isResultVisible(status: JobStatus): boolean {
   return status === "running" || status === "completed" || status === "failed" || status === "exported";
@@ -76,11 +82,23 @@ function getVerificationWarningCount(regions: Region[]): number {
   return regions.reduce((total, region) => total + (region.verificationWarnings?.length ?? 0), 0);
 }
 
+/** 완료된 영역 수를 계산한다. */
+function getCompletedRegionCount(regions: Region[]): number {
+  return regions.filter((region) => region.status === "completed").length;
+}
+
+/** 실패한 영역 수를 계산한다. */
+function getFailedRegionCount(regions: Region[]): number {
+  return regions.filter((region) => region.status === "failed").length;
+}
+
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { refreshProfile, user } = useAuth();
   const { autoDetectRegions, getJob, saveRegions, runPipeline, hydrateJob, exportHwpx } = useJobs();
+  const initialQueuedOperation = (location.state as JobDetailNavigationState | null)?.queuedOperation ?? null;
   const [isRunning, setIsRunning] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -90,6 +108,8 @@ export function JobDetailPage() {
   const [hasHydrationError, setHasHydrationError] = useState(false);
   const [draftRegions, setDraftRegions] = useState<Region[] | null>(null);
   const [executionOptions, setExecutionOptions] = useState<JobExecutionOptions>(defaultExecutionOptions);
+  const [pendingOperation, setPendingOperation] = useState<JobTaskOperation | null>(initialQueuedOperation);
+  const pendingOperationRef = useRef<JobTaskOperation | null>(initialQueuedOperation);
 
   const job = getJob(jobId || "");
   const activeRegions = draftRegions ?? job?.regions ?? [];
@@ -171,6 +191,95 @@ export function JobDetailPage() {
     setProgress(0);
   }, [job]);
 
+  useEffect(() => {
+    pendingOperationRef.current = pendingOperation;
+  }, [pendingOperation]);
+
+  /** polling 종료 시 작업별 완료/실패 토스트와 프로필 갱신을 처리한다. */
+  const handlePendingOperationSettled = useCallback(
+    (nextStatus: JobStatus, nextRegions: Region[], nextLastError?: string) => {
+      const operation = pendingOperationRef.current;
+      if (!operation) {
+        return;
+      }
+
+      if (operation === "run") {
+        const completedCount = getCompletedRegionCount(nextRegions);
+        const failedCount = getFailedRegionCount(nextRegions);
+        if (nextStatus === "completed" || nextStatus === "exported") {
+          toast.success("선택한 파이프라인 실행이 완료되었습니다.", {
+            description: `성공 ${completedCount}개, 실패 ${failedCount}개`,
+          });
+        } else if (nextStatus === "failed") {
+          toast.error("일부 영역 처리에 실패했습니다.", {
+            description: nextLastError || `성공 ${completedCount}개, 실패 ${failedCount}개`,
+          });
+        }
+      }
+
+      if (operation === "auto_detect") {
+        if (nextStatus === "queued") {
+          toast.success("AI 자동 문항 찾기가 완료되었습니다.", {
+            description: `${nextRegions.length}개 영역을 저장했습니다. 박스를 확인하고 필요하면 수정하세요.`,
+          });
+        } else if (nextStatus === "failed") {
+          toast.error(nextLastError || "AI 자동 문항 찾기 중 오류가 발생했습니다.");
+        }
+      }
+
+      pendingOperationRef.current = null;
+      setPendingOperation(null);
+      void refreshProfile();
+    },
+    [refreshProfile]
+  );
+
+  useEffect(() => {
+    if (!job || !jobId || job.status !== "running") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollJob = async () => {
+      try {
+        const hydrated = await hydrateJob(jobId);
+        if (cancelled || hydrated.status === "running") {
+          return;
+        }
+        handlePendingOperationSettled(hydrated.status, hydrated.regions, hydrated.lastError);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : "작업 상태를 새로고침하지 못했습니다.";
+        setActionError(message);
+      }
+    };
+
+    void pollJob();
+    const timer = window.setInterval(() => {
+      void pollJob();
+    }, JOB_POLLING_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [handlePendingOperationSettled, hydrateJob, job, jobId]);
+
+  useEffect(() => {
+    if (!job || !pendingOperation || job.status === "running") {
+      return;
+    }
+
+    const isRunTerminal = pendingOperation === "run" && ["completed", "failed", "exported"].includes(job.status);
+    const isAutoDetectTerminal = pendingOperation === "auto_detect" && ["queued", "failed"].includes(job.status);
+    if (isRunTerminal || isAutoDetectTerminal) {
+      handlePendingOperationSettled(job.status, job.regions, job.lastError);
+    }
+  }, [handlePendingOperationSettled, job, pendingOperation]);
+
   /** 실행 옵션 체크 상태를 변경한다. */
   const updateExecutionOption = useCallback((key: keyof JobExecutionOptions, checked: boolean) => {
     setExecutionOptions((prev) => ({
@@ -223,17 +332,10 @@ export function JobDetailPage() {
 
     try {
       const result = await runPipeline(jobId, executionOptions);
-      await refreshProfile();
-
-      if (result.status === "failed") {
-        toast.error("일부 영역 처리에 실패했습니다.", {
-          description: `성공 ${result.completed_count}개, 실패 ${result.failed_count}개, 차감 ${result.charged_count}크레딧`,
-        });
-      } else {
-        toast.success("선택한 파이프라인 실행이 완료되었습니다.", {
-          description: `이번 실행 차감: ${result.charged_count}크레딧`,
-        });
-      }
+      setPendingOperation(result.operation);
+      toast.success("선택한 파이프라인 실행이 시작되었습니다.", {
+        description: "완료되면 상태가 자동으로 갱신됩니다.",
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "파이프라인 실행 중 오류가 발생했습니다.";
       setActionError(message);
@@ -259,16 +361,10 @@ export function JobDetailPage() {
 
     try {
       const result = await autoDetectRegions(jobId);
-      await refreshProfile();
-      if (result.review_required) {
-        toast("AI가 문항을 찾았지만 검토가 필요합니다.", {
-          description: "박스를 확인하고 필요하면 수정한 뒤 실행하세요.",
-        });
-      } else {
-        toast.success("AI 자동 문항 찾기가 완료되었습니다.", {
-          description: `${result.detected_count}개 영역을 찾았습니다.`,
-        });
-      }
+      setPendingOperation(result.operation);
+      toast.success("AI 자동 문항 찾기가 시작되었습니다.", {
+        description: "완료되면 박스 결과가 자동으로 갱신됩니다.",
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI 자동 문항 찾기 중 오류가 발생했습니다.";
       setActionError(message);
@@ -403,7 +499,7 @@ export function JobDetailPage() {
                               : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {isDone ? (
+                    {isDone ? (
                           <CheckCircle2 className="w-4 h-4" />
                         ) : isActive && (job.status === "running" || isRunning) ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -430,7 +526,7 @@ export function JobDetailPage() {
               <div className="mt-3">
                 <Progress value={progress} className="h-1.5" />
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  {job.regions.filter((region) => region.status === "completed").length} / {job.regions.length} 영역 처리 완료
+                  {getCompletedRegionCount(job.regions)} / {job.regions.length} 영역 처리 완료
                 </p>
               </div>
             ) : null}
@@ -615,7 +711,7 @@ export function JobDetailPage() {
                   <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
                   <p className="text-[13px]">처리 중...</p>
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    {job.regions.filter((region) => region.status === "completed").length}/{job.regions.length} 영역 완료
+                    {getCompletedRegionCount(job.regions)}/{job.regions.length} 영역 완료
                   </p>
                 </div>
               ) : null}
